@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "821083100323",
+    "project_id": "sti-sync",
+    "storage_bucket": "sti-sync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:821083100323:android:3566177e41fbe333d31b16",
+        "android_client_info": {
+          "package_name": "com.example.sti_sync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqivBtIKfQ1NHenPUSSC9oBksEoTEVaOI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
