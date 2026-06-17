@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../viewmodels/registration_viewmodel.dart';
+import '../../../../shared/providers/providers.dart';
 import 'steps/personal_info_step.dart';
 import 'steps/academic_details_step.dart';
 import 'steps/credentials_step.dart';
@@ -10,7 +11,6 @@ import 'steps/profile_photo_step.dart';
 import 'steps/school_id_step.dart';
 import 'steps/review_step.dart';
 
-/// Section label shown on the right of the header for each step.
 const List<String> _sectionTitles = [
   'Personal Info',
   'Academic Details',
@@ -20,16 +20,9 @@ const List<String> _sectionTitles = [
   'Review',
 ];
 
-/// Parent shell for the 6-step registration flow.
-///
-/// Owns the fixed header, top progress bar, the scrollable step bodies, and the
-/// sticky bottom action bar (step dots + Continue button). Each step body is an
-/// independently scrollable widget; the action bar never scrolls with content.
 class RegistrationFlowScreen extends ConsumerWidget {
   const RegistrationFlowScreen({super.key});
 
-  /// Bodies for each step, kept alive via [IndexedStack] so scroll/input state
-  /// is preserved when moving back and forth.
   static const List<Widget> _steps = [
     PersonalInfoStep(),
     AcademicDetailsStep(),
@@ -39,12 +32,10 @@ class RegistrationFlowScreen extends ConsumerWidget {
     ReviewStep(),
   ];
 
-  /// Handles back navigation: previous step, or exit the flow on step 1.
   void _handleBack(BuildContext context, WidgetRef ref) {
     final vm = ref.read(registrationViewModelProvider.notifier);
-    final state = ref.read(registrationViewModelProvider);
-    if (state.isFirstStep) {
-      // Leaving the flow entirely — pop if possible, else fall back to welcome.
+    final s = ref.read(registrationViewModelProvider);
+    if (s.isFirstStep) {
       if (context.canPop()) {
         context.pop();
       } else {
@@ -55,10 +46,113 @@ class RegistrationFlowScreen extends ConsumerWidget {
     }
   }
 
+  /// Validates the current step and advances on success, or shows an error.
+  void _handleContinue(BuildContext context, WidgetRef ref) {
+    final vm = ref.read(registrationViewModelProvider.notifier);
+    final s = ref.read(registrationViewModelProvider);
+
+    if (s.isLastStep) {
+      _submit(context, ref);
+      return;
+    }
+
+    final error = vm.validateStep(s.currentStep);
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      return;
+    }
+
+    vm.nextStep();
+  }
+
+  Future<void> _submit(BuildContext context, WidgetRef ref) async {
+    final vm = ref.read(registrationViewModelProvider.notifier);
+    final error = vm.validateStep(5);
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      return;
+    }
+    await vm.submit();
+    // Check result — if still mounted and no error, navigate away.
+    if (!context.mounted) return;
+    final state = ref.read(registrationViewModelProvider);
+    if (state.submitSuccess) {
+      _showSuccessAndExit(context);
+    } else if (state.submitError != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(state.submitError!),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+    }
+  }
+
+  void _showSuccessAndExit(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success, size: 64),
+            SizedBox(height: 16),
+            Text(
+              'Registration Submitted!',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryDark),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Your registration is under review by the SAO office. '
+              'You will be notified once it is approved (1–3 working days).',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.goNamed('welcome');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryDark,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Back to Welcome'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(registrationViewModelProvider);
-    final vm = ref.read(registrationViewModelProvider.notifier);
     final step = state.currentStep;
     final progress = (step + 1) / kRegistrationStepCount;
 
@@ -73,24 +167,27 @@ class RegistrationFlowScreen extends ConsumerWidget {
         body: SafeArea(
           child: Column(
             children: [
-              // ─── Top progress bar ───
+              // Top progress bar.
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 5,
                   backgroundColor: const Color(0xFFEDE7F6),
-                  valueColor: const AlwaysStoppedAnimation(AppColors.accentPurple),
+                  valueColor:
+                      const AlwaysStoppedAnimation(AppColors.accentPurple),
                 ),
               ),
 
-              // ─── Header: back, step counter, section label ───
+              // Header: back arrow · "Step X of 6" · section label.
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: AppColors.primaryDark),
+                      icon: const Icon(Icons.arrow_back,
+                          color: AppColors.primaryDark),
                       onPressed: () => _handleBack(context, ref),
                     ),
                     Expanded(
@@ -98,10 +195,9 @@ class RegistrationFlowScreen extends ConsumerWidget {
                         'Step ${step + 1} of $kRegistrationStepCount',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey,
-                        ),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey),
                       ),
                     ),
                     Padding(
@@ -109,32 +205,28 @@ class RegistrationFlowScreen extends ConsumerWidget {
                       child: Text(
                         _sectionTitles[step],
                         style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.accentPurple,
-                        ),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.accentPurple),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // ─── Scrollable step body ───
+              // Scrollable step body — kept alive so input isn't lost.
               Expanded(
                 child: IndexedStack(index: step, children: _steps),
               ),
 
-              // ─── Sticky bottom action bar ───
+              // Sticky bottom bar.
               _BottomActionBar(
                 step: step,
                 isLastStep: state.isLastStep,
-                onContinue: () {
-                  if (state.isLastStep) {
-                    _submit(context);
-                  } else {
-                    vm.nextStep();
-                  }
-                },
+                isSubmitting: state.isSubmitting,
+                submitProgress: state.submitProgress,
+                submitProgressLabel: state.submitProgressLabel,
+                onContinue: () => _handleContinue(context, ref),
               ),
             ],
           ),
@@ -142,31 +234,22 @@ class RegistrationFlowScreen extends ConsumerWidget {
       ),
     );
   }
-
-  /// Placeholder submit — real Firestore write/validation wired separately.
-  void _submit(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Registration submitted (demo) — entering SAO review queue.'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    context.goNamed('welcome');
-  }
 }
-/// Sticky bottom bar: step progress dots + the primary action button.
-///
-/// Sits outside the scrollable body so it stays pinned at all times. The button
-/// label/color switches to a purple "Submit Registration" on the final step.
+
 class _BottomActionBar extends StatelessWidget {
   final int step;
   final bool isLastStep;
+  final bool isSubmitting;
+  final double submitProgress;
+  final String submitProgressLabel;
   final VoidCallback onContinue;
 
   const _BottomActionBar({
     required this.step,
     required this.isLastStep,
+    required this.isSubmitting,
+    required this.submitProgress,
+    required this.submitProgressLabel,
     required this.onContinue,
   });
 
@@ -181,7 +264,7 @@ class _BottomActionBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Progress dots: completed = green, current = elongated purple, rest grey.
+          // Progress dots.
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(kRegistrationStepCount, (i) {
@@ -205,25 +288,55 @@ class _BottomActionBar extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
+          // Submit progress bar (visible only during submission).
+          if (isSubmitting) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: submitProgress,
+                    backgroundColor: const Color(0xFFEDE7F6),
+                    valueColor:
+                        const AlwaysStoppedAnimation(AppColors.accentPurple),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(submitProgressLabel,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.accentPurple)),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+
           // Primary action button.
           SizedBox(
             width: double.infinity,
             height: 60,
             child: ElevatedButton(
-              onPressed: onContinue,
+              onPressed: isSubmitting ? null : onContinue,
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     isLastStep ? AppColors.accentPurple : AppColors.primaryDark,
-                foregroundColor: isLastStep ? Colors.white : AppColors.secondary,
+                foregroundColor:
+                    isLastStep ? Colors.white : AppColors.secondary,
+                disabledBackgroundColor: Colors.grey.shade300,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
+                    borderRadius: BorderRadius.circular(30)),
                 elevation: 0,
               ),
-              child: Text(
-                isLastStep ? 'Submit Registration' : 'Continue',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      isLastStep ? 'Submit Registration' : 'Continue',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
             ),
           ),
         ],

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 3 — Create Your Password.
 ///
@@ -127,7 +127,7 @@ class _CredentialsStepState extends ConsumerState<CredentialsStep> {
             decoration: BoxDecoration(
               color: const Color(0xFFF7F0FA),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.accentPurple.withOpacity(0.4)),
+              border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.4)),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,7 +167,7 @@ class _ReqChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: met ? AppColors.success.withOpacity(0.12) : Colors.white,
+        color: met ? AppColors.success.withValues(alpha: 0.12) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: met ? AppColors.success : Colors.grey.shade300,

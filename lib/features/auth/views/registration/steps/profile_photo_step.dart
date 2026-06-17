@@ -1,23 +1,33 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 4 — Take Your Profile Photo.
-///
-/// Dashed-circle capture target, Take Selfie / Upload actions, and a photo
-/// requirements callout. Actual camera/upload wiring is deferred; tapping marks
-/// the photo as captured so the Review step reflects it.
 class ProfilePhotoStep extends ConsumerWidget {
   const ProfilePhotoStep({super.key});
 
+  Future<void> _pick(WidgetRef ref, ImageSource source) async {
+    final picker = ImagePicker();
+    final xFile = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1024,
+    );
+    if (xFile == null) return;
+    ref.read(registrationViewModelProvider.notifier)
+        .setProfilePhotoFile(File(xFile.path));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vm = ref.read(registrationViewModelProvider.notifier);
-    final hasPhoto = ref.watch(
-      registrationViewModelProvider.select((s) => s.hasProfilePhoto),
+    final photoFile = ref.watch(
+      registrationViewModelProvider.select((s) => s.profilePhotoFile),
     );
+    final hasPhoto = photoFile != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -31,10 +41,10 @@ class ProfilePhotoStep extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
-          // Dashed circular capture target.
+          // Circular capture target.
           Center(
             child: GestureDetector(
-              onTap: () => vm.setHasProfilePhoto(true),
+              onTap: () => _pick(ref, ImageSource.camera),
               child: Container(
                 height: 200,
                 width: 200,
@@ -42,34 +52,33 @@ class ProfilePhotoStep extends ConsumerWidget {
                   color: const Color(0xFFF3E9FA),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppColors.accentPurple.withOpacity(0.5),
+                    color: AppColors.accentPurple.withValues(alpha: 0.5),
                     width: 2,
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      hasPhoto ? Icons.check_circle : Icons.photo_camera_outlined,
-                      size: 48,
-                      color: AppColors.accentPurple,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      hasPhoto ? 'Photo captured' : 'Tap to take photo',
-                      style: const TextStyle(
-                        color: AppColors.accentPurple,
-                        fontWeight: FontWeight.w600,
+                clipBehavior: Clip.antiAlias,
+                child: hasPhoto
+                    ? Image.file(photoFile, fit: BoxFit.cover)
+                    : const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.photo_camera_outlined,
+                              size: 48, color: AppColors.accentPurple),
+                          SizedBox(height: 10),
+                          Text(
+                            'Tap to take photo',
+                            style: TextStyle(
+                              color: AppColors.accentPurple,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
           const SizedBox(height: 28),
 
-          // Take Selfie / Upload actions.
           Row(
             children: [
               Expanded(
@@ -77,7 +86,7 @@ class ProfilePhotoStep extends ConsumerWidget {
                   label: 'Take Selfie',
                   icon: Icons.photo_camera_outlined,
                   filled: true,
-                  onTap: () => vm.setHasProfilePhoto(true),
+                  onTap: () => _pick(ref, ImageSource.camera),
                 ),
               ),
               const SizedBox(width: 14),
@@ -86,14 +95,13 @@ class ProfilePhotoStep extends ConsumerWidget {
                   label: 'Upload',
                   icon: Icons.image_outlined,
                   filled: false,
-                  onTap: () => vm.setHasProfilePhoto(true),
+                  onTap: () => _pick(ref, ImageSource.gallery),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
 
-          // Photo requirements callout.
           const _RequirementsBox(
             title: 'Photo Requirements',
             items: [
@@ -109,7 +117,6 @@ class ProfilePhotoStep extends ConsumerWidget {
   }
 }
 
-/// Filled (purple) or outlined action button used for capture/upload.
 class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -131,35 +138,28 @@ class _ActionButton extends StatelessWidget {
           ? ElevatedButton.icon(
               onPressed: onTap,
               icon: Icon(icon, size: 20),
-              label: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accentPurple,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             )
           : OutlinedButton.icon(
               onPressed: onTap,
               icon: Icon(icon, size: 20),
-              label: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.accentPurple,
                 side: const BorderSide(color: AppColors.accentPurple, width: 1.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
     );
   }
 }
 
-/// Yellow-tinted requirements callout used in photo/ID steps.
 class _RequirementsBox extends StatelessWidget {
   final String title;
   final List<String> items;
@@ -183,13 +183,9 @@ class _RequirementsBox extends StatelessWidget {
             children: [
               const Icon(Icons.info_outline, size: 18, color: Color(0xFFE0A100)),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFE0A100),
-                ),
-              ),
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Color(0xFFE0A100))),
             ],
           ),
           const SizedBox(height: 10),
@@ -199,17 +195,11 @@ class _RequirementsBox extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('•  ',
-                      style: TextStyle(color: AppColors.primaryDark)),
+                  const Text('•  ', style: TextStyle(color: AppColors.primaryDark)),
                   Expanded(
-                    child: Text(
-                      item,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.primaryDark,
-                        height: 1.3,
-                      ),
-                    ),
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.primaryDark, height: 1.3)),
                   ),
                 ],
               ),

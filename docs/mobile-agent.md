@@ -12,7 +12,7 @@
 2. **MVVM is non-negotiable.** Every feature = Model + ViewModel + View. No business logic in widgets.
 3. **Firestore is the only database.** All data is read/written through the repository layer — never directly from a ViewModel or widget.
 4. **Realtime first.** Any data that can change while the app is open (events, attendance status, payment status, announcements) must use `snapshots()` streams — no one-time `get()` calls for live data.
-5. **After every implementation, update the relevant docs.** See Section 7.
+5. **After every implementation, update the relevant docs.** See Section 8.
 
 ---
 
@@ -263,9 +263,33 @@ When adding a new route: update this table AND `app_router.dart`.
 
 ---
 
-## 5. Technology Mandates
+## 5. Image & File Uploads — Cloudinary (Mandatory)
 
-### 5.1 State Management
+All user-uploaded images and documents (profile photos, school ID photos, any future
+document submissions) **must** go through `lib/services/cloudinary_service.dart`.
+
+| Setting | Value |
+|---|---|
+| Cloud name | `djwlkcgnx` |
+| Upload preset | `sti_sync_uploads` (unsigned — no API key needed) |
+| Endpoint | `https://api.cloudinary.com/v1_1/djwlkcgnx/auto/upload` |
+| Folders | profile photo → `students/profile`; school ID → `students/school-id`; extras → `students/documents` |
+
+**Hard rules:**
+- Firestore stores **only the `secure_url` string** returned by Cloudinary. Never store local file paths, byte data, or temporary URIs.
+- **Never embed the Cloudinary API Key or API Secret** anywhere in the app. The unsigned preset requires only the cloud name and preset name.
+- Every upload screen calls `CloudinaryService.uploadFile(file, folder: '...')` — never inline multipart code.
+- Validate before upload: images must be JPG/PNG/WebP, max 5 MB. Show upload progress. Block submit while upload is in flight.
+
+This rule applies to **all future upload features** (profile edits, certificate downloads, document re-submissions, etc.), not just registration.
+
+// AGENT-UPDATED: 2026-06-17 — Added Cloudinary upload mandate section
+
+---
+
+## 6. Technology Mandates
+
+### 6.1 State Management
 - **Required:** Riverpod (`flutter_riverpod`) for all state.
 - **ViewModel pattern:** `StateNotifier<YourState>` with a corresponding `StateNotifierProvider`.
 - **FORBIDDEN:** `setState` in screens (only allowed in isolated local-UI widgets like a text field focus state), `Provider` package, `Bloc`, `GetX`, `MobX`.
@@ -287,7 +311,7 @@ final eventViewModelProvider = StateNotifierProvider<EventViewModel, EventState>
 );
 ```
 
-### 5.2 Firestore Stream Convention
+### 6.2 Firestore Stream Convention
 All live data uses `.snapshots()`. Never use `.get()` for data that updates while the app is open.
 
 ```dart
@@ -309,7 +333,7 @@ ref.watch(eventRepositoryProvider).watchUpcomingEvents(studentId)
 await _firestore.collection('events').get();
 ```
 
-### 5.3 Model Convention
+### 6.3 Model Convention
 Every model must implement `fromFirestore` and `toMap`:
 
 ```dart
@@ -344,7 +368,7 @@ class EventModel {
 }
 ```
 
-### 5.4 Firestore Path Convention
+### 6.4 Firestore Path Convention
 All Firestore collection/document paths are string constants in `lib/core/constants/firestore_paths.dart`. Never hardcode path strings in repositories.
 
 ```dart
@@ -361,7 +385,7 @@ class FirestorePaths {
 }
 ```
 
-### 5.5 Error Handling
+### 6.5 Error Handling
 All repository methods throw typed exceptions from `lib/core/exceptions/app_exception.dart`. ViewModels catch these and expose them as state.
 
 ```dart
@@ -386,7 +410,7 @@ Future<void> checkIn(...) async {
 }
 ```
 
-### 5.6 Navigation
+### 6.6 Navigation
 Use `GoRouter` with named routes only. Never use `Navigator.push` with a widget constructor directly.
 
 ```dart
@@ -397,12 +421,12 @@ context.goNamed('eventDetail', pathParameters: {'eventId': event.id});
 Navigator.push(context, MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)));
 ```
 
-### 5.7 QR Gate Access Rule (Critical)
+### 6.7 QR Gate Access Rule (Critical)
 Before writing any attendance record, **always** check `qrTicketUnlocked` from the student's `/payables` document for that event. If `false`, block the check-in and show a payment-required screen. This logic lives in `attendance_repository.dart`.
 
 ---
 
-## 6. Coding Style Rules
+## 7. Coding Style Rules
 
 - Dart file names: `snake_case.dart`
 - Class names: `PascalCase`
@@ -416,7 +440,7 @@ Before writing any attendance record, **always** check `qrTicketUnlocked` from t
 
 ---
 
-## 7. Self-Documentation Update Rule (Non-Negotiable)
+## 8. Self-Documentation Update Rule (Non-Negotiable)
 
 After every implementation, update the affected doc **in the same run** before presenting results.
 
@@ -435,7 +459,7 @@ Append this marker to the updated section:
 
 ---
 
-## 8. Execution Checklist
+## 9. Execution Checklist
 
 Run this before writing any code:
 
@@ -452,7 +476,7 @@ Run this before writing any code:
 
 ---
 
-## 9. Anti-Patterns — Hard Stops
+## 10. Anti-Patterns — Hard Stops
 
 | Anti-Pattern | Correct Approach |
 |---|---|

@@ -7,4 +7,8 @@ class FirestorePaths {
   static const String announcements = 'announcements';
   static const String certificates = 'certificates';
   static const String organizations = 'organizations';
+  static const String courses = 'courses';
+  static const String departments = 'departments';
+  static const String sections = 'sections';
+  static const String semesters = 'semesters';
 }

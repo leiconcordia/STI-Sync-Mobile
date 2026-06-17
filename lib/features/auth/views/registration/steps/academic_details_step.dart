@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 2 — Academic Details.
-///
-/// Course selection (chips), year level (cards), section input, an auto-filled
-/// department field, and semester selection.
 class AcademicDetailsStep extends ConsumerStatefulWidget {
   const AcademicDetailsStep({super.key});
 
   @override
-  ConsumerState<AcademicDetailsStep> createState() =>
-      _AcademicDetailsStepState();
+  ConsumerState<AcademicDetailsStep> createState() => _AcademicDetailsStepState();
 }
 
 class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
@@ -47,8 +43,7 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
         children: [
           const StepHeader(
             title: 'Academic Details',
-            subtitle:
-                'Select your current enrollment information for this semester.',
+            subtitle: 'Select your current enrollment information for this semester.',
           ),
           const SizedBox(height: 20),
 
@@ -60,7 +55,7 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
             children: _courses.map((c) {
               return _ChipOption(
                 label: c,
-                selected: state.course == c,
+                selected: state.courseCode == c,
                 onTap: () => vm.setCourse(c),
               );
             }).toList(),
@@ -96,11 +91,11 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
           ),
           const SizedBox(height: 16),
 
-          // Auto-filled department (read-only, locked).
+          // Auto-filled department (read-only).
           _LockedField(
-            value: state.department.isEmpty
+            value: state.departmentName.isEmpty
                 ? 'Select a course first'
-                : state.department,
+                : state.departmentName,
           ),
           const SizedBox(height: 6),
           const Text(
@@ -124,22 +119,27 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
               );
             }).toList(),
           ),
+
+          // School year display (auto-derived).
+          if (state.schoolYear.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'School Year: ${state.schoolYear}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
         ],
       ),
     );
   }
 }
-/// Rounded chip used for course selection (purple when selected).
+
 class _ChipOption extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _ChipOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _ChipOption({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +168,6 @@ class _ChipOption extends StatelessWidget {
   }
 }
 
-/// Outlined card used for year level / semester selection (navy when selected).
 class _SelectableCard extends StatelessWidget {
   final String label;
   final bool selected;
@@ -212,7 +211,6 @@ class _SelectableCard extends StatelessWidget {
   }
 }
 
-/// Greyed, lock-iconed read-only field for the auto-filled department.
 class _LockedField extends StatelessWidget {
   final String value;
   const _LockedField({required this.value});

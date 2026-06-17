@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 1 — Personal Information.
-///
-/// Captures the student's legal name, ID number, date of birth, sex, and
-/// contact number. Independently scrollable inside the flow shell.
 class PersonalInfoStep extends ConsumerStatefulWidget {
   const PersonalInfoStep({super.key});
 
@@ -25,7 +22,6 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
   @override
   void initState() {
     super.initState();
-    // Restore any previously entered values (e.g. after going back).
     final s = ref.read(registrationViewModelProvider);
     _lastName.text = s.lastName;
     _firstName.text = s.firstName;
@@ -44,15 +40,23 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
     super.dispose();
   }
 
-  /// Opens the native date picker and stores the selection.
   Future<void> _pickDate() async {
     final vm = ref.read(registrationViewModelProvider.notifier);
     final current = ref.read(registrationViewModelProvider).dateOfBirth;
     final picked = await showDatePicker(
       context: context,
-      initialDate: current ?? DateTime(2006, 6, 9),
-      firstDate: DateTime(1980),
+      initialDate: current ?? DateTime(2000),
+      firstDate: DateTime(1970),
       lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.accentPurple,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
     );
     if (picked != null) vm.setDateOfBirth(picked);
   }
@@ -60,9 +64,7 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
   @override
   Widget build(BuildContext context) {
     final vm = ref.read(registrationViewModelProvider.notifier);
-    final dob = ref.watch(
-      registrationViewModelProvider.select((s) => s.dateOfBirth),
-    );
+    final dob = ref.watch(registrationViewModelProvider.select((s) => s.dateOfBirth));
     final sex = ref.watch(registrationViewModelProvider.select((s) => s.sex));
 
     return SingleChildScrollView(
@@ -72,8 +74,7 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
         children: [
           const StepHeader(
             title: 'Personal Information',
-            subtitle: 'Enter your details exactly as they appear in your '
-                'school records.',
+            subtitle: 'Enter your details exactly as they appear in your school records.',
           ),
           const SizedBox(height: 24),
 
@@ -102,16 +103,16 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
             controller: _studentId,
             hint: 'Student ID Number *',
             icon: Icons.badge_outlined,
+            keyboardType: TextInputType.number,
             onChanged: vm.setStudentId,
           ),
           const SizedBox(height: 6),
           const Text(
-            'Enter your official STI student ID exactly as shown on your ID card.',
+            'Enter your official STI student ID exactly as shown on your ID card (11 digits).',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 20),
 
-          // Date of birth — tappable field that opens a date picker.
           _DateField(date: dob, onTap: _pickDate),
           const SizedBox(height: 20),
 
@@ -140,21 +141,25 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
 
           RegistrationTextField(
             controller: _contact,
-            hint: 'Contact Number *',
+            hint: 'Contact Number * (e.g. 9171234567)',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
             onChanged: vm.setContactNumber,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '10 digits starting with 9, no country code.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ],
       ),
     );
   }
 }
-/// Tappable date-of-birth field with a purple outline matching the design.
+
 class _DateField extends StatelessWidget {
   final DateTime? date;
   final VoidCallback onTap;
-
   const _DateField({required this.date, required this.onTap});
 
   String get _formatted {
@@ -177,8 +182,7 @@ class _DateField extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 18, color: AppColors.accentPurple),
+            const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.accentPurple),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -212,17 +216,11 @@ class _DateField extends StatelessWidget {
   }
 }
 
-/// Pill-style Male/Female selector button.
 class _SexButton extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-
-  const _SexButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _SexButton({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

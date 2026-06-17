@@ -27,34 +27,50 @@
 
 **Document ID** = Firebase Auth UID of the student.
 
-```dart
-/// Represents a registered student user in the mobile app.
-class StudentModel {
-  final String id;               // Firebase Auth UID — also the document ID
-  final String studentNumber;    // e.g., "2024-00123"
-  final String firstName;        // e.g., "Maria"
-  final String lastName;         // e.g., "Santos"
-  final String displayName;      // Denormalized full name: "Maria Santos"
-  final String email;            // School email — matches Firebase Auth email
-  final String courseCode;       // e.g., "BSIT"
-  final String courseName;       // e.g., "Bachelor of Science in Information Technology"
-  final int yearLevel;           // 1–4
-  final String sectionName;      // e.g., "BSIT 1101"
-  final String departmentCode;   // e.g., "SCS"
-  final String? avatarUrl;       // Firebase Storage URL — nullable
-  final List<String> organizationIds; // Orgs the student belongs to
-  final bool isActive;           // false = account disabled; block login
-  final DateTime createdAt;
-  final DateTime updatedAt;
-}
-```
+Shared schema with the STI Sync web admin. **Do not rename fields — they must match
+the web app's `students` collection exactly.**
+
+| Field | Dart type | Firestore type | Notes |
+|---|---|---|---|
+| `id` | `String` | string | Firebase Auth UID (= doc id) |
+| `authUid` | `String` | string | Same as id — explicit copy |
+| `lastName` | `String` | string | Trimmed |
+| `firstName` | `String` | string | Trimmed |
+| `middleName` | `String` | string | `""` if none |
+| `studentId` | `String` | string | Official STI ID, exactly 11 digits |
+| `dateOfBirth` | `String` | string | ISO `YYYY-MM-DD` |
+| `sex` | `String` | string | `"Male"` or `"Female"` |
+| `contactNumber` | `String` | string | 10 digits starting with `9`, no +63 |
+| `courseId` | `String` | string | FK → `courses` |
+| `courseName` | `String` | string | Denormalized |
+| `courseCode` | `String` | string | e.g. `"BSIT"` |
+| `departmentId` | `String` | string | FK → `departments` |
+| `departmentName` | `String` | string | Denormalized |
+| `yearLevel` | `String` | string | `"1st Year"` … `"4th Year"` |
+| `section` | `String` | string | e.g. `"BSIT-2A"` |
+| `schoolYear` | `String` | string | e.g. `"2026-2027"` |
+| `semester` | `String` | string | `"1st Semester"` or `"2nd Semester"` |
+| `email` | `String` | string | Lowercased, matches Auth email |
+| `profilePhotoUrl` | `String` | string | Cloudinary `secure_url`, `""` if none |
+| `schoolIdPhotoUrl` | `String` | string | Cloudinary `secure_url`, `""` if none |
+| `status` | `String` | string | `ACTIVE\|PENDING\|RETURNED\|INACTIVE\|SUSPENDED\|ARCHIVED` |
+| `registrationSource` | `String` | string | `"SELF_REGISTER"` (app) or `"MANUAL"` (web admin) |
+| `addedBy` | `String` | string | `"self"` for self-registration |
+| `rejectionReason` | `String?` | string? | Only present when status = `RETURNED` |
+| `createdAt` | `DateTime` | Timestamp | `FieldValue.serverTimestamp()` on create |
+| `updatedAt` | `DateTime` | Timestamp | `FieldValue.serverTimestamp()` on every write |
+
+**Self-registration writes** `status: "PENDING"` and `registrationSource: "SELF_REGISTER"`.
+The web admin's Pending Verification queue filters `status == "PENDING"`.
 
 **Firestore path:** `/students/{uid}`
 **Mobile read rule:** Student can only read their own document (`uid == auth.currentUser.uid`).
-**Realtime:** Yes — use `.snapshots()` for profile screen so changes from admin are reflected live.
+**Realtime:** Yes — use `.snapshots()` so admin status changes propagate live.
 
 **Indexes required (mobile queries):**
 - None — always fetched by document ID.
+
+// AGENT-UPDATED: 2026-06-17 — Replaced old StudentModel schema with full §2 schema (SELF_REGISTER-compatible, Cloudinary URLs)
 
 ---
 

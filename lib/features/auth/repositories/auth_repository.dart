@@ -4,19 +4,16 @@ import '../../../core/constants/firestore_paths.dart';
 import '../../../core/exceptions/app_exception.dart';
 import '../models/student_model.dart';
 
-/// Repository for handling authentication and student profile data.
+/// Repository for authentication and student profile reads.
 class AuthRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
   AuthRepository(this._auth, this._firestore);
 
-  /// Stream of the current user's authentication state.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Logs in a student using email and password.
-  /// 
-  /// Throws [AppException] if login fails.
+  /// Signs in with email/password. Throws [AppException] on failure.
   Future<UserCredential> login(String email, String password) async {
     try {
       return await _auth.signInWithEmailAndPassword(
@@ -31,14 +28,9 @@ class AuthRepository {
     }
   }
 
-  /// Logs out the current user.
-  Future<void> logout() async {
-    await _auth.signOut();
-  }
+  Future<void> logout() async => _auth.signOut();
 
-  /// Fetches the student profile for a given UID.
-  /// 
-  /// Returns a stream of [StudentModel] to listen for live updates.
+  /// Live stream of the student's own Firestore document.
   Stream<StudentModel?> watchStudentProfile(String uid) {
     return _firestore
         .collection(FirestorePaths.students)
@@ -47,14 +39,14 @@ class AuthRepository {
         .map((doc) => doc.exists ? StudentModel.fromFirestore(doc) : null);
   }
 
-  /// Gets the current student profile one-time.
+  /// One-time fetch of the student's Firestore document.
   Future<StudentModel?> getStudentProfile(String uid) async {
     try {
-      final doc = await _firestore.collection(FirestorePaths.students).doc(uid).get();
-      if (doc.exists) {
-        return StudentModel.fromFirestore(doc);
-      }
-      return null;
+      final doc = await _firestore
+          .collection(FirestorePaths.students)
+          .doc(uid)
+          .get();
+      return doc.exists ? StudentModel.fromFirestore(doc) : null;
     } on FirebaseException catch (e) {
       throw AppException(
         code: e.code,

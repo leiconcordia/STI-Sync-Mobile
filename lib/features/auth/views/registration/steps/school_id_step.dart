@@ -1,22 +1,35 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 5 — Upload Your School ID.
-///
-/// Dashed capture target, a "What your ID should show" preview card, Take Photo
-/// / Upload actions, and a requirements callout. Capture wiring is deferred;
-/// tapping marks the ID as captured for the Review step.
 class SchoolIdStep extends ConsumerWidget {
   const SchoolIdStep({super.key});
 
+  Future<void> _pick(WidgetRef ref, ImageSource source) async {
+    final picker = ImagePicker();
+    final xFile = await picker.pickImage(
+      source: source,
+      imageQuality: 85, // Reduced from 90 for better upload reliability
+      maxWidth: 1024,   // Reduced from 1600 to prevent oversized uploads
+    );
+    if (xFile == null) return;
+    
+    // Explicitly update the viewmodel state
+    ref.read(registrationViewModelProvider.notifier)
+        .setSchoolIdFile(File(xFile.path));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vm = ref.read(registrationViewModelProvider.notifier);
-    final hasId =
-        ref.watch(registrationViewModelProvider.select((s) => s.hasSchoolId));
+    final idFile = ref.watch(
+      registrationViewModelProvider.select((s) => s.schoolIdFile),
+    );
+    final hasId = idFile != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -25,17 +38,16 @@ class SchoolIdStep extends ConsumerWidget {
         children: [
           const StepHeader(
             title: 'Upload Your School ID',
-            subtitle:
-                'Take a clear photo of your physical STI College Ormoc ID card.',
+            subtitle: 'Take a clear photo of your physical STI College Ormoc ID card.',
           ),
           const SizedBox(height: 20),
 
-          // Dashed capture target.
+          // Capture target.
           GestureDetector(
-            onTap: () => vm.setHasSchoolId(true),
+            onTap: () => _pick(ref, ImageSource.camera),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 32),
+              height: 180,
               decoration: BoxDecoration(
                 color: const Color(0xFFF3E9FA),
                 borderRadius: BorderRadius.circular(14),
@@ -44,44 +56,39 @@ class SchoolIdStep extends ConsumerWidget {
                   width: 1.5,
                 ),
               ),
-              child: Column(
-                children: [
-                  Icon(
-                    hasId ? Icons.check_circle : Icons.credit_card,
-                    size: 42,
-                    color: AppColors.accentPurple,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    hasId ? 'ID captured' : 'Tap to photograph your ID',
-                    style: const TextStyle(
-                      color: AppColors.accentPurple,
-                      fontWeight: FontWeight.bold,
+              clipBehavior: Clip.antiAlias,
+              child: hasId
+                  ? Image.file(idFile, fit: BoxFit.cover)
+                  : const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.credit_card, size: 42, color: AppColors.accentPurple),
+                        SizedBox(height: 10),
+                        Text(
+                          'Tap to photograph your ID',
+                          style: TextStyle(
+                              color: AppColors.accentPurple,
+                              fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text('or upload from gallery',
+                            style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'or upload from gallery',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 20),
 
-          // "What your ID should show" preview card.
           const _IdPreviewCard(),
           const SizedBox(height: 20),
 
-          // Take Photo / Upload actions.
           Row(
             children: [
               Expanded(
                 child: SizedBox(
                   height: 54,
                   child: ElevatedButton.icon(
-                    onPressed: () => vm.setHasSchoolId(true),
+                    onPressed: () => _pick(ref, ImageSource.camera),
                     icon: const Icon(Icons.photo_camera_outlined, size: 20),
                     label: const Text('Take Photo',
                         style: TextStyle(fontWeight: FontWeight.bold)),
@@ -90,8 +97,7 @@ class SchoolIdStep extends ConsumerWidget {
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -101,17 +107,15 @@ class SchoolIdStep extends ConsumerWidget {
                 child: SizedBox(
                   height: 54,
                   child: OutlinedButton.icon(
-                    onPressed: () => vm.setHasSchoolId(true),
+                    onPressed: () => _pick(ref, ImageSource.gallery),
                     icon: const Icon(Icons.image_outlined, size: 20),
                     label: const Text('Upload',
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.accentPurple,
-                      side: const BorderSide(
-                          color: AppColors.accentPurple, width: 1.5),
+                      side: const BorderSide(color: AppColors.accentPurple, width: 1.5),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -120,7 +124,6 @@ class SchoolIdStep extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
-          // Requirements callout.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -132,22 +135,18 @@ class SchoolIdStep extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.info_outline, size: 18, color: Color(0xFFE0A100)),
                     SizedBox(width: 8),
-                    Text(
-                      'Requirements',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFE0A100),
-                      ),
-                    ),
+                    Text('Requirements',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFE0A100))),
                   ],
                 ),
                 const SizedBox(height: 10),
-                ...['Full card visible, no cropping', 'All text readable']
-                    .map(
+                ...['Full card visible, no cropping', 'All text readable'].map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
@@ -156,13 +155,9 @@ class SchoolIdStep extends ConsumerWidget {
                         const Text('•  ',
                             style: TextStyle(color: AppColors.primaryDark)),
                         Expanded(
-                          child: Text(
-                            item,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.primaryDark,
-                            ),
-                          ),
+                          child: Text(item,
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.primaryDark)),
                         ),
                       ],
                     ),
@@ -176,7 +171,7 @@ class SchoolIdStep extends ConsumerWidget {
     );
   }
 }
-/// Schematic "what your ID should show" preview card with placeholder bars.
+
 class _IdPreviewCard extends StatelessWidget {
   const _IdPreviewCard();
 
@@ -202,13 +197,9 @@ class _IdPreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'What your ID should show',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.accentPurple,
-            ),
-          ),
+          const Text('What your ID should show',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: AppColors.accentPurple)),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
@@ -217,9 +208,7 @@ class _IdPreviewCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 6,
-                ),
+                    color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)
               ],
             ),
             child: Row(
@@ -235,14 +224,11 @@ class _IdPreviewCard extends StatelessWidget {
                         color: const Color(0xFFC9D4E5),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        'STI',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryDark,
-                        ),
-                      ),
+                      child: const Text('STI',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryDark)),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -253,10 +239,8 @@ class _IdPreviewCard extends StatelessWidget {
                         color: const Color(0xFFE7E7E7),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        'Photo',
-                        style: TextStyle(fontSize: 9, color: Colors.grey),
-                      ),
+                      child: const Text('Photo',
+                          style: TextStyle(fontSize: 9, color: Colors.grey)),
                     ),
                   ],
                 ),

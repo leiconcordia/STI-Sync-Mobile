@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../viewmodels/registration_viewmodel.dart';
 import '../widgets/registration_widgets.dart';
+import '../../../../../shared/providers/providers.dart';
 
 /// Step 6 — Review Your Registration.
 ///
@@ -78,7 +78,7 @@ class ReviewStep extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        orDash(s.course),
+                        orDash(s.courseCode),
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ],
@@ -124,7 +124,7 @@ class ReviewStep extends ConsumerWidget {
               ),
               _ReviewRow(
                 label: 'Course',
-                value: orDash(s.course),
+                value: orDash(s.courseCode),
                 onTap: () => vm.goToStep(1),
               ),
               _ReviewRow(
@@ -139,7 +139,7 @@ class ReviewStep extends ConsumerWidget {
               ),
               _ReviewRow(
                 label: 'Department',
-                value: orDash(s.department),
+                value: orDash(s.departmentName),
                 editable: false,
               ),
               _ReviewRow(
@@ -149,14 +149,14 @@ class ReviewStep extends ConsumerWidget {
               ),
               _ReviewRow(
                 label: 'Profile Photo',
-                value: s.hasProfilePhoto ? 'Uploaded' : 'Not uploaded',
-                ok: s.hasProfilePhoto,
+                value: s.profilePhotoFile != null ? 'Uploaded' : 'Not uploaded',
+                ok: s.profilePhotoFile != null,
                 onTap: () => vm.goToStep(3),
               ),
               _ReviewRow(
                 label: 'School ID',
-                value: s.hasSchoolId ? 'Uploaded' : 'Not uploaded',
-                ok: s.hasSchoolId,
+                value: s.schoolIdFile != null ? 'Uploaded' : 'Not uploaded',
+                ok: s.schoolIdFile != null,
                 onTap: () => vm.goToStep(4),
                 isLast: true,
               ),
