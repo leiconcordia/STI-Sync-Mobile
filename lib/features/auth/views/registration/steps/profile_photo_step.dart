@@ -24,10 +24,9 @@ class ProfilePhotoStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final photoFile = ref.watch(
-      registrationViewModelProvider.select((s) => s.profilePhotoFile),
-    );
-    final hasPhoto = photoFile != null;
+    final state = ref.watch(registrationViewModelProvider);
+    final photoFile = state.profilePhotoFile;
+    final hasPhoto = state.hasProfilePhoto;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -58,7 +57,12 @@ class ProfilePhotoStep extends ConsumerWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: hasPhoto
-                    ? Image.file(photoFile, fit: BoxFit.cover)
+                    ? (photoFile != null
+                        ? Image.file(photoFile, fit: BoxFit.cover)
+                        : Image.network(
+                            ref.read(registrationViewModelProvider).existingProfilePhotoUrl!,
+                            fit: BoxFit.cover,
+                          ))
                     : const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

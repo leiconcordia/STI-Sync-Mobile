@@ -13,28 +13,21 @@ class AcademicDetailsStep extends ConsumerStatefulWidget {
 }
 
 class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
-  static const _courses = ['BSIT', 'BSCS', 'BSCE', 'BSED', 'BSA', 'BSBA'];
   static const _years = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-  static const _semesters = ['1st Semester', '2nd Semester'];
-
-  final _section = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _section.text = ref.read(registrationViewModelProvider).section;
-  }
-
-  @override
-  void dispose() {
-    _section.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final vm = ref.read(registrationViewModelProvider.notifier);
     final state = ref.watch(registrationViewModelProvider);
+
+    if (state.isFetchingAcademicData && state.availableCourses.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -49,17 +42,22 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
 
           const FieldLabel('Course *'),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: _courses.map((c) {
-              return _ChipOption(
-                label: c,
-                selected: state.courseCode == c,
-                onTap: () => vm.setCourse(c),
-              );
-            }).toList(),
-          ),
+          if (state.availableCourses.isEmpty)
+            const Text('No courses available.', style: TextStyle(color: Colors.grey))
+          else
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: state.availableCourses.map((c) {
+                final id = c['id'] as String? ?? 'Unknown';
+                final code = (c['courseCode'] as String?) ?? (c['code'] as String?) ?? id;
+                return _ChipOption(
+                  label: code,
+                  selected: state.courseCode == code,
+                  onTap: () => vm.setCourse(id),
+                );
+              }).toList(),
+            ),
           const SizedBox(height: 20),
 
           const FieldLabel('Year Level *'),
@@ -83,13 +81,26 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
 
           const FieldLabel('Section *'),
           const SizedBox(height: 10),
-          RegistrationTextField(
-            controller: _section,
-            hint: 'e.g. BSIT-2A',
-            icon: Icons.groups_outlined,
-            onChanged: vm.setSection,
-          ),
-          const SizedBox(height: 16),
+          if (state.courseCode.isEmpty)
+             const Text('Select a course to view sections.', style: TextStyle(color: Colors.grey))
+          else if (state.isFetchingAcademicData)
+             const Padding(padding: EdgeInsets.all(8.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+          else if (state.availableSections.isEmpty)
+             const Text('No sections found for this course.', style: TextStyle(color: Colors.grey))
+          else
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: state.availableSections.map((s) {
+                final sectionName = s['name'] as String? ?? 'Unknown';
+                return _ChipOption(
+                  label: sectionName,
+                  selected: state.section == sectionName,
+                  onTap: () => vm.setSection(sectionName),
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 20),
 
           // Auto-filled department (read-only).
           _LockedField(
@@ -104,30 +115,18 @@ class _AcademicDetailsStepState extends ConsumerState<AcademicDetailsStep> {
           ),
           const SizedBox(height: 20),
 
-          const FieldLabel('Semester *'),
+          const FieldLabel('Semester & School Year *'),
           const SizedBox(height: 10),
-          Column(
-            children: _semesters.map((s) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SelectableCard(
-                  label: s,
-                  selected: state.semester == s,
-                  onTap: () => vm.setSemester(s),
-                  fullWidth: true,
-                ),
-              );
-            }).toList(),
+          _LockedField(
+            value: state.semester.isEmpty 
+                ? 'Loading active semester...' 
+                : '${state.semester} (AY ${state.schoolYear})',
           ),
-
-          // School year display (auto-derived).
-          if (state.schoolYear.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'School Year: ${state.schoolYear}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
+          const SizedBox(height: 6),
+          const Text(
+            'Auto-filled based on the currently active semester.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
         ],
       ),
     );
@@ -149,10 +148,10 @@ class _ChipOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.accentPurple : Colors.white,
+          color: selected ? AppColors.primaryDark : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? AppColors.accentPurple : Colors.grey.shade300,
+            color: selected ? AppColors.primaryDark : Colors.grey.shade300,
             width: 1.5,
           ),
         ),
@@ -160,7 +159,7 @@ class _ChipOption extends StatelessWidget {
           label,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: selected ? Colors.white : Colors.grey.shade600,
+            color: selected ? AppColors.secondary : Colors.grey.shade600,
           ),
         ),
       ),
@@ -172,13 +171,11 @@ class _SelectableCard extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final bool fullWidth;
 
   const _SelectableCard({
     required this.label,
     required this.selected,
     required this.onTap,
-    this.fullWidth = false,
   });
 
   @override
@@ -187,7 +184,6 @@ class _SelectableCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: fullWidth ? double.infinity : null,
         height: 56,
         alignment: Alignment.center,
         decoration: BoxDecoration(

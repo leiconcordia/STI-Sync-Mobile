@@ -26,10 +26,9 @@ class SchoolIdStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final idFile = ref.watch(
-      registrationViewModelProvider.select((s) => s.schoolIdFile),
-    );
-    final hasId = idFile != null;
+    final state = ref.watch(registrationViewModelProvider);
+    final idFile = state.schoolIdFile;
+    final hasId = state.hasSchoolId;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -58,7 +57,12 @@ class SchoolIdStep extends ConsumerWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: hasId
-                  ? Image.file(idFile, fit: BoxFit.cover)
+                  ? (idFile != null
+                      ? Image.file(idFile, fit: BoxFit.cover)
+                      : Image.network(
+                          ref.read(registrationViewModelProvider).existingSchoolIdUrl!,
+                          fit: BoxFit.cover,
+                        ))
                   : const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

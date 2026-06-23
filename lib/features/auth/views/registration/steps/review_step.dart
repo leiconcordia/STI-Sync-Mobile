@@ -149,14 +149,14 @@ class ReviewStep extends ConsumerWidget {
               ),
               _ReviewRow(
                 label: 'Profile Photo',
-                value: s.profilePhotoFile != null ? 'Uploaded' : 'Not uploaded',
-                ok: s.profilePhotoFile != null,
+                value: s.hasProfilePhoto ? 'Uploaded' : 'Not uploaded',
+                ok: s.hasProfilePhoto,
                 onTap: () => vm.goToStep(3),
               ),
               _ReviewRow(
                 label: 'School ID',
-                value: s.schoolIdFile != null ? 'Uploaded' : 'Not uploaded',
-                ok: s.schoolIdFile != null,
+                value: s.hasSchoolId ? 'Uploaded' : 'Not uploaded',
+                ok: s.hasSchoolId,
                 onTap: () => vm.goToStep(4),
                 isLast: true,
               ),

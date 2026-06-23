@@ -84,7 +84,20 @@ class RegistrationFlowScreen extends ConsumerWidget {
         ));
       return;
     }
+    final authVm = ref.read(authViewModelProvider.notifier);
+    final statePre = ref.read(registrationViewModelProvider);
+    
+    // Quick pre-flight check for photos before we lock the auth stream.
+    if (!statePre.hasProfilePhoto || !statePre.hasSchoolId) {
+       // Just call submit to let it trigger its own error snackbar state.
+       await vm.submit();
+       return;
+    }
+    
+    authVm.setRegistrationInProgress(true);
     await vm.submit();
+    authVm.setRegistrationInProgress(false);
+    
     // Check result — if still mounted and no error, navigate away.
     if (!context.mounted) return;
     final state = ref.read(registrationViewModelProvider);
@@ -134,7 +147,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.goNamed('welcome');
+                context.goNamed('pendingStatus');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,
@@ -142,7 +155,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Back to Welcome'),
+              child: const Text('View Status'),
             ),
           ),
         ],
@@ -222,6 +235,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
               // Sticky bottom bar.
               _BottomActionBar(
                 step: step,
+                isResubmit: state.isResubmit,
                 isLastStep: state.isLastStep,
                 isSubmitting: state.isSubmitting,
                 submitProgress: state.submitProgress,
@@ -238,6 +252,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
 
 class _BottomActionBar extends StatelessWidget {
   final int step;
+  final bool isResubmit;
   final bool isLastStep;
   final bool isSubmitting;
   final double submitProgress;
@@ -246,6 +261,7 @@ class _BottomActionBar extends StatelessWidget {
 
   const _BottomActionBar({
     required this.step,
+    required this.isResubmit,
     required this.isLastStep,
     required this.isSubmitting,
     required this.submitProgress,
@@ -333,7 +349,9 @@ class _BottomActionBar extends StatelessWidget {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      isLastStep ? 'Submit Registration' : 'Continue',
+                      isLastStep 
+                          ? (isResubmit ? 'Resubmit Registration' : 'Submit Registration') 
+                          : 'Continue',
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold),
                     ),

@@ -7,12 +7,14 @@ class AuthState {
   final bool isLoading;
   final String? errorMessage;
   final StudentModel? student;
+  final StudentModel? pendingStudent; // Added for PENDING/RETURNED accounts
   final bool isAuthenticated;
 
   const AuthState({
     this.isLoading = false,
     this.errorMessage,
     this.student,
+    this.pendingStudent,
     this.isAuthenticated = false,
   });
 
@@ -20,13 +22,17 @@ class AuthState {
     bool? isLoading,
     String? errorMessage,
     StudentModel? student,
+    StudentModel? pendingStudent,
     bool? isAuthenticated,
     bool clearError = false,
+    bool clearStudent = false,
+    bool clearPendingStudent = false,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : errorMessage,
-      student: student ?? this.student,
+      student: clearStudent ? null : (student ?? this.student),
+      pendingStudent: clearPendingStudent ? null : (pendingStudent ?? this.pendingStudent),
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
     );
   }
@@ -45,34 +51,89 @@ class AuthViewModel extends StateNotifier<AuthState> {
 
   void setRegistrationInProgress(bool value) {
     _registrationInProgress = value;
+    if (!value) {
+      // Registration just finished. If we have a user, trigger a manual fetch
+      // to update the state since we ignored the stream events during registration.
+      final user = _repository.auth.currentUser;
+      if (user != null) {
+        _repository.getStudentProfile(user.uid).then((student) {
+          if (student != null) {
+            if (student.status == 'ACTIVE') {
+              state = state.copyWith(
+                isAuthenticated: true,
+                student: student,
+                clearPendingStudent: true,
+                isLoading: false,
+              );
+            } else if (student.status == 'PENDING' || student.status == 'RETURNED') {
+              state = state.copyWith(
+                isAuthenticated: true,
+                pendingStudent: student,
+                clearStudent: true,
+                isLoading: false,
+              );
+            }
+          }
+        });
+      }
+    }
   }
 
   void _init() {
     _repository.authStateChanges.listen((user) async {
       if (user != null) {
-        // If registration is still running, the Firestore doc doesn't exist
-        // yet — do nothing and wait for registration to complete.
-        if (_registrationInProgress) return;
-
         try {
-          final student = await _repository.getStudentProfile(user.uid);
-          if (student != null && student.status == 'ACTIVE') {
-            state = state.copyWith(
-              isAuthenticated: true,
-              student: student,
-              isLoading: false,
-            );
-          } else if (student != null) {
-            // Account exists but status is PENDING / RETURNED / etc.
-            // Don't sign out automatically here — only sign out on explicit login.
+          // Listen to the stream instead of a one-time get so that status changes
+          // reflect immediately in the AuthState.
+          _repository.watchStudentProfile(user.uid).listen((student) {
+            // Ignore updates if registration is still writing the document
+            if (_registrationInProgress) return;
+            if (student != null) {
+              if (student.status == 'ACTIVE') {
+                state = state.copyWith(
+                  isAuthenticated: true,
+                  student: student,
+                  clearPendingStudent: true,
+                  isLoading: false,
+                );
+              } else if (student.status == 'PENDING' || student.status == 'RETURNED') {
+                // Account exists but status is PENDING or RETURNED.
+                // We keep them "authenticated" internally but track them via pendingStudent
+                // so the router can send them to the pending screen.
+                state = state.copyWith(
+                  isAuthenticated: true,
+                  pendingStudent: student,
+                  clearStudent: true,
+                  isLoading: false,
+                );
+              } else {
+                 // Other states like SUSPENDED, INACTIVE
+                 state = state.copyWith(
+                  isAuthenticated: false,
+                  clearStudent: true,
+                  clearPendingStudent: true,
+                  isLoading: false,
+                );
+              }
+            } else {
+               // Null doc edge cases
+               state = state.copyWith(
+                 isAuthenticated: false,
+                 clearStudent: true,
+                 clearPendingStudent: true,
+                 isLoading: false,
+               );
+            }
+          }, onError: (e) {
             state = state.copyWith(
               isAuthenticated: false,
-              student: null,
+              errorMessage: 'Failed to load profile: $e',
+              clearStudent: true,
+              clearPendingStudent: true,
               isLoading: false,
             );
-          }
-          // If student == null: doc not yet written (edge case during
-          // registration or account just created) — stay silent.
+          });
+
         } catch (e) {
           state = state.copyWith(
             isAuthenticated: false,
@@ -83,7 +144,8 @@ class AuthViewModel extends StateNotifier<AuthState> {
       } else {
         state = state.copyWith(
           isAuthenticated: false,
-          student: null,
+          clearStudent: true,
+          clearPendingStudent: true,
           isLoading: false,
         );
       }
@@ -104,17 +166,5 @@ class AuthViewModel extends StateNotifier<AuthState> {
 
   Future<void> logout() async => _repository.logout();
 
-  String _pendingMessage(String status) {
-    switch (status) {
-      case 'PENDING':
-        return 'Your account is pending SAO review. You will be notified once approved.';
-      case 'RETURNED':
-        return 'Your registration was returned for corrections. Please contact the SAO office.';
-      case 'INACTIVE':
-      case 'SUSPENDED':
-        return 'Your account has been deactivated. Contact the SAO office for assistance.';
-      default:
-        return 'Your account is not active. Contact the SAO office.';
-    }
-  }
+
 }

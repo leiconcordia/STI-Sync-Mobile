@@ -60,6 +60,9 @@ the web app's `students` collection exactly.**
 | `createdAt` | `DateTime` | Timestamp | `FieldValue.serverTimestamp()` on create |
 | `updatedAt` | `DateTime` | Timestamp | `FieldValue.serverTimestamp()` on every write |
 
+**Derived Fields (Not stored in Firestore):**
+- `registrationNumber`: Formatted as `REG-{createdAt.year}-{docId.substring(0,4).toUpperCase()}` (e.g. `REG-2026-A3F9`). Used in UI to track pending registrations.
+
 **Self-registration writes** `status: "PENDING"` and `registrationSource: "SELF_REGISTER"`.
 The web admin's Pending Verification queue filters `status == "PENDING"`.
 

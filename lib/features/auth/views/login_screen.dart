@@ -238,7 +238,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style: TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                     GestureDetector(
-                      onTap: () => context.pushNamed('register'),
+                      onTap: () {
+                        ref.read(registrationViewModelProvider.notifier).reset();
+                        context.pushNamed('register');
+                      },
                       child: const Text(
                         'Create Account',
                         style: TextStyle(

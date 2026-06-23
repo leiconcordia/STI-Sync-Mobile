@@ -32,6 +32,11 @@ class RegistrationState {
   final String semester;
   final String schoolYear;
 
+  // Academic Data Fetching
+  final bool isFetchingAcademicData;
+  final List<Map<String, dynamic>> availableCourses;
+  final List<Map<String, dynamic>> availableSections;
+
   // Step 3 — Credentials
   final String email;
   final String password;
@@ -39,14 +44,17 @@ class RegistrationState {
 
   // Step 4 — Profile Photo
   final File? profilePhotoFile;
+  final String? existingProfilePhotoUrl;
 
   // Step 5 — School ID
   final File? schoolIdFile;
+  final String? existingSchoolIdUrl;
 
   // Step 6 — Review
   final bool confirmedAccuracy;
 
   // Submission
+  final String? existingUid; // If non-null, this is a resubmit
   final bool isSubmitting;
   final double submitProgress;
   final String submitProgressLabel;
@@ -71,12 +79,18 @@ class RegistrationState {
     this.departmentName = '',
     this.semester = '',
     this.schoolYear = '',
+    this.isFetchingAcademicData = false,
+    this.availableCourses = const [],
+    this.availableSections = const [],
     this.email = '',
     this.password = '',
     this.confirmPassword = '',
     this.profilePhotoFile,
+    this.existingProfilePhotoUrl,
     this.schoolIdFile,
+    this.existingSchoolIdUrl,
     this.confirmedAccuracy = false,
+    this.existingUid,
     this.isSubmitting = false,
     this.submitProgress = 0,
     this.submitProgressLabel = '',
@@ -85,10 +99,11 @@ class RegistrationState {
     this.debugLog = const [],
   });
 
+  bool get isResubmit => existingUid != null;
   bool get isLastStep => currentStep == kRegistrationStepCount - 1;
   bool get isFirstStep => currentStep == 0;
-  bool get hasProfilePhoto => profilePhotoFile != null;
-  bool get hasSchoolId => schoolIdFile != null;
+  bool get hasProfilePhoto => profilePhotoFile != null || (existingProfilePhotoUrl != null && existingProfilePhotoUrl!.isNotEmpty);
+  bool get hasSchoolId => schoolIdFile != null || (existingSchoolIdUrl != null && existingSchoolIdUrl!.isNotEmpty);
 
   String get displayFullName {
     final mi = middleName.trim().isEmpty ? '' : ' ${middleName.trim()[0]}.';
@@ -145,6 +160,7 @@ class RegistrationState {
   }
 
   String? _validateCredentials() {
+    if (isResubmit) return null; // Skip password validation on resubmit
     if (email.trim().isEmpty) return 'Email address is required.';
     if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email.trim())) {
       return 'Enter a valid email address.';
@@ -180,20 +196,27 @@ class RegistrationState {
     String? departmentName,
     String? semester,
     String? schoolYear,
+    bool? isFetchingAcademicData,
+    List<Map<String, dynamic>>? availableCourses,
+    List<Map<String, dynamic>>? availableSections,
     String? email,
     String? password,
     String? confirmPassword,
     File? profilePhotoFile,
     bool clearProfilePhoto = false,
+    String? existingProfilePhotoUrl,
     File? schoolIdFile,
     bool clearSchoolId = false,
+    String? existingSchoolIdUrl,
     bool? confirmedAccuracy,
+    String? existingUid,
     bool? isSubmitting,
     double? submitProgress,
     String? submitProgressLabel,
     String? submitError,
     bool clearSubmitError = false,
     bool? submitSuccess,
+    List<String>? debugLog,
   }) {
     return RegistrationState(
       currentStep: currentStep ?? this.currentStep,
@@ -212,19 +235,26 @@ class RegistrationState {
       departmentName: departmentName ?? this.departmentName,
       semester: semester ?? this.semester,
       schoolYear: schoolYear ?? this.schoolYear,
+      isFetchingAcademicData: isFetchingAcademicData ?? this.isFetchingAcademicData,
+      availableCourses: availableCourses ?? this.availableCourses,
+      availableSections: availableSections ?? this.availableSections,
       email: email ?? this.email,
       password: password ?? this.password,
       confirmPassword: confirmPassword ?? this.confirmPassword,
       profilePhotoFile:
           clearProfilePhoto ? null : (profilePhotoFile ?? this.profilePhotoFile),
+      existingProfilePhotoUrl: existingProfilePhotoUrl ?? this.existingProfilePhotoUrl,
       schoolIdFile:
           clearSchoolId ? null : (schoolIdFile ?? this.schoolIdFile),
+      existingSchoolIdUrl: existingSchoolIdUrl ?? this.existingSchoolIdUrl,
       confirmedAccuracy: confirmedAccuracy ?? this.confirmedAccuracy,
+      existingUid: existingUid ?? this.existingUid,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submitProgress: submitProgress ?? this.submitProgress,
       submitProgressLabel: submitProgressLabel ?? this.submitProgressLabel,
       submitError: clearSubmitError ? null : (submitError ?? this.submitError),
       submitSuccess: submitSuccess ?? this.submitSuccess,
+      debugLog: debugLog ?? this.debugLog,
     );
   }
 }
@@ -236,8 +266,38 @@ class RegistrationState {
 class RegistrationViewModel extends StateNotifier<RegistrationState> {
   final RegistrationRepository _repo;
 
-  RegistrationViewModel(this._repo)
-      : super(RegistrationState(schoolYear: _currentSchoolYear()));
+  RegistrationViewModel(this._repo) : super(const RegistrationState()) {
+    _fetchInitialAcademicData();
+  }
+
+  void reset() {
+    state = const RegistrationState();
+    _fetchInitialAcademicData();
+  }
+
+  Future<void> _fetchInitialAcademicData() async {
+    state = state.copyWith(isFetchingAcademicData: true);
+    try {
+      final courses = await _repo.getCourses();
+      final activeSemester = await _repo.getActiveSemester();
+
+      String sem = '';
+      String sy = '';
+      if (activeSemester != null) {
+        sem = (activeSemester['name'] as String?) ?? (activeSemester['semester'] as String?) ?? (activeSemester['term'] as String?) ?? '';
+        sy = (activeSemester['academicYear'] as String?) ?? (activeSemester['schoolYear'] as String?) ?? (activeSemester['year'] as String?) ?? '';
+      }
+
+      state = state.copyWith(
+        availableCourses: courses,
+        semester: sem,
+        schoolYear: sy,
+        isFetchingAcademicData: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isFetchingAcademicData: false);
+    }
+  }
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -268,17 +328,19 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
         if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(s.email.trim())) {
           return 'Enter a valid email address.';
         }
-        if (s.password.length < 8) return 'Password must be at least 8 characters.';
-        if (!s.password.contains(RegExp(r'[A-Z]'))) {
-          return 'Password must contain at least one uppercase letter.';
+        if (!s.isResubmit) {
+          if (s.password.length < 8) return 'Password must be at least 8 characters.';
+          if (!s.password.contains(RegExp(r'[A-Z]'))) {
+            return 'Password must contain at least one uppercase letter.';
+          }
+          if (!s.password.contains(RegExp(r'[0-9]'))) {
+            return 'Password must contain at least one number.';
+          }
+          if (!s.password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+            return 'Password must contain at least one special character.';
+          }
+          if (s.password != s.confirmPassword) return 'Passwords do not match.';
         }
-        if (!s.password.contains(RegExp(r'[0-9]'))) {
-          return 'Password must contain at least one number.';
-        }
-        if (!s.password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
-          return 'Password must contain at least one special character.';
-        }
-        if (s.password != s.confirmPassword) return 'Passwords do not match.';
         return null;
       case 3:
         if (!s.hasProfilePhoto) return 'Please take or upload your profile photo.';
@@ -333,14 +395,44 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
   void setSex(String v) => state = state.copyWith(sex: v);
   void setContactNumber(String v) => state = state.copyWith(contactNumber: v);
 
-  void setCourse(String code) {
-    final info = _courseInfo(code);
-    state = state.copyWith(
-      courseCode: code,
-      courseName: info['name']!,
-      departmentId: info['deptId']!,
-      departmentName: info['deptName']!,
+  void setCourse(String courseId) async {
+    final courseMap = state.availableCourses.firstWhere(
+      (c) => c['id'] == courseId || c['courseCode'] == courseId || c['code'] == courseId,
+      orElse: () => <String, dynamic>{},
     );
+
+    final codeForDisplay = (courseMap['courseCode'] as String?) ?? (courseMap['code'] as String?) ?? (courseMap['id'] as String?) ?? '';
+
+    state = state.copyWith(
+      courseCode: codeForDisplay,
+      courseName: courseMap['name'] ?? '',
+      departmentId: courseMap['departmentId'] ?? '',
+      departmentName: courseMap['departmentName'] ?? '',
+      section: '', // clear section
+      availableSections: [],
+      isFetchingAcademicData: true,
+    );
+
+    try {
+      final deptId = courseMap['departmentId'];
+      String fetchedDeptName = courseMap['departmentName'] ?? '';
+      
+      if (deptId != null && deptId.toString().isNotEmpty && fetchedDeptName.isEmpty) {
+        final deptSnap = await _repo.getDepartment(deptId);
+        if (deptSnap != null) {
+          fetchedDeptName = deptSnap['name'] ?? deptSnap['departmentName'] ?? '';
+        }
+      }
+
+      final sections = await _repo.getSections(courseId);
+      state = state.copyWith(
+        departmentName: fetchedDeptName,
+        availableSections: sections,
+        isFetchingAcademicData: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isFetchingAcademicData: false);
+    }
   }
 
   void setYearLevel(String v) => state = state.copyWith(yearLevel: v);
@@ -364,26 +456,71 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
 
   void clearSubmitError() => state = state.copyWith(clearSubmitError: true);
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Future<void> populateFromStudent(StudentModel student) async {
+    state = state.copyWith(
+      existingUid: student.id,
+      lastName: student.lastName,
+      firstName: student.firstName,
+      middleName: student.middleName,
+      studentId: student.studentId,
+      dateOfBirth: DateTime.tryParse(student.dateOfBirth),
+      sex: student.sex,
+      contactNumber: student.contactNumber,
+      courseCode: student.courseCode.isNotEmpty ? student.courseCode : student.courseId,
+      courseName: student.courseName,
+      yearLevel: student.yearLevel,
+      section: student.section,
+      departmentId: student.departmentId,
+      departmentName: student.departmentName,
+      semester: student.semester,
+      schoolYear: student.schoolYear,
+      email: student.email,
+      existingProfilePhotoUrl: student.profilePhotoUrl,
+      existingSchoolIdUrl: student.schoolIdPhotoUrl,
+      currentStep: 0,
+    );
+    
+    // Fetch sections for the pre-populated course directly so the dropdown works.
+    // We use courseId if available, otherwise courseCode.
+    final targetCourseId = student.courseId.isNotEmpty ? student.courseId : student.courseCode;
+    if (targetCourseId.isNotEmpty) {
+      state = state.copyWith(isFetchingAcademicData: true);
+      try {
+        final sections = await _repo.getSections(targetCourseId);
+        state = state.copyWith(
+          availableSections: sections,
+          isFetchingAcademicData: false,
+        );
+      } catch (e) {
+        state = state.copyWith(isFetchingAcademicData: false);
+      }
+    }
+  }
+
   // ── Submission ────────────────────────────────────────────────────────────
 
-  Future<void> submit() async {
+  Future<bool> submit() async {
     final s = state;
     
     // Check for missing files explicitly before starting
-    if (s.profilePhotoFile == null) {
+    if (!s.hasProfilePhoto) {
       state = state.copyWith(
         isSubmitting: false,
         submitError: 'Profile photo is missing. Please go back and take a photo.',
       );
-      return;
+      return false;
     }
-    if (s.schoolIdFile == null) {
+    if (!s.hasSchoolId) {
       state = state.copyWith(
         isSubmitting: false,
         submitError: 'School ID photo is missing. Please go back and take a photo.',
       );
-      return;
+      return false;
     }
+    
+    state = state.copyWith(isSubmitting: true, submitError: null);
 
     state = state.copyWith(
       isSubmitting: true,
@@ -398,8 +535,8 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
     final digits = s.contactNumber.replaceAll(RegExp(r'\D'), '');
 
     final model = StudentModel(
-      id: '',
-      authUid: '',
+      id: s.existingUid ?? '',
+      authUid: s.existingUid ?? '',
       lastName: s.lastName.trim(),
       firstName: s.firstName.trim(),
       middleName: s.middleName.trim(),
@@ -424,71 +561,48 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
       addedBy: 'self',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      rejectionReason: null, // Clear rejection reason on resubmit
     );
 
     try {
-      await _repo.register(
-        data: model,
-        password: s.password,
-        profilePhotoFile: s.profilePhotoFile!,
-        schoolIdFile: s.schoolIdFile!,
-        onProgress: (progress, label) {
-          state = state.copyWith(
-            submitProgress: progress,
-            submitProgressLabel: label,
-          );
-        },
-      );
+      if (s.isResubmit) {
+        await _repo.resubmit(
+          uid: s.existingUid!,
+          data: model,
+          profilePhotoFile: s.profilePhotoFile,
+          existingProfilePhotoUrl: s.existingProfilePhotoUrl,
+          schoolIdFile: s.schoolIdFile,
+          existingSchoolIdUrl: s.existingSchoolIdUrl,
+          onProgress: (progress, label) {
+            state = state.copyWith(
+              submitProgress: progress,
+              submitProgressLabel: label,
+            );
+          },
+        );
+      } else {
+        await _repo.register(
+          data: model,
+          password: s.password,
+          profilePhotoFile: s.profilePhotoFile!,
+          schoolIdFile: s.schoolIdFile!,
+          onProgress: (progress, label) {
+            state = state.copyWith(
+              submitProgress: progress,
+              submitProgressLabel: label,
+            );
+          },
+        );
+      }
       state = state.copyWith(isSubmitting: false, submitSuccess: true);
-    } on Exception catch (e) {
+      return true;
+    } catch (e) {
       state = state.copyWith(
         isSubmitting: false,
-        submitError: e.toString().replaceFirst('Exception: ', ''),
+        submitError: 'Failed to submit registration. Please try again.',
+        debugLog: [...s.debugLog, 'Submit error: $e'],
       );
+      return false;
     }
-  }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  static String _currentSchoolYear() {
-    final now = DateTime.now();
-    final start = now.month >= 8 ? now.year : now.year - 1;
-    return '$start-${start + 1}';
-  }
-
-  static Map<String, String> _courseInfo(String code) {
-    const map = <String, Map<String, String>>{
-      'BSIT': {
-        'name': 'Bachelor of Science in Information Technology',
-        'deptId': 'ict',
-        'deptName': 'ICT',
-      },
-      'BSCS': {
-        'name': 'Bachelor of Science in Computer Science',
-        'deptId': 'ict',
-        'deptName': 'ICT',
-      },
-      'BSCE': {
-        'name': 'Bachelor of Science in Computer Engineering',
-        'deptId': 'ict',
-        'deptName': 'ICT',
-      },
-      'BSED': {
-        'name': 'Bachelor of Secondary Education',
-        'deptId': 'education',
-        'deptName': 'Education',
-      },
-      'BSA': {
-        'name': 'Bachelor of Science in Accountancy',
-        'deptId': 'business',
-        'deptName': 'Business & Accountancy',
-      },
-      'BSBA': {
-        'name': 'Bachelor of Science in Business Administration',
-        'deptId': 'business',
-        'deptName': 'Business & Accountancy',
-      },
-    };
-    return map[code] ?? {'name': code, 'deptId': '', 'deptName': ''};
   }
 }

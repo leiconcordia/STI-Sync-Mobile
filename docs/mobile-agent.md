@@ -115,6 +115,7 @@ lib/
 │   │   │   └── registration_viewmodel.dart   # 6-step registration flow state
 │   │   ├── views/
 │   │   │   ├── login_screen.dart
+│   │   │   ├── pending_status_screen.dart
 │   │   │   ├── splash_screen.dart
 │   │   │   ├── welcome_screen.dart
 │   │   │   └── registration/
@@ -247,6 +248,7 @@ All routes are defined in `lib/core/router/app_router.dart`.
 | `splash` | `/` | `SplashScreen` |
 | `login` | `/login` | `LoginScreen` |
 | `register` | `/register` | `RegistrationFlowScreen` (6-step student registration) |
+| `pendingStatus` | `/pending-status` | `PendingStatusScreen` (Account Under Review / Returned) |
 | `dashboard` | `/dashboard` | `DashboardScreen` |
 | `events` | `/events` | `EventsScreen` |
 | `eventDetail` | `/events/:eventId` | `EventDetailScreen` |

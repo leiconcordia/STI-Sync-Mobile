@@ -76,79 +76,109 @@ class _CredentialsStepState extends ConsumerState<CredentialsStep> {
           ),
           const SizedBox(height: 20),
 
-          RegistrationTextField(
-            controller: _password,
-            hint: 'Create password *',
-            icon: Icons.lock_outline,
-            obscureText: !_showPassword,
-            onChanged: vm.setPassword,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _showPassword ? Icons.visibility : Icons.visibility_off,
-                color: Colors.grey,
-              ),
-              onPressed: () => setState(() => _showPassword = !_showPassword),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Live requirement chips.
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _ReqChip(label: '8+ characters', met: hasLength),
-              _ReqChip(label: 'Uppercase', met: hasUpper),
-              _ReqChip(label: 'Number', met: hasNumber),
-              _ReqChip(label: 'Special char', met: hasSpecial),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          RegistrationTextField(
-            controller: _confirm,
-            hint: 'Confirm Password *',
-            icon: Icons.lock_outline,
-            obscureText: !_showConfirm,
-            onChanged: vm.setConfirmPassword,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _showConfirm ? Icons.visibility : Icons.visibility_off,
-                color: Colors.grey,
-              ),
-              onPressed: () => setState(() => _showConfirm = !_showConfirm),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Encryption reassurance note.
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F0FA),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.4)),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.shield_outlined,
-                    size: 20, color: AppColors.accentPurple),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Your password is encrypted. STI staff will never ask for '
-                    'your password.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.accentPurple,
-                      height: 1.4,
-                    ),
-                  ),
+          if (!ref.read(registrationViewModelProvider).isResubmit) ...[
+            RegistrationTextField(
+              controller: _password,
+              hint: 'Create password *',
+              icon: Icons.lock_outline,
+              obscureText: !_showPassword,
+              onChanged: vm.setPassword,
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _showPassword ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey,
                 ),
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Live requirement chips.
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _ReqChip(label: '8+ characters', met: hasLength),
+                _ReqChip(label: 'Uppercase', met: hasUpper),
+                _ReqChip(label: 'Number', met: hasNumber),
+                _ReqChip(label: 'Special char', met: hasSpecial),
               ],
             ),
-          ),
+            const SizedBox(height: 20),
+
+            RegistrationTextField(
+              controller: _confirm,
+              hint: 'Confirm Password *',
+              icon: Icons.lock_outline,
+              obscureText: !_showConfirm,
+              onChanged: vm.setConfirmPassword,
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _showConfirm ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () => setState(() => _showConfirm = !_showConfirm),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // Encryption reassurance note (or resubmit note).
+          if (ref.read(registrationViewModelProvider).isResubmit)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F0FA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 20, color: AppColors.accentPurple),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Your password was set during your initial registration. You only need to verify your email address to resubmit.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.accentPurple,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F0FA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined,
+                      size: 20, color: AppColors.accentPurple),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Your password is encrypted. STI staff will never ask for '
+                      'your password.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.accentPurple,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

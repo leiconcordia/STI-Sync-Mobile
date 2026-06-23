@@ -27,7 +27,6 @@ class CloudinaryService {
     void Function(double progress)? onProgress,
   }) async {
     final bytes = await file.readAsBytes();
-    final length = bytes.length;
 
 
 

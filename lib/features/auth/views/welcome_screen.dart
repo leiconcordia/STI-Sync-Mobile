@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/providers/providers.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -137,7 +138,10 @@ class WelcomeScreen extends ConsumerWidget {
                     width: double.infinity,
                     height: 60,
                     child: OutlinedButton(
-                      onPressed: () => context.pushNamed('register'),
+                      onPressed: () {
+                        ref.read(registrationViewModelProvider.notifier).reset();
+                        context.pushNamed('register');
+                      },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF001D4A),
                         side: const BorderSide(color: Color(0xFF001D4A), width: 1.5),

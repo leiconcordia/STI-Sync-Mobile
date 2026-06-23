@@ -178,11 +178,11 @@ class _DateField extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.accentPurple, width: 1.5),
+          border: Border.all(color: Colors.grey.shade300),
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.accentPurple),
+            const Icon(Icons.calendar_today_outlined, size: 18, color: Colors.grey),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -192,7 +192,7 @@ class _DateField extends StatelessWidget {
                     'Date of Birth *',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.accentPurple,
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

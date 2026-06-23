@@ -36,6 +36,6 @@ final registrationRepositoryProvider = Provider<RegistrationRepository>((ref) {
 });
 
 final registrationViewModelProvider =
-    StateNotifierProvider.autoDispose<RegistrationViewModel, RegistrationState>(
+    StateNotifierProvider<RegistrationViewModel, RegistrationState>(
   (ref) => RegistrationViewModel(ref.watch(registrationRepositoryProvider)),
 );

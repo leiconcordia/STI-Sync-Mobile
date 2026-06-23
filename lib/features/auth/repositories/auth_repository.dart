@@ -11,6 +11,8 @@ class AuthRepository {
 
   AuthRepository(this._auth, this._firestore);
 
+  FirebaseAuth get auth => _auth;
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   /// Signs in with email/password. Throws [AppException] on failure.
