@@ -1,8 +1,8 @@
-# STI Sync Mobile — Database Schema Reference
+﻿# STI Sync Mobile ΓÇö Database Schema Reference
 
 > **Single source of truth** for all Firestore collections the mobile app reads or writes.
 > **Agent rule:** Verify every field against this doc before writing a query or model. If a field is missing, update this doc first, then implement.
-> **Shared backend:** This app reads from the same Firestore project as the STI Sync Web app. Do NOT redefine existing collections — only document what the mobile app actively uses.
+> **Shared backend:** This app reads from the same Firestore project as the STI Sync Web app. Do NOT redefine existing collections ΓÇö only document what the mobile app actively uses.
 
 ---
 
@@ -12,6 +12,7 @@
 |---|---|---|
 | `students` | Read own profile | `snapshots()` stream |
 | `events` | Read approved events | `snapshots()` stream |
+| `events/{eventId}/event_sessions` | Read sessions per event | `snapshots()` stream |
 | `attendance` | Read own records; write on QR scan | Stream + write |
 | `payables` | Read own payment status | `snapshots()` stream |
 | `announcements` | Read all targeted at student/org | `snapshots()` stream |
@@ -26,13 +27,13 @@
 
 **Document ID** = Firebase Auth UID of the student.
 
-Shared schema with the STI Sync web admin. **Do not rename fields — they must match
+Shared schema with the STI Sync web admin. **Do not rename fields ΓÇö they must match
 the web app's `students` collection exactly.**
 
 | Field | Dart type | Firestore type | Notes |
 |---|---|---|---|
 | `id` | `String` | string | Firebase Auth UID (= doc id) |
-| `authUid` | `String` | string | Same as id — explicit copy |
+| `authUid` | `String` | string | Same as id ΓÇö explicit copy |
 | `lastName` | `String` | string | Trimmed |
 | `firstName` | `String` | string | Trimmed |
 | `middleName` | `String` | string | `""` if none |
@@ -40,12 +41,12 @@ the web app's `students` collection exactly.**
 | `dateOfBirth` | `String` | string | ISO `YYYY-MM-DD` |
 | `sex` | `String` | string | `"Male"` or `"Female"` |
 | `contactNumber` | `String` | string | 10 digits starting with `9`, no +63 |
-| `courseId` | `String` | string | FK → `courses` |
+| `courseId` | `String` | string | FK ΓåÆ `courses` |
 | `courseName` | `String` | string | Denormalized |
 | `courseCode` | `String` | string | e.g. `"BSIT"` |
-| `departmentId` | `String` | string | FK → `departments` |
+| `departmentId` | `String` | string | FK ΓåÆ `departments` |
 | `departmentName` | `String` | string | Denormalized |
-| `yearLevel` | `String` | string | `"1st Year"` … `"4th Year"` |
+| `yearLevel` | `String` | string | `"1st Year"` ΓÇª `"4th Year"` |
 | `section` | `String` | string | e.g. `"BSIT-2A"` |
 | `schoolYear` | `String` | string | e.g. `"2026-2027"` |
 | `semester` | `String` | string | `"1st Semester"` or `"2nd Semester"` |
@@ -67,10 +68,12 @@ The web admin's Pending Verification queue filters `status == "PENDING"`.
 
 **Firestore path:** `/students/{uid}`
 **Mobile read rule:** Student can only read their own document (`uid == auth.currentUser.uid`).
-**Realtime:** Yes — use `.snapshots()` so admin status changes propagate live.
+**Realtime:** Yes ΓÇö use `.snapshots()` so admin status changes propagate live.
 
 **Indexes required (mobile queries):**
-- None — always fetched by document ID.
+- None ΓÇö always fetched by document ID.
+
+// AGENT-UPDATED: 2026-06-17 ΓÇö Replaced old StudentModel schema with full ┬º2 schema (SELF_REGISTER-compatible, Cloudinary URLs)
 
 ---
 
@@ -80,76 +83,36 @@ The web admin's Pending Verification queue filters `status == "PENDING"`.
 /// Represents a published/approved event visible to students.
 class EventModel {
   final String id;
-  final String referenceId;
   final String title;
-  final String? tagline;
   final String description;
-  final List<String> objectives;
-  final String? bannerImageUrl;
-  final String? thumbnailUrl;
+  final EventType type;          // academic | socio_civic | cultural | sports | other
+  final String? organizationId;  // null = SAO-owned event
+  final String organizationName; // Denormalized for display
+  final EventStatus status;      // Only 'approved' events are shown in mobile
+  final String? coverImageUrl;   // Firebase Storage URL
 
-  // ─── Classification ───
-  final String eventTypeId;
-  final String eventCategoryId;
-  final String hostingOrgId;
+  // ΓöÇΓöÇΓöÇ Schedule ΓöÇΓöÇΓöÇ
+  final DateTime startDate;
+  final DateTime endDate;
+  final String venue;
 
-  // ─── Academic Context ───
-  final String semesterId;
-  final String schoolYear;
+  // ΓöÇΓöÇΓöÇ Payables ΓöÇΓöÇΓöÇ
+  final bool studentPayableEnabled;
+  final double studentPayableAmount; // Per-student fee in PHP. 0.0 if not enabled.
 
-  // ─── Schedule ───
-  final List<EventSessionModel> sessions; // Embedded array of sessions
-  final String venueId;
-  final String eventFormat; // 'On-Campus' | 'Online' | 'Hybrid'
+  // ΓöÇΓöÇΓöÇ Participants ΓöÇΓöÇΓöÇ
+  final List<String> eligibleYearLevels; // e.g., ["1", "2", "3", "4"]
 
-  // ─── Participants ───
-  final List<String> targetYearLevels;
-  final List<String> targetDepartmentIds;
-  final int expectedParticipantCount;
-
-  // ─── Attendance ───
-  final bool attendanceEnabled;
-  final double? minAttendancePercent;
-  final int? lateThresholdMinutes;
-  final int? gracePeriodMinutes;
-  final double? latePenaltyAmount;
-
-  // ─── Certificates ───
-  final bool certificatesEnabled;
-  final bool autoIssueCertificates;
-  final String? certificateSignatory;
-
-  // ─── Payables ───
-  final bool studentPayablesEnabled;
-  final double? suggestedFeePerStudent;
-  final double? adminFeeOverride;
-  final double? totalExpectedCollection;
-
-  // ─── Settings ───
-  final bool enableQRTickets;
-  final bool mandatoryAttendance;
-  final bool lockAfterApproval;
-  final String scannerActivationCode;
-
-  // ─── Lifecycle ───
-  final String proposalStatus; // draft | approved
-  final String createdBy;
+  // ΓöÇΓöÇΓöÇ Meta ΓöÇΓöÇΓöÇ
+  final String academicYear;     // e.g., "2024-2025"
+  final String semester;         // "1st" | "2nd" | "summer"
+  final DateTime? publishedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 }
 
-class EventSessionModel {
-  final String id;
-  final String title;
-  final String date;            // ISO YYYY-MM-DD
-  final String startTime;       // HH:mm
-  final String endTime;         // HH:mm
-  final String timeInOpen;
-  final String timeInClose;
-  final bool hasTimeOut;
-  final String? timeOutOpen;
-  final String? timeOutClose;
-}
+enum EventType { academic, socioCivic, cultural, sports, other }
+enum EventStatus { draft, pendingApproval, approved, rejected, completed }
 ```
 
 **Firestore path:** `/events/{eventId}`
@@ -158,15 +121,56 @@ class EventSessionModel {
 // Only show approved events the student is eligible for
 _firestore
   .collection(FirestorePaths.events)
-  .where('proposalStatus', isEqualTo: 'approved')
-  .where('targetYearLevels', arrayContains: student.yearLevel.toString())
-  .orderBy('createdAt', descending: true)
+  .where('status', isEqualTo: 'approved')
+  .where('eligibleYearLevels', arrayContains: student.yearLevel.toString())
+  .orderBy('startDate', descending: false)
+  .snapshots()
+```
+
+**Indexes required:**
+- `status` ASC, `startDate` ASC
+- `status` ASC, `eligibleYearLevels` ARRAY, `startDate` ASC
+
+---
+
+### 2.3 `events/{eventId}/event_sessions/{sessionId}`
+
+Sub-collection of each event. Each session is a scannable time slot.
+
+```dart
+/// A single scannable session within an event.
+class EventSessionModel {
+  final String id;
+  final String eventId;          // Parent event ID
+  final String label;            // e.g., "Day 1 Morning"
+  final DateTime date;
+  final String startTime;        // "08:00" ΓÇö 24hr format
+  final String endTime;          // "12:00"
+  final String venue;
+
+  // ΓöÇΓöÇΓöÇ Attendance Window ΓöÇΓöÇΓöÇ
+  final DateTime attendanceWindowStart; // When QR scanning opens
+  final DateTime attendanceWindowEnd;   // When QR scanning closes
+
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+```
+
+**Firestore path:** `/events/{eventId}/event_sessions/{sessionId}`
+**Mobile query:** Fetch all sessions for a given event.
+```dart
+_firestore
+  .collection(FirestorePaths.events)
+  .doc(eventId)
+  .collection(FirestorePaths.eventSessions)
+  .orderBy('date')
   .snapshots()
 ```
 
 ---
 
-### 2.3 `attendance/{attendanceId}`
+### 2.4 `attendance/{attendanceId}`
 
 ```dart
 /// A single attendance check-in record for a student at an event session.
@@ -175,22 +179,17 @@ class AttendanceModel {
   final String eventId;
   final String sessionId;
   final String studentId;
-  final String organizationId;
-
   final String studentName;      // Denormalized
   final String studentNumber;    // Denormalized
   final String course;           // Denormalized
   final int yearLevel;           // Denormalized
-  
-  final String scanMethod;       // 'qr' | 'manual'
-  final String scannedBy;        // UID of officer who scanned
-  final String scannedByName;    // Denormalized scanner name
-  final String gateType;         // 'entry' | 'exit'
-  
-  final DateTime scannedAt;
+  final String scannedByUid;    // UID of officer who scanned (or 'self' for student QR)
+  final ScanMethod scanMethod;   // qr | manual
+  final DateTime checkedInAt;
   final DateTime createdAt;
-  final DateTime serverTimestamp;
 }
+
+enum ScanMethod { qr, manual }
 ```
 
 **Firestore path:** `/attendance/{attendanceId}`
@@ -199,34 +198,34 @@ class AttendanceModel {
 _firestore
   .collection(FirestorePaths.attendance)
   .where('studentId', isEqualTo: currentStudentId)
-  .orderBy('scannedAt', descending: true)
+  .orderBy('checkedInAt', descending: true)
   .snapshots()
 ```
 
-**Mobile write** (QR self-check-in — only if `qrTicketUnlocked == true`):
+**Mobile write** (QR self-check-in ΓÇö only if `qrTicketUnlocked == true`):
 ```dart
 await _firestore.collection(FirestorePaths.attendance).add({
   'eventId': eventId,
   'sessionId': sessionId,
   'studentId': student.id,
-  'organizationId': organizationId,
   'studentName': student.displayName,
   'studentNumber': student.studentNumber,
   'course': student.courseCode,
   'yearLevel': student.yearLevel,
+  'scannedByUid': student.id,
   'scanMethod': 'qr',
-  'scannedBy': student.id,
-  'scannedByName': student.displayName,
-  'gateType': 'entry', // or 'exit'
-  'scannedAt': FieldValue.serverTimestamp(),
+  'checkedInAt': FieldValue.serverTimestamp(),
   'createdAt': FieldValue.serverTimestamp(),
-  'serverTimestamp': FieldValue.serverTimestamp(),
 });
 ```
 
+**Indexes required:**
+- `studentId` ASC, `checkedInAt` DESC
+- `eventId` ASC, `sessionId` ASC, `studentId` ASC
+
 ---
 
-### 2.4 `payables/{payableId}`
+### 2.5 `payables/{payableId}`
 
 ```dart
 /// Tracks a student's payment obligation and QR access status for an event.
@@ -236,32 +235,32 @@ class PayableModel {
   final String studentId;
   final String organizationId;
 
-  // ─── Denormalized student info ───
+  // ΓöÇΓöÇΓöÇ Denormalized student info ΓöÇΓöÇΓöÇ
   final String studentName;
   final String studentNumber;
   final String course;
   final int yearLevel;
 
-  // ─── Payment ───
+  // ΓöÇΓöÇΓöÇ Payment ΓöÇΓöÇΓöÇ
   final double amountDue;           // In PHP
   final double amountPaid;          // 0.0 until paid
-  final String paymentStatus;       // 'unpaid' | 'paid' | 'waived' | 'refunded'
+  final PaymentStatus paymentStatus; // unpaid | paid | waived | refunded
   final DateTime? paidAt;
-  final String? paymentMethod;      // 'cash' | 'gcash' | 'bank_transfer'
+  final PaymentMethod? paymentMethod; // cash | gcash | bank_transfer
   final String? paymentReference;   // Receipt or transaction ID
-  final String? processedBy;
 
-  // ─── QR Gate Control (CRITICAL) ───
+  // ΓöÇΓöÇΓöÇ QR Gate Control (CRITICAL) ΓöÇΓöÇΓöÇ
   /// When false: student is BLOCKED from QR check-in.
   /// When true: student may scan in at the gate.
   /// Never allow attendance write when this is false.
   final bool qrTicketUnlocked;
 
-  final List<dynamic> transactions; // Embedded payment transactions
-
   final DateTime createdAt;
   final DateTime updatedAt;
 }
+
+enum PaymentStatus { unpaid, paid, waived, refunded }
+enum PaymentMethod { cash, gcash, bankTransfer }
 ```
 
 **Firestore path:** `/payables/{payableId}`
@@ -276,7 +275,7 @@ _firestore
 
 **QR gate check** (must run before writing attendance):
 ```dart
-// In AttendanceRepository — MANDATORY before any attendance write
+// In AttendanceRepository ΓÇö MANDATORY before any attendance write
 Future<bool> isStudentAllowedEntry(String eventId, String studentId) async {
   final snap = await _firestore
     .collection(FirestorePaths.payables)
@@ -290,9 +289,13 @@ Future<bool> isStudentAllowedEntry(String eventId, String studentId) async {
 }
 ```
 
+**Indexes required:**
+- `studentId` ASC, `eventId` ASC
+- `eventId` ASC, `qrTicketUnlocked` ASC
+
 ---
 
-### 2.5 `announcements/{announcementId}`
+### 2.6 `announcements/{announcementId}`
 
 ```dart
 /// An announcement published by SAO to students/organizations.
@@ -320,9 +323,13 @@ enum AnnouncementPriority { normal, urgent }
 // Merge client-side (Firestore does not support OR across different fields in one query)
 ```
 
+**Indexes required:**
+- `publishedAt` DESC
+- `targetAudience` ASC, `publishedAt` DESC
+
 ---
 
-### 2.6 `certificates/{certificateId}`
+### 2.7 `certificates/{certificateId}`
 
 ```dart
 /// A certificate issued to a student for an event.
@@ -335,7 +342,7 @@ class CertificateModel {
   final String templateId;
   final String issuedByUid;
   final String issuedByName;     // Denormalized
-  final String fileUrl;          // Firebase Storage URL — PDF or image
+  final String fileUrl;          // Firebase Storage URL ΓÇö PDF or image
   final DateTime issuedAt;
   final DateTime createdAt;
 }
@@ -353,7 +360,7 @@ _firestore
 
 ---
 
-### 2.7 `organizations/{organizationId}`
+### 2.8 `organizations/{organizationId}`
 
 Mobile app reads org data for display (name, logo). Students do not write to this collection.
 
@@ -369,7 +376,7 @@ class OrganizationModel {
 ```
 
 **Firestore path:** `/organizations/{organizationId}`
-**Access:** One-time `get()` is acceptable here — org info changes rarely.
+**Access:** One-time `get()` is acceptable here ΓÇö org info changes rarely.
 
 ---
 
@@ -388,7 +395,10 @@ class FirestorePaths {
   static const String certificates   = 'certificates';
   static const String organizations  = 'organizations';
 
-  // Admin-only (mobile reads only — no writes)
+  // Sub-collections
+  static const String eventSessions  = 'event_sessions'; // under /events/{id}/
+
+  // Admin-only (mobile reads only ΓÇö no writes)
   static const String sasAdmins      = 'sas_admins';
 }
 ```
@@ -401,10 +411,11 @@ The mobile app operates as an authenticated student. The Firestore rules enforce
 
 | Collection | Mobile Read | Mobile Write |
 |---|---|---|
-| `students` | Own document only (`uid == auth.uid`) | None — admin manages |
-| `events` | `proposalStatus == 'approved'` only | None |
+| `students` | Own document only (`uid == auth.uid`) | None ΓÇö admin manages |
+| `events` | `status == 'approved'` only | None |
+| `event_sessions` | Under any approved event | None |
 | `attendance` | Own records (`studentId == auth.uid`) | Only when `qrTicketUnlocked == true` |
-| `payables` | Own records (`studentId == auth.uid`) | None — admin marks paid |
+| `payables` | Own records (`studentId == auth.uid`) | None ΓÇö admin marks paid |
 | `announcements` | Targeted at `'all'`, `'students'`, or own orgIds | `readByUids` field only (arrayUnion) |
 | `certificates` | Own records (`studentId == auth.uid`) | None |
 | `organizations` | Active orgs only | None |
@@ -415,7 +426,7 @@ The mobile app operates as an authenticated student. The Firestore rules enforce
 
 ```dart
 // Reading from Firestore
-final date = (data['createdAt'] as Timestamp).toDate();
+final date = (data['startDate'] as Timestamp).toDate();
 
 // Writing to Firestore
 'createdAt': FieldValue.serverTimestamp(),
@@ -425,3 +436,9 @@ final date = (data['createdAt'] as Timestamp).toDate();
 import 'package:intl/intl.dart';
 final display = DateFormat('MMM dd, yyyy hh:mm a').format(date);
 ```
+
+---
+
+## Changelog
+
+<!-- AGENT-UPDATED: 2026-06-16 ΓÇö Initial mobile schema created from web backend-schema.md -->

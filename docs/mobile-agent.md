@@ -143,9 +143,14 @@ lib/
 │   │   ├── views/
 │   │   │   └── dashboard_screen.dart
 │   │   └── widgets/
-│   │       ├── upcoming_event_card.dart
-│   │       ├── announcement_banner.dart
-│   │       └── payment_status_chip.dart
+│   │       ├── dashboard_header.dart
+│   │       ├── digital_id_card.dart
+│   │       ├── quick_actions_grid.dart
+│   │       ├── scanner_assignment_banner.dart
+│   │       ├── upcoming_events_section.dart
+│   │       ├── announcements_section.dart
+│   │       └── my_organizations_section.dart
+│   │   // AGENT-UPDATED: 2026-06-25 — updated dashboard widgets tree
 │   │
 │   ├── events/
 │   │   ├── models/
