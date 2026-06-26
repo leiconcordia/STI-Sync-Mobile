@@ -1,13 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sti_sync/shared/providers/providers.dart';
+import '../models/event_model.dart';
 
-class EventListCard extends StatelessWidget {
-  const EventListCard({super.key});
+class EventListCard extends ConsumerWidget {
+  final EventModel event;
+
+  const EventListCard({super.key, required this.event});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    String dateStr = 'No schedule yet';
+    if (event.sessions.isNotEmpty) {
+      dateStr = event.sessions.first.date;
+    }
+
+    final venueName = ref.watch(venueNameProvider(event.venueId));
+    final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
+
+    final categoryName = ref.watch(categoryNameProvider(event.eventCategoryId));
+    final actualParticipantCount = ref.watch(actualParticipantCountProvider(event));
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -30,9 +46,13 @@ class EventListCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Tech Summit 2026',
-                  style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
+                Expanded(
+                  child: Text(
+                    event.title,
+                    style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -41,7 +61,7 @@ class EventListCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    'Registered ✓',
+                    'Eligible ✓',
                     style: AppTextStyles.labelSmall.copyWith(
                       color: AppColors.success,
                       fontWeight: FontWeight.bold,
@@ -59,18 +79,25 @@ class EventListCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 12,
                   backgroundColor: AppColors.primary,
-                  child: const Text('IC', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    orgName.valueOrNull?.substring(0, 1) ?? 'O', 
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'ICTSO',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    orgName.valueOrNull ?? 'Loading...',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 4),
-                Text('• Academic', style: AppTextStyles.labelSmall),
+                Text('• ${categoryName.valueOrNull ?? '...'}', style: AppTextStyles.labelSmall),
               ],
             ),
           ),
@@ -81,11 +108,18 @@ class EventListCard extends StatelessWidget {
               children: [
                 const Icon(Icons.calendar_today, size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
-                Text('Jun 15, 2026', style: AppTextStyles.labelSmall),
+                Text(dateStr, style: AppTextStyles.labelSmall),
                 const SizedBox(width: 16),
                 const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
-                Text('Auditorium', style: AppTextStyles.labelSmall),
+                Expanded(
+                  child: Text(
+                    venueName.valueOrNull ?? 'Loading...', 
+                    style: AppTextStyles.labelSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
@@ -96,11 +130,7 @@ class EventListCard extends StatelessWidget {
               children: [
                 const Icon(Icons.people_outline, size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
-                Text('250 registered', style: AppTextStyles.labelSmall),
-                const SizedBox(width: 16),
-                const Icon(Icons.schedule, size: 14, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                Text('5 days left', style: AppTextStyles.labelSmall),
+                Text('${actualParticipantCount.valueOrNull ?? '...'} targeted', style: AppTextStyles.labelSmall),
               ],
             ),
           ),
@@ -113,7 +143,7 @@ class EventListCard extends StatelessWidget {
               children: [
                 GestureDetector(
                   onTap: () {
-                    context.goNamed('eventDetail', pathParameters: {'eventId': '1'});
+                    context.goNamed('eventDetail', pathParameters: {'eventId': event.id});
                   },
                   child: Text(
                     'View Details',

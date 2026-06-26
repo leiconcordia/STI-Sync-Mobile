@@ -9,6 +9,7 @@ import 'package:sti_sync/features/auth/views/welcome_screen.dart';
 import 'package:sti_sync/features/dashboard/views/main_shell_screen.dart';
 import 'package:sti_sync/features/dashboard/views/dashboard_screen.dart';
 import 'package:sti_sync/features/events/views/events_screen.dart';
+import 'package:sti_sync/features/events/views/event_detail_screen.dart';
 import 'package:sti_sync/features/payables/views/payables_screen.dart';
 import 'package:sti_sync/features/profile/views/profile_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
@@ -99,6 +100,15 @@ final routerProvider = Provider<GoRouter>((ref) {
                 name: 'events',
                 path: '/events',
                 builder: (context, state) => const EventsScreen(),
+                routes: [
+                  GoRoute(
+                    name: 'eventDetail',
+                    path: ':eventId',
+                    builder: (context, state) => EventDetailScreen(
+                      eventId: state.pathParameters['eventId']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

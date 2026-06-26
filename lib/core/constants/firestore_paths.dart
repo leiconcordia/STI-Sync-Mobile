@@ -11,4 +11,10 @@ class FirestorePaths {
   static const String departments = 'departments';
   static const String sections = 'sections';
   static const String semesters = 'semesters';
+  static const String venues = 'venues';
+  static const String eventCategories = 'event_categories';
+
+  // Event document fields
+  static const String targetDepartmentIds = 'targetDepartmentIds';
+  static const String targetYearLevels = 'targetYearLevels';
 }

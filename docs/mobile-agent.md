@@ -165,6 +165,7 @@ lib/
 │   │   └── widgets/
 │   │       ├── event_card.dart
 │   │       └── event_status_badge.dart
+│   │   // AGENT-UPDATED: 2026-06-26 — Implemented EventModel, EventRepository, EventViewModel, and EventsScreen with eligibility filtering logic
 │   │
 │   ├── attendance/
 │   │   ├── models/
@@ -271,7 +272,7 @@ When adding a new route: update this table AND `app_router.dart`.
 ---
 
 ## 5. Image & File Uploads — Cloudinary (Mandatory)
-
+  
 All user-uploaded images and documents (profile photos, school ID photos, any future
 document submissions) **must** go through `lib/services/cloudinary_service.dart`.
 
@@ -497,3 +498,158 @@ Run this before writing any code:
 | `dynamic` type cast from Firestore data | Explicit cast: `data['field'] as String` |
 | Skipping doc update after schema/route change | Update docs before finishing |
 | Business logic in a widget build method | Move to ViewModel |
+
+// AGENT-UPDATED: 2026-06-26 — Added offline mode architecture, 
+// smart QR attendance system, scanner role enforcement, 
+// payables gate control, and flagged/manual attendance rules
+
+---
+
+## 11. Offline Mode Architecture (Mandatory)
+
+### 11.1 Local Database — Drift (SQLite)
+All offline-capable features use **Drift** (`drift` package) as the 
+local SQLite database. Never use shared_preferences or Hive for 
+structured relational data.
+
+| Setting | Value |
+|---|---|
+| Package | `drift` + `drift_flutter` |
+| Database file | `lib/core/local/app_database.dart` |
+| Location | `lib/core/local/` |
+
+### 11.2 Offline Tables (Drift Schema)
+
+```dart
+// Tables that must exist in local SQLite:
+// - cached_events          → EventDocument (read-only cache)
+// - cached_participants    → student data per event (scanner download)
+// - offline_attendance     → pending scans not yet synced
+// - cached_payables        → qrTicketUnlocked per student per event
+// - scanner_assignments    → which events this device is a scanner for
+```
+
+### 11.3 Sync Rules
+- Online → Offline: sync happens automatically on app foreground 
+  if connectivity exists
+- Offline → Online: `SyncService.uploadPendingAttendance()` runs 
+  on connectivity restore
+- Duplicate detection: before uploading, query both Firestore 
+  AND `offline_attendance` table for existing records matching 
+  (studentId + sessionId + gateType). Show conflict UI before commit.
+- After event ends: `EventCleanupService.purgeEventData(eventId)` 
+  deletes all local participant data for that event
+
+### 11.4 Connectivity Detection
+Use `connectivity_plus` package. All repositories check 
+`ConnectivityService.isOnline` before choosing Firestore vs local path.
+
+---
+
+## 12. Scanner Role Enforcement Rules (Critical)
+
+1. A scanner can ONLY scan QR codes whose `eventId` matches 
+   their assigned event. Mismatched eventId → reject with error UI.
+2. Scanner must select a session + gate type (Time-In / Time-Out) 
+   before the camera opens. This selection is locked for the scan session.
+3. Scanner with `allowManualAttendance: false` → manual entry 
+   button is hidden entirely.
+4. Scanner with `canCheckIn: false` → Scan-In button disabled.
+5. Scanner with `canCheckOut: false` → Scan-Out button disabled.
+6. If event `proposalStatus !== 'approved'` OR event end time 
+   has passed → scanner tab removed from nav, local data purged.
+7. Participant eligibility: student sees event only if their 
+   `departmentId` is in `targetDepartmentIds` AND their 
+   `yearLevel` is in `targetYearLevels`.
+
+---
+
+## 13. QR Ticket Rules
+
+1. QR code is generated client-side only when BOTH conditions met:
+   - `enableQRTickets === true`
+   - `attendanceEnabled === true`
+   - `qrTicketUnlocked === true` (from /payables) OR event has 
+     no payables requirement
+2. QR payload: `{ eventId, studentId, studentAuthUid, generatedAt }`
+3. QR is rendered using `qr_flutter` package
+4. If `qrTicketUnlocked === false` → show locked QR screen with 
+   payment instructions. QR is NOT rendered.
+5. Locked QR still accessible offline — lock state cached locally.
+
+---
+
+## 14. New Routes (Scanner + Offline)
+
+| Name | Path | Screen |
+|---|---|---|
+| `scannerHome` | `/scanner` | `ScannerHomeScreen` |
+| `scannerCamera` | `/scanner/:eventId/:sessionId/:gateType` | `ScannerCameraScreen` |
+| `scannerLogs` | `/scanner/:eventId/logs` | `ScannerLogsScreen` |
+| `manualAttendance` | `/scanner/:eventId/manual` | `ManualAttendanceScreen` |
+| `syncConflicts` | `/scanner/sync-conflicts` | `SyncConflictsScreen` |
+| `qrTicket` | `/ticket/:eventId` | `QrTicketScreen` |
+
+---
+
+## 15. New Feature Directories
+
+```
+lib/features/
+├── scanner/
+│   ├── models/
+│   │   ├── scanner_assignment_model.dart
+│   │   ├── offline_attendance_model.dart
+│   │   └── sync_conflict_model.dart
+│   ├── repositories/
+│   │   ├── scanner_repository.dart
+│   │   └── offline_attendance_repository.dart
+│   ├── viewmodels/
+│   │   ├── scanner_viewmodel.dart
+│   │   └── sync_viewmodel.dart
+│   ├── views/
+│   │   ├── scanner_home_screen.dart
+│   │   ├── scanner_camera_screen.dart
+│   │   ├── scanner_logs_screen.dart
+│   │   ├── manual_attendance_screen.dart
+│   │   └── sync_conflicts_screen.dart
+│   └── widgets/
+│       ├── scan_result_overlay.dart
+│       ├── session_selector_sheet.dart
+│       ├── conflict_review_tile.dart
+│       └── scanner_metric_card.dart
+├── qr_ticket/
+│   ├── models/
+│   │   └── qr_ticket_model.dart
+│   ├── repositories/
+│   │   └── qr_ticket_repository.dart
+│   ├── viewmodels/
+│   │   └── qr_ticket_viewmodel.dart
+│   ├── views/
+│   │   └── qr_ticket_screen.dart
+│   └── widgets/
+│       ├── qr_code_display.dart
+│       └── locked_qr_card.dart
+└── sync/
+    ├── services/
+    │   ├── sync_service.dart
+    │   ├── connectivity_service.dart
+    │   └── event_cleanup_service.dart
+    └── models/
+        └── sync_status_model.dart
+
+lib/core/local/
+├── app_database.dart          # Drift database definition
+├── tables/
+│   ├── cached_events_table.dart
+│   ├── cached_participants_table.dart
+│   ├── offline_attendance_table.dart
+│   ├── cached_payables_table.dart
+│   └── scanner_assignments_table.dart
+└── daos/
+    ├── events_dao.dart
+    ├── participants_dao.dart
+    ├── attendance_dao.dart
+    ├── payables_dao.dart
+    └── scanner_dao.dart
+```

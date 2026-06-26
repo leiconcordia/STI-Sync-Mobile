@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/shared/providers/providers.dart';
+import '../models/event_model.dart';
 
-class FeaturedEventCard extends StatelessWidget {
-  const FeaturedEventCard({super.key});
+class FeaturedEventCard extends ConsumerWidget {
+  final EventModel event;
+
+  const FeaturedEventCard({super.key, required this.event});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // If sessions are present, use the first session's date, else just a placeholder
+    String dateStr = 'No schedule yet';
+    if (event.sessions.isNotEmpty) {
+      dateStr = event.sessions.first.date;
+    }
+
+    final venueName = ref.watch(venueNameProvider(event.venueId));
+    final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary,
@@ -32,8 +46,10 @@ class FeaturedEventCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Tech Summit 2026',
+            event.title,
             style: AppTextStyles.h1.copyWith(color: Colors.white),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
           Row(
@@ -41,7 +57,7 @@ class FeaturedEventCard extends StatelessWidget {
               const Icon(Icons.calendar_today, size: 16, color: Colors.white70),
               const SizedBox(width: 8),
               Text(
-                'Jun 15, 2026',
+                dateStr,
                 style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
               ),
             ],
@@ -51,9 +67,13 @@ class FeaturedEventCard extends StatelessWidget {
             children: [
               const Icon(Icons.location_on_outlined, size: 16, color: Colors.white70),
               const SizedBox(width: 8),
-              Text(
-                'Auditorium',
-                style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+              Expanded(
+                child: Text(
+                  venueName.valueOrNull ?? 'Loading...',
+                  style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -68,7 +88,7 @@ class FeaturedEventCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'ICTSO',
+                  orgName.valueOrNull ?? 'Loading...',
                   style: AppTextStyles.labelSmall.copyWith(color: Colors.white),
                 ),
               ),
@@ -79,7 +99,7 @@ class FeaturedEventCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Registered ✓',
+                  'Eligible ✓',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -93,3 +113,4 @@ class FeaturedEventCard extends StatelessWidget {
     );
   }
 }
+

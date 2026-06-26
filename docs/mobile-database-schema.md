@@ -425,3 +425,126 @@ final date = (data['createdAt'] as Timestamp).toDate();
 import 'package:intl/intl.dart';
 final display = DateFormat('MMM dd, yyyy hh:mm a').format(date);
 ```
+
+// AGENT-UPDATED: 2026-06-26 — Added offline_attendance, 
+// cached_participants, scanner_sessions collections
+
+### 1.12 `scanner_sessions` (Firestore)
+
+**Path:** `/scanner_sessions/{sessionId}`
+
+> Created when a scanner activates for an event session. 
+> Tracks which device/officer is scanning which session.
+
+interface ScannerSessionDocument {
+  id: string;
+  eventId: string;                    // FK → /events
+  sessionId: string;                  // FK → events.sessions[].id
+  officerUserId: string;              // FK → Firebase Auth UID
+  officerName: string;
+  gateType: 'time_in' | 'time_out';
+  deviceId: string;                   // unique device identifier
+  activatedAt: Timestamp;
+  deactivatedAt: Timestamp | null;
+  isActive: boolean;
+  scanCount: number;                  // denormalized count
+  manualCount: number;
+  flaggedCount: number;
+}
+
+### 1.13 `flagged_attendance` (Firestore)
+
+**Path:** `/flagged_attendance/{flagId}`
+
+> Separate collection for manual/flagged entries. 
+> Only scanners with allowManualAttendance can write here.
+
+interface FlaggedAttendanceDocument {
+  id: string;
+  eventId: string;
+  sessionId: string;
+  organizationId: string;
+  
+  // Student info — may be incomplete for unknown walkins
+  studentId: string | null;
+  studentName: string;
+  studentNumber: string | null;
+  course: string | null;
+  yearLevel: number | null;
+  
+  // Flag details
+  flagReason: 'no_phone' | 'payment_pending' | 
+              'not_registered' | 'device_error' | 'other';
+  flagNote: string | null;
+  gateType: 'time_in' | 'time_out';
+  
+  // Scanner
+  flaggedBy: string;                  // officer userId
+  flaggedByName: string;
+  
+  // Timestamps
+  flaggedAt: Timestamp;
+  createdAt: Timestamp;
+}
+
+### Local SQLite Tables (Drift)
+
+#### `cached_events`
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | Firestore event ID |
+| title | TEXT | |
+| eventJson | TEXT | Full JSON of EventDocument |
+| cachedAt | INTEGER | Unix ms |
+| expiresAt | INTEGER | Unix ms — purge after event ends |
+
+#### `cached_participants`
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | studentId |
+| eventId | TEXT | FK — composite with studentId |
+| studentName | TEXT | |
+| studentNumber | TEXT | |
+| course | TEXT | |
+| yearLevel | INTEGER | |
+| profilePhotoUrl | TEXT | Cloudinary URL |
+| qrTicketUnlocked | INTEGER | 0 or 1 |
+| participantJson | TEXT | Full snapshot |
+| downloadedAt | INTEGER | Unix ms |
+
+#### `offline_attendance`
+| Column | Type | Notes |
+|---|---|---|
+| localId | TEXT PK | UUID generated offline |
+| eventId | TEXT | |
+| sessionId | TEXT | |
+| studentId | TEXT | |
+| studentName | TEXT | |
+| gateType | TEXT | 'time_in' / 'time_out' |
+| scanMethod | TEXT | 'qr' / 'manual' |
+| scannedBy | TEXT | officer userId |
+| scannedAt | INTEGER | Unix ms |
+| synced | INTEGER | 0 = pending, 1 = uploaded |
+| syncedAt | INTEGER | Unix ms or null |
+| conflictResolved | INTEGER | 0/1 |
+
+#### `cached_payables`
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | payableId |
+| eventId | TEXT | |
+| studentId | TEXT | |
+| qrTicketUnlocked | INTEGER | 0 or 1 |
+| amountDue | REAL | |
+| paymentStatus | TEXT | |
+| cachedAt | INTEGER | Unix ms |
+
+#### `scanner_assignments`
+| Column | Type | Notes |
+|---|---|---|
+| eventId | TEXT PK | |
+| sessionIds | TEXT | JSON array |
+| officerUserId | TEXT | |
+| permissions | TEXT | JSON of EventScanner object |
+| dataDownloaded | INTEGER | 0/1 |
+| downloadedAt | INTEGER | Unix ms |
