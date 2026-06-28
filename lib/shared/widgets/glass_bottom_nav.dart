@@ -29,21 +29,13 @@ class GlassBottomNav extends StatelessWidget {
   });
 
   List<NavItem> get _items {
-    final items = [
+    return [
       const NavItem(tab: NavTab.home, icon: Icons.home_outlined, label: 'Home'),
       const NavItem(tab: NavTab.events, icon: Icons.calendar_month_outlined, label: 'Events'),
-    ];
-
-    if (isScanner) {
-      items.add(const NavItem(tab: NavTab.scanner, icon: Icons.qr_code_scanner, label: 'My QR'));
-    }
-
-    items.addAll([
+      const NavItem(tab: NavTab.scanner, icon: Icons.qr_code_scanner, label: 'Scanner'),
       const NavItem(tab: NavTab.finance, icon: Icons.account_balance_wallet_outlined, label: 'Finance'),
       const NavItem(tab: NavTab.profile, icon: Icons.person_outline, label: 'Profile'),
-    ]);
-
-    return items;
+    ];
   }
 
   @override
@@ -114,7 +106,7 @@ class GlassBottomNav extends StatelessWidget {
                         color: isActive ? activeTextColor : inactiveColor,
                         size: 24,
                       ),
-                      if (isActive) ...[
+                      if (isActive && !isQrTab) ...[
                         const SizedBox(width: 8),
                         Text(
                           item.label,

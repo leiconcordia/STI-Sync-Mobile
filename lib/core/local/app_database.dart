@@ -42,13 +42,44 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from < 2) {
+          await m.addColumn(cachedPayables, cachedPayables.studentName);
+          await m.addColumn(cachedPayables, cachedPayables.studentIdNumber);
+          await m.addColumn(cachedPayables, cachedPayables.profilePhotoUrl);
+          await m.addColumn(cachedPayables, cachedPayables.eventTitle);
+          await m.addColumn(cachedPayables, cachedPayables.courseInfo);
+        }
+      },
+    );
+  }
 
   EventsDao get eventsDao => EventsDao(this);
   ParticipantsDao get participantsDao => ParticipantsDao(this);
   AttendanceDao get attendanceDao => AttendanceDao(this);
   PayablesDao get payablesDao => PayablesDao(this);
   ScannerDao get scannerDao => ScannerDao(this);
+
+  Future<void> clearAllData() async {
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await transaction(() async {
+        for (final table in allTables) {
+          await delete(table).go();
+        }
+      });
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
+  }
 }
 
 LazyDatabase _openConnection() {

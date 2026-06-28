@@ -153,17 +153,22 @@ class EventListCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'View Ticket',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primaryDark,
-                      fontWeight: FontWeight.bold,
+                GestureDetector(
+                  onTap: () {
+                    context.goNamed('qrTicket', pathParameters: {'eventId': event.id});
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'View Ticket',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),

@@ -20,6 +20,12 @@ class PayablesDao extends DatabaseAccessor<AppDatabase> with _$PayablesDaoMixin 
     return p.qrTicketUnlocked == 1;
   }
 
+  Future<CachedPayable?> getPayable(String studentId, String eventId) async {
+    return (select(cachedPayables)
+          ..where((t) => t.studentId.equals(studentId) & t.eventId.equals(eventId)))
+        .getSingleOrNull();
+  }
+
   Future<void> purgeEventPayables(String eventId) {
     return (delete(cachedPayables)..where((t) => t.eventId.equals(eventId))).go();
   }

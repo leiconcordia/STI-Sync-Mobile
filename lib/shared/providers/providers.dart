@@ -10,6 +10,8 @@ import '../../services/cloudinary_service.dart';
 import '../../features/sync/services/connectivity_service.dart';
 import '../../features/events/repositories/event_repository.dart';
 import '../../features/events/viewmodels/event_viewmodel.dart';
+import '../../features/qr_ticket/repositories/qr_ticket_repository.dart';
+import '../../features/qr_ticket/viewmodels/qr_ticket_viewmodel.dart';
 import '../../core/local/app_database.dart';
 
 /// Events feature
@@ -17,6 +19,7 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository(
     ref.watch(firestoreProvider),
     ref.watch(appDatabaseProvider),
+    ref.watch(connectivityServiceProvider),
   );
 });
 
@@ -44,7 +47,10 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 });
 
 final authViewModelProvider = StateNotifierProvider<AuthViewModel, AuthState>(
-  (ref) => AuthViewModel(ref.watch(authRepositoryProvider)),
+  (ref) => AuthViewModel(
+    ref.watch(authRepositoryProvider),
+    ref.watch(appDatabaseProvider),
+  ),
 );
 
 /// Registration feature
@@ -151,3 +157,23 @@ final actualParticipantCountProvider = FutureProvider.family<int, EventModel>((r
     return snap.docs.length;
   }
 });
+
+final connectivityStatusProvider = StreamProvider<bool>((ref) {
+  final service = ref.watch(connectivityServiceProvider);
+  return service.connectivityStream;
+});
+
+/// QR Ticket feature
+final qrTicketRepositoryProvider = Provider<QrTicketRepository>((ref) {
+  return QrTicketRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(appDatabaseProvider).payablesDao,
+    ref.watch(connectivityServiceProvider),
+  );
+});
+
+final qrTicketViewModelProvider =
+    StateNotifierProvider.family<QrTicketViewModel, QrTicketState, String>(
+  (ref, eventId) => QrTicketViewModel(ref.watch(qrTicketRepositoryProvider)),
+);
+

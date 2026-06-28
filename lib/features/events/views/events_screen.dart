@@ -66,7 +66,7 @@ class EventsScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         FeaturedEventCard(event: events.first),
-                        if (events.length > 1) ...[
+                        if (events.isNotEmpty) ...[
                           const SizedBox(height: 32),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -79,10 +79,10 @@ class EventsScreen extends ConsumerWidget {
                           ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: events.length - 1,
+                            itemCount: events.length,
                             separatorBuilder: (context, index) => const SizedBox(height: 16),
                             itemBuilder: (context, index) {
-                              return EventListCard(event: events[index + 1]);
+                              return EventListCard(event: events[index]);
                             },
                           ),
                         ]

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rxdart/rxdart.dart';
+import '../../../features/sync/services/connectivity_service.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/exceptions/app_exception.dart';
 import '../../../core/local/app_database.dart';
@@ -9,8 +11,9 @@ import '../models/event_model.dart';
 class EventRepository {
   final FirebaseFirestore _firestore;
   final AppDatabase _appDatabase;
+  final ConnectivityService _connectivityService;
 
-  EventRepository(this._firestore, this._appDatabase);
+  EventRepository(this._firestore, this._appDatabase, this._connectivityService);
 
   Stream<List<EventModel>> watchEligibleEvents(String studentId) {
     final studentStream = _firestore
@@ -19,11 +22,28 @@ class EventRepository {
         .snapshots()
         .map((doc) => doc.exists ? StudentModel.fromFirestore(doc) : null);
 
-    final eventsStream = _firestore
+    final firestoreEventsStream = _firestore
         .collection(FirestorePaths.events)
         .where('proposalStatus', isEqualTo: 'approved')
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
+        .map((snap) => snap.docs.map((doc) => EventModel.fromFirestore(doc)).toList())
+        .doOnData((events) => _cacheEventsSilently(events));
+
+    final localEventsStream = _appDatabase.eventsDao.watchAllEvents().map((cachedList) {
+      return cachedList.map((cached) {
+        try {
+          return EventModel.fromMap(cached.id, jsonDecode(cached.eventJson));
+        } catch (_) {
+          return null;
+        }
+      }).whereType<EventModel>().toList();
+    });
+
+    final eventsStream = _connectivityService.connectivityStream
+        .startWith(_connectivityService.isOnline)
+        .switchMap((isOnline) {
+      return isOnline ? firestoreEventsStream : localEventsStream;
+    });
 
     return Rx.combineLatest2<StudentModel?, List<EventModel>, List<EventModel>>(
       studentStream,
@@ -41,8 +61,15 @@ class EventRepository {
           return isDeptEligible && isYearEligible;
         }).toList();
 
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return filtered;
+        // Deduplicate by event title to prevent accidental duplicates
+        final uniqueEvents = <String, EventModel>{};
+        for (var event in filtered) {
+          uniqueEvents[event.title.toLowerCase().trim()] = event;
+        }
+
+        final deduplicatedList = uniqueEvents.values.toList();
+        deduplicatedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return deduplicatedList;
       },
     ).handleError((e) {
       if (e is FirebaseException) {
@@ -55,7 +82,16 @@ class EventRepository {
   Future<void> cacheEligibleEvents(String studentId) async {
     try {
       final events = await watchEligibleEvents(studentId).first;
-      
+      await _cacheEventsSilently(events);
+    } on FirebaseException catch (e) {
+      throw AppException(code: e.code, message: e.message ?? 'Firestore error');
+    } catch (e) {
+      throw AppException(code: 'unknown', message: e.toString());
+    }
+  }
+
+  Future<void> _cacheEventsSilently(List<EventModel> events) async {
+    try {
       final companions = events.map((event) {
         int expiresAt = DateTime.now().millisecondsSinceEpoch + const Duration(hours: 24).inMilliseconds;
         
@@ -80,10 +116,8 @@ class EventRepository {
       await _appDatabase.batch((batch) {
         batch.insertAllOnConflictUpdate(_appDatabase.cachedEvents, companions);
       });
-    } on FirebaseException catch (e) {
-      throw AppException(code: e.code, message: e.message ?? 'Firestore error');
-    } catch (e) {
-      throw AppException(code: 'unknown', message: e.toString());
+    } catch (_) {
+      // Ignore background caching errors
     }
   }
 }

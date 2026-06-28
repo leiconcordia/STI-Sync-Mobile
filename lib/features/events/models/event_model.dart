@@ -142,10 +142,14 @@ class EventModel {
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+          : (data['createdAt'] is String 
+              ? DateTime.tryParse(data['createdAt']) ?? DateTime.now() 
+              : DateTime.now()),
       updatedAt: data['updatedAt'] is Timestamp
           ? (data['updatedAt'] as Timestamp).toDate()
-          : DateTime.now(),
+          : (data['updatedAt'] is String 
+              ? DateTime.tryParse(data['updatedAt']) ?? DateTime.now() 
+              : DateTime.now()),
     );
   }
 
@@ -192,7 +196,12 @@ class EventModel {
     };
   }
 
-  String toJson() => json.encode(toMap());
+  String toJson() {
+    final map = toMap();
+    map['createdAt'] = createdAt.toIso8601String();
+    map['updatedAt'] = updatedAt.toIso8601String();
+    return json.encode(map);
+  }
 }
 
 class EventSessionModel {

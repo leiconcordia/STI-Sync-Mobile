@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/student_model.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/exceptions/app_exception.dart';
+import '../../../core/local/app_database.dart';
 
 class AuthState {
   final bool isLoading;
@@ -40,8 +41,9 @@ class AuthState {
 
 class AuthViewModel extends StateNotifier<AuthState> {
   final AuthRepository _repository;
+  final AppDatabase _appDatabase;
 
-  AuthViewModel(this._repository) : super(const AuthState()) {
+  AuthViewModel(this._repository, this._appDatabase) : super(const AuthState()) {
     _init();
   }
 
@@ -164,7 +166,10 @@ class AuthViewModel extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> logout() async => _repository.logout();
+  Future<void> logout() async {
+    await _repository.logout();
+    await _appDatabase.clearAllData();
+  }
 
 
 }

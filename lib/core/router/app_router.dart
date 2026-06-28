@@ -10,6 +10,9 @@ import 'package:sti_sync/features/dashboard/views/main_shell_screen.dart';
 import 'package:sti_sync/features/dashboard/views/dashboard_screen.dart';
 import 'package:sti_sync/features/events/views/events_screen.dart';
 import 'package:sti_sync/features/events/views/event_detail_screen.dart';
+import 'package:sti_sync/features/qr_ticket/views/qr_ticket_screen.dart';
+import 'package:sti_sync/features/scanner/views/scanner_download_screen.dart';
+import 'package:sti_sync/features/scanner/views/scanner_mode_screen.dart';
 import 'package:sti_sync/features/payables/views/payables_screen.dart';
 import 'package:sti_sync/features/profile/views/profile_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
@@ -80,6 +83,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/pending-status',
         builder: (context, state) => const PendingStatusScreen(),
       ),
+      GoRoute(
+        name: 'qrTicket',
+        path: '/events/:eventId/ticket',
+        builder: (context, state) => QrTicketScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return MainShellScreen(navigationShell: navigationShell);
@@ -107,6 +117,22 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => EventDetailScreen(
                       eventId: state.pathParameters['eventId']!,
                     ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                name: 'scanner',
+                path: '/scanner',
+                builder: (context, state) => const ScannerDownloadScreen(),
+                routes: [
+                  GoRoute(
+                    name: 'scannerMode',
+                    path: 'mode',
+                    builder: (context, state) => const ScannerModeScreen(),
                   ),
                 ],
               ),

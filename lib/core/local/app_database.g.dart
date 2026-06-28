@@ -1508,6 +1508,36 @@ class $CachedPayablesTable extends CachedPayables
   late final GeneratedColumn<int> cachedAt = GeneratedColumn<int>(
       'cached_at', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _studentNameMeta =
+      const VerificationMeta('studentName');
+  @override
+  late final GeneratedColumn<String> studentName = GeneratedColumn<String>(
+      'student_name', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _studentIdNumberMeta =
+      const VerificationMeta('studentIdNumber');
+  @override
+  late final GeneratedColumn<String> studentIdNumber = GeneratedColumn<String>(
+      'student_id_number', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _profilePhotoUrlMeta =
+      const VerificationMeta('profilePhotoUrl');
+  @override
+  late final GeneratedColumn<String> profilePhotoUrl = GeneratedColumn<String>(
+      'profile_photo_url', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _eventTitleMeta =
+      const VerificationMeta('eventTitle');
+  @override
+  late final GeneratedColumn<String> eventTitle = GeneratedColumn<String>(
+      'event_title', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _courseInfoMeta =
+      const VerificationMeta('courseInfo');
+  @override
+  late final GeneratedColumn<String> courseInfo = GeneratedColumn<String>(
+      'course_info', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -1516,7 +1546,12 @@ class $CachedPayablesTable extends CachedPayables
         qrTicketUnlocked,
         amountDue,
         paymentStatus,
-        cachedAt
+        cachedAt,
+        studentName,
+        studentIdNumber,
+        profilePhotoUrl,
+        eventTitle,
+        courseInfo
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1573,6 +1608,36 @@ class $CachedPayablesTable extends CachedPayables
     } else if (isInserting) {
       context.missing(_cachedAtMeta);
     }
+    if (data.containsKey('student_name')) {
+      context.handle(
+          _studentNameMeta,
+          studentName.isAcceptableOrUnknown(
+              data['student_name']!, _studentNameMeta));
+    }
+    if (data.containsKey('student_id_number')) {
+      context.handle(
+          _studentIdNumberMeta,
+          studentIdNumber.isAcceptableOrUnknown(
+              data['student_id_number']!, _studentIdNumberMeta));
+    }
+    if (data.containsKey('profile_photo_url')) {
+      context.handle(
+          _profilePhotoUrlMeta,
+          profilePhotoUrl.isAcceptableOrUnknown(
+              data['profile_photo_url']!, _profilePhotoUrlMeta));
+    }
+    if (data.containsKey('event_title')) {
+      context.handle(
+          _eventTitleMeta,
+          eventTitle.isAcceptableOrUnknown(
+              data['event_title']!, _eventTitleMeta));
+    }
+    if (data.containsKey('course_info')) {
+      context.handle(
+          _courseInfoMeta,
+          courseInfo.isAcceptableOrUnknown(
+              data['course_info']!, _courseInfoMeta));
+    }
     return context;
   }
 
@@ -1596,6 +1661,16 @@ class $CachedPayablesTable extends CachedPayables
           .read(DriftSqlType.string, data['${effectivePrefix}payment_status'])!,
       cachedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}cached_at'])!,
+      studentName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}student_name']),
+      studentIdNumber: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}student_id_number']),
+      profilePhotoUrl: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}profile_photo_url']),
+      eventTitle: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}event_title']),
+      courseInfo: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}course_info']),
     );
   }
 
@@ -1613,6 +1688,11 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   final double amountDue;
   final String paymentStatus;
   final int cachedAt;
+  final String? studentName;
+  final String? studentIdNumber;
+  final String? profilePhotoUrl;
+  final String? eventTitle;
+  final String? courseInfo;
   const CachedPayable(
       {required this.id,
       required this.eventId,
@@ -1620,7 +1700,12 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
       required this.qrTicketUnlocked,
       required this.amountDue,
       required this.paymentStatus,
-      required this.cachedAt});
+      required this.cachedAt,
+      this.studentName,
+      this.studentIdNumber,
+      this.profilePhotoUrl,
+      this.eventTitle,
+      this.courseInfo});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1631,6 +1716,21 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
     map['amount_due'] = Variable<double>(amountDue);
     map['payment_status'] = Variable<String>(paymentStatus);
     map['cached_at'] = Variable<int>(cachedAt);
+    if (!nullToAbsent || studentName != null) {
+      map['student_name'] = Variable<String>(studentName);
+    }
+    if (!nullToAbsent || studentIdNumber != null) {
+      map['student_id_number'] = Variable<String>(studentIdNumber);
+    }
+    if (!nullToAbsent || profilePhotoUrl != null) {
+      map['profile_photo_url'] = Variable<String>(profilePhotoUrl);
+    }
+    if (!nullToAbsent || eventTitle != null) {
+      map['event_title'] = Variable<String>(eventTitle);
+    }
+    if (!nullToAbsent || courseInfo != null) {
+      map['course_info'] = Variable<String>(courseInfo);
+    }
     return map;
   }
 
@@ -1643,6 +1743,21 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
       amountDue: Value(amountDue),
       paymentStatus: Value(paymentStatus),
       cachedAt: Value(cachedAt),
+      studentName: studentName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(studentName),
+      studentIdNumber: studentIdNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(studentIdNumber),
+      profilePhotoUrl: profilePhotoUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(profilePhotoUrl),
+      eventTitle: eventTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(eventTitle),
+      courseInfo: courseInfo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(courseInfo),
     );
   }
 
@@ -1657,6 +1772,11 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
       amountDue: serializer.fromJson<double>(json['amountDue']),
       paymentStatus: serializer.fromJson<String>(json['paymentStatus']),
       cachedAt: serializer.fromJson<int>(json['cachedAt']),
+      studentName: serializer.fromJson<String?>(json['studentName']),
+      studentIdNumber: serializer.fromJson<String?>(json['studentIdNumber']),
+      profilePhotoUrl: serializer.fromJson<String?>(json['profilePhotoUrl']),
+      eventTitle: serializer.fromJson<String?>(json['eventTitle']),
+      courseInfo: serializer.fromJson<String?>(json['courseInfo']),
     );
   }
   @override
@@ -1670,6 +1790,11 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
       'amountDue': serializer.toJson<double>(amountDue),
       'paymentStatus': serializer.toJson<String>(paymentStatus),
       'cachedAt': serializer.toJson<int>(cachedAt),
+      'studentName': serializer.toJson<String?>(studentName),
+      'studentIdNumber': serializer.toJson<String?>(studentIdNumber),
+      'profilePhotoUrl': serializer.toJson<String?>(profilePhotoUrl),
+      'eventTitle': serializer.toJson<String?>(eventTitle),
+      'courseInfo': serializer.toJson<String?>(courseInfo),
     };
   }
 
@@ -1680,7 +1805,12 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
           int? qrTicketUnlocked,
           double? amountDue,
           String? paymentStatus,
-          int? cachedAt}) =>
+          int? cachedAt,
+          Value<String?> studentName = const Value.absent(),
+          Value<String?> studentIdNumber = const Value.absent(),
+          Value<String?> profilePhotoUrl = const Value.absent(),
+          Value<String?> eventTitle = const Value.absent(),
+          Value<String?> courseInfo = const Value.absent()}) =>
       CachedPayable(
         id: id ?? this.id,
         eventId: eventId ?? this.eventId,
@@ -1689,6 +1819,15 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
         amountDue: amountDue ?? this.amountDue,
         paymentStatus: paymentStatus ?? this.paymentStatus,
         cachedAt: cachedAt ?? this.cachedAt,
+        studentName: studentName.present ? studentName.value : this.studentName,
+        studentIdNumber: studentIdNumber.present
+            ? studentIdNumber.value
+            : this.studentIdNumber,
+        profilePhotoUrl: profilePhotoUrl.present
+            ? profilePhotoUrl.value
+            : this.profilePhotoUrl,
+        eventTitle: eventTitle.present ? eventTitle.value : this.eventTitle,
+        courseInfo: courseInfo.present ? courseInfo.value : this.courseInfo,
       );
   CachedPayable copyWithCompanion(CachedPayablesCompanion data) {
     return CachedPayable(
@@ -1703,6 +1842,18 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
           ? data.paymentStatus.value
           : this.paymentStatus,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      studentName:
+          data.studentName.present ? data.studentName.value : this.studentName,
+      studentIdNumber: data.studentIdNumber.present
+          ? data.studentIdNumber.value
+          : this.studentIdNumber,
+      profilePhotoUrl: data.profilePhotoUrl.present
+          ? data.profilePhotoUrl.value
+          : this.profilePhotoUrl,
+      eventTitle:
+          data.eventTitle.present ? data.eventTitle.value : this.eventTitle,
+      courseInfo:
+          data.courseInfo.present ? data.courseInfo.value : this.courseInfo,
     );
   }
 
@@ -1715,14 +1866,30 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
           ..write('qrTicketUnlocked: $qrTicketUnlocked, ')
           ..write('amountDue: $amountDue, ')
           ..write('paymentStatus: $paymentStatus, ')
-          ..write('cachedAt: $cachedAt')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('studentName: $studentName, ')
+          ..write('studentIdNumber: $studentIdNumber, ')
+          ..write('profilePhotoUrl: $profilePhotoUrl, ')
+          ..write('eventTitle: $eventTitle, ')
+          ..write('courseInfo: $courseInfo')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, eventId, studentId, qrTicketUnlocked,
-      amountDue, paymentStatus, cachedAt);
+  int get hashCode => Object.hash(
+      id,
+      eventId,
+      studentId,
+      qrTicketUnlocked,
+      amountDue,
+      paymentStatus,
+      cachedAt,
+      studentName,
+      studentIdNumber,
+      profilePhotoUrl,
+      eventTitle,
+      courseInfo);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1733,7 +1900,12 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
           other.qrTicketUnlocked == this.qrTicketUnlocked &&
           other.amountDue == this.amountDue &&
           other.paymentStatus == this.paymentStatus &&
-          other.cachedAt == this.cachedAt);
+          other.cachedAt == this.cachedAt &&
+          other.studentName == this.studentName &&
+          other.studentIdNumber == this.studentIdNumber &&
+          other.profilePhotoUrl == this.profilePhotoUrl &&
+          other.eventTitle == this.eventTitle &&
+          other.courseInfo == this.courseInfo);
 }
 
 class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
@@ -1744,6 +1916,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   final Value<double> amountDue;
   final Value<String> paymentStatus;
   final Value<int> cachedAt;
+  final Value<String?> studentName;
+  final Value<String?> studentIdNumber;
+  final Value<String?> profilePhotoUrl;
+  final Value<String?> eventTitle;
+  final Value<String?> courseInfo;
   final Value<int> rowid;
   const CachedPayablesCompanion({
     this.id = const Value.absent(),
@@ -1753,6 +1930,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
     this.amountDue = const Value.absent(),
     this.paymentStatus = const Value.absent(),
     this.cachedAt = const Value.absent(),
+    this.studentName = const Value.absent(),
+    this.studentIdNumber = const Value.absent(),
+    this.profilePhotoUrl = const Value.absent(),
+    this.eventTitle = const Value.absent(),
+    this.courseInfo = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedPayablesCompanion.insert({
@@ -1763,6 +1945,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
     required double amountDue,
     required String paymentStatus,
     required int cachedAt,
+    this.studentName = const Value.absent(),
+    this.studentIdNumber = const Value.absent(),
+    this.profilePhotoUrl = const Value.absent(),
+    this.eventTitle = const Value.absent(),
+    this.courseInfo = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         eventId = Value(eventId),
@@ -1779,6 +1966,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
     Expression<double>? amountDue,
     Expression<String>? paymentStatus,
     Expression<int>? cachedAt,
+    Expression<String>? studentName,
+    Expression<String>? studentIdNumber,
+    Expression<String>? profilePhotoUrl,
+    Expression<String>? eventTitle,
+    Expression<String>? courseInfo,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1789,6 +1981,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
       if (amountDue != null) 'amount_due': amountDue,
       if (paymentStatus != null) 'payment_status': paymentStatus,
       if (cachedAt != null) 'cached_at': cachedAt,
+      if (studentName != null) 'student_name': studentName,
+      if (studentIdNumber != null) 'student_id_number': studentIdNumber,
+      if (profilePhotoUrl != null) 'profile_photo_url': profilePhotoUrl,
+      if (eventTitle != null) 'event_title': eventTitle,
+      if (courseInfo != null) 'course_info': courseInfo,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1801,6 +1998,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
       Value<double>? amountDue,
       Value<String>? paymentStatus,
       Value<int>? cachedAt,
+      Value<String?>? studentName,
+      Value<String?>? studentIdNumber,
+      Value<String?>? profilePhotoUrl,
+      Value<String?>? eventTitle,
+      Value<String?>? courseInfo,
       Value<int>? rowid}) {
     return CachedPayablesCompanion(
       id: id ?? this.id,
@@ -1810,6 +2012,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
       amountDue: amountDue ?? this.amountDue,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       cachedAt: cachedAt ?? this.cachedAt,
+      studentName: studentName ?? this.studentName,
+      studentIdNumber: studentIdNumber ?? this.studentIdNumber,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      eventTitle: eventTitle ?? this.eventTitle,
+      courseInfo: courseInfo ?? this.courseInfo,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1838,6 +2045,21 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
     if (cachedAt.present) {
       map['cached_at'] = Variable<int>(cachedAt.value);
     }
+    if (studentName.present) {
+      map['student_name'] = Variable<String>(studentName.value);
+    }
+    if (studentIdNumber.present) {
+      map['student_id_number'] = Variable<String>(studentIdNumber.value);
+    }
+    if (profilePhotoUrl.present) {
+      map['profile_photo_url'] = Variable<String>(profilePhotoUrl.value);
+    }
+    if (eventTitle.present) {
+      map['event_title'] = Variable<String>(eventTitle.value);
+    }
+    if (courseInfo.present) {
+      map['course_info'] = Variable<String>(courseInfo.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1854,6 +2076,11 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
           ..write('amountDue: $amountDue, ')
           ..write('paymentStatus: $paymentStatus, ')
           ..write('cachedAt: $cachedAt, ')
+          ..write('studentName: $studentName, ')
+          ..write('studentIdNumber: $studentIdNumber, ')
+          ..write('profilePhotoUrl: $profilePhotoUrl, ')
+          ..write('eventTitle: $eventTitle, ')
+          ..write('courseInfo: $courseInfo, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2988,6 +3215,11 @@ typedef $$CachedPayablesTableCreateCompanionBuilder = CachedPayablesCompanion
   required double amountDue,
   required String paymentStatus,
   required int cachedAt,
+  Value<String?> studentName,
+  Value<String?> studentIdNumber,
+  Value<String?> profilePhotoUrl,
+  Value<String?> eventTitle,
+  Value<String?> courseInfo,
   Value<int> rowid,
 });
 typedef $$CachedPayablesTableUpdateCompanionBuilder = CachedPayablesCompanion
@@ -2999,6 +3231,11 @@ typedef $$CachedPayablesTableUpdateCompanionBuilder = CachedPayablesCompanion
   Value<double> amountDue,
   Value<String> paymentStatus,
   Value<int> cachedAt,
+  Value<String?> studentName,
+  Value<String?> studentIdNumber,
+  Value<String?> profilePhotoUrl,
+  Value<String?> eventTitle,
+  Value<String?> courseInfo,
   Value<int> rowid,
 });
 
@@ -3032,6 +3269,23 @@ class $$CachedPayablesTableFilterComposer
 
   ColumnFilters<int> get cachedAt => $composableBuilder(
       column: $table.cachedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get studentIdNumber => $composableBuilder(
+      column: $table.studentIdNumber,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get profilePhotoUrl => $composableBuilder(
+      column: $table.profilePhotoUrl,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get courseInfo => $composableBuilder(
+      column: $table.courseInfo, builder: (column) => ColumnFilters(column));
 }
 
 class $$CachedPayablesTableOrderingComposer
@@ -3065,6 +3319,23 @@ class $$CachedPayablesTableOrderingComposer
 
   ColumnOrderings<int> get cachedAt => $composableBuilder(
       column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get studentIdNumber => $composableBuilder(
+      column: $table.studentIdNumber,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get profilePhotoUrl => $composableBuilder(
+      column: $table.profilePhotoUrl,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get courseInfo => $composableBuilder(
+      column: $table.courseInfo, builder: (column) => ColumnOrderings(column));
 }
 
 class $$CachedPayablesTableAnnotationComposer
@@ -3096,6 +3367,21 @@ class $$CachedPayablesTableAnnotationComposer
 
   GeneratedColumn<int> get cachedAt =>
       $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => column);
+
+  GeneratedColumn<String> get studentIdNumber => $composableBuilder(
+      column: $table.studentIdNumber, builder: (column) => column);
+
+  GeneratedColumn<String> get profilePhotoUrl => $composableBuilder(
+      column: $table.profilePhotoUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get courseInfo => $composableBuilder(
+      column: $table.courseInfo, builder: (column) => column);
 }
 
 class $$CachedPayablesTableTableManager extends RootTableManager<
@@ -3132,6 +3418,11 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
             Value<double> amountDue = const Value.absent(),
             Value<String> paymentStatus = const Value.absent(),
             Value<int> cachedAt = const Value.absent(),
+            Value<String?> studentName = const Value.absent(),
+            Value<String?> studentIdNumber = const Value.absent(),
+            Value<String?> profilePhotoUrl = const Value.absent(),
+            Value<String?> eventTitle = const Value.absent(),
+            Value<String?> courseInfo = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               CachedPayablesCompanion(
@@ -3142,6 +3433,11 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
             amountDue: amountDue,
             paymentStatus: paymentStatus,
             cachedAt: cachedAt,
+            studentName: studentName,
+            studentIdNumber: studentIdNumber,
+            profilePhotoUrl: profilePhotoUrl,
+            eventTitle: eventTitle,
+            courseInfo: courseInfo,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -3152,6 +3448,11 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
             required double amountDue,
             required String paymentStatus,
             required int cachedAt,
+            Value<String?> studentName = const Value.absent(),
+            Value<String?> studentIdNumber = const Value.absent(),
+            Value<String?> profilePhotoUrl = const Value.absent(),
+            Value<String?> eventTitle = const Value.absent(),
+            Value<String?> courseInfo = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               CachedPayablesCompanion.insert(
@@ -3162,6 +3463,11 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
             amountDue: amountDue,
             paymentStatus: paymentStatus,
             cachedAt: cachedAt,
+            studentName: studentName,
+            studentIdNumber: studentIdNumber,
+            profilePhotoUrl: profilePhotoUrl,
+            eventTitle: eventTitle,
+            courseInfo: courseInfo,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0

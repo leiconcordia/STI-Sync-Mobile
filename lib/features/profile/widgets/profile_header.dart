@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/features/auth/models/student_model.dart';
 
@@ -42,7 +43,18 @@ class ProfileHeader extends StatelessWidget {
                 ),
                 child: ClipOval(
                   child: student.profilePhotoUrl.isNotEmpty
-                      ? Image.network(student.profilePhotoUrl, fit: BoxFit.cover)
+                      ? CachedNetworkImage(
+                          imageUrl: student.profilePhotoUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: AppColors.primaryDark,
+                            child: const Icon(Icons.person, color: Colors.white, size: 50),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: AppColors.primaryDark,
+                            child: const Icon(Icons.person, color: Colors.white, size: 50),
+                          ),
+                        )
                       : Container(
                           color: AppColors.primaryDark,
                           child: const Icon(Icons.person, color: Colors.white, size: 50),

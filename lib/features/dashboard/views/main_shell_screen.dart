@@ -18,8 +18,10 @@ class MainShellScreen extends StatelessWidget {
       case 1:
         return NavTab.events;
       case 2:
-        return NavTab.finance;
+        return NavTab.scanner;
       case 3:
+        return NavTab.finance;
+      case 4:
         return NavTab.profile;
       default:
         return NavTab.home;
@@ -35,15 +37,14 @@ class MainShellScreen extends StatelessWidget {
       case NavTab.events:
         index = 1;
         break;
-      case NavTab.finance:
+      case NavTab.scanner:
         index = 2;
         break;
-      case NavTab.profile:
+      case NavTab.finance:
         index = 3;
         break;
-      case NavTab.scanner:
-        // Scanner might be a modal or specific push, for now we map it differently or ignore in bottom nav index
-        index = 0;
+      case NavTab.profile:
+        index = 4;
         break;
     }
     

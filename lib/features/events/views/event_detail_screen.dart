@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:go_router/go_router.dart';
@@ -66,14 +67,32 @@ class EventDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty)
-                      Container(
-                        width: double.infinity,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          image: DecorationImage(
-                            image: NetworkImage(event.bannerImageUrl!),
-                            fit: BoxFit.cover,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: CachedNetworkImage(
+                          imageUrl: event.bannerImageUrl!,
+                          width: double.infinity,
+                          height: 200,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey.shade200,
+                            height: 200,
+                            alignment: Alignment.center,
+                            child: const CircularProgressIndicator(),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: double.infinity,
+                            height: 200,
+                            color: AppColors.primary,
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Text(
+                                event.title,
+                                style: AppTextStyles.h1.copyWith(color: Colors.white),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
                         ),
                       )
@@ -86,10 +105,13 @@ class EventDetailScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         alignment: Alignment.center,
-                        child: Text(
-                          event.title,
-                          style: AppTextStyles.h1.copyWith(color: Colors.white),
-                          textAlign: TextAlign.center,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text(
+                            event.title,
+                            style: AppTextStyles.h1.copyWith(color: Colors.white),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ),
                     const SizedBox(height: 16),
@@ -121,16 +143,39 @@ class EventDetailScreen extends ConsumerWidget {
                           ),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                radius: 10,
-                                backgroundColor: AppColors.primary,
-                                backgroundImage: logoUrl != null ? NetworkImage(logoUrl!) : null,
-                                child: logoUrl == null
-                                    ? Text(
-                                        orgName.isNotEmpty ? orgName.substring(0, 1) : 'O',
-                                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              ClipOval(
+                                child: logoUrl != null && logoUrl!.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        imageUrl: logoUrl!,
+                                        width: 20,
+                                        height: 20,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          width: 20,
+                                          height: 20,
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          width: 20,
+                                          height: 20,
+                                          color: AppColors.primary,
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            orgName.isNotEmpty ? orgName.substring(0, 1) : 'O',
+                                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
                                       )
-                                    : null,
+                                    : Container(
+                                        width: 20,
+                                        height: 20,
+                                        color: AppColors.primary,
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          orgName.isNotEmpty ? orgName.substring(0, 1) : 'O',
+                                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -355,11 +400,16 @@ class EventDetailScreen extends ConsumerWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Text(
-                            'View Ticket',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.orange.shade700, 
-                              fontWeight: FontWeight.bold,
+                          GestureDetector(
+                            onTap: () {
+                              context.goNamed('qrTicket', pathParameters: {'eventId': eventId});
+                            },
+                            child: Text(
+                              'View Ticket',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: Colors.orange.shade700, 
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],

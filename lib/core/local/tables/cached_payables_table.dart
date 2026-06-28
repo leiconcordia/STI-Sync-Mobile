@@ -9,6 +9,12 @@ class CachedPayables extends Table {
   TextColumn get paymentStatus => text()();
   IntColumn get cachedAt => integer()();
 
+  TextColumn get studentName => text().nullable()();
+  TextColumn get studentIdNumber => text().nullable()();
+  TextColumn get profilePhotoUrl => text().nullable()();
+  TextColumn get eventTitle => text().nullable()();
+  TextColumn get courseInfo => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
