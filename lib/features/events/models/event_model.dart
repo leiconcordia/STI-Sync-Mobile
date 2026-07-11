@@ -45,6 +45,7 @@ class EventModel {
   final bool mandatoryAttendance;
   final bool lockAfterApproval;
   final String scannerActivationCode;
+  final List<String> scannerUserIds;
 
   final String proposalStatus;
   final String createdBy;
@@ -87,6 +88,7 @@ class EventModel {
     required this.mandatoryAttendance,
     required this.lockAfterApproval,
     required this.scannerActivationCode,
+    required this.scannerUserIds,
     required this.proposalStatus,
     required this.createdBy,
     required this.createdAt,
@@ -138,6 +140,7 @@ class EventModel {
       mandatoryAttendance: data['mandatoryAttendance'] as bool? ?? false,
       lockAfterApproval: data['lockAfterApproval'] as bool? ?? false,
       scannerActivationCode: data['scannerActivationCode'] as String? ?? '',
+      scannerUserIds: List<String>.from(data['scannerUserIds'] ?? []),
       proposalStatus: data['proposalStatus'] as String? ?? '',
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
@@ -189,6 +192,7 @@ class EventModel {
       'mandatoryAttendance': mandatoryAttendance,
       'lockAfterApproval': lockAfterApproval,
       'scannerActivationCode': scannerActivationCode,
+      'scannerUserIds': scannerUserIds,
       'proposalStatus': proposalStatus,
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),

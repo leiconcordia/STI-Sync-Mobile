@@ -8,8 +8,16 @@ part 'scanner_dao.g.dart';
 class ScannerDao extends DatabaseAccessor<AppDatabase> with _$ScannerDaoMixin {
   ScannerDao(AppDatabase db) : super(db);
 
-  Future<void> saveAssignment(ScannerAssignmentsCompanion assignment) {
-    return into(scannerAssignments).insertOnConflictUpdate(assignment);
+  Future<void> saveAssignment(ScannerAssignmentsCompanion assignment) async {
+    final existing = await getAssignment(assignment.eventId.value);
+    if (existing != null) {
+      await into(scannerAssignments).insertOnConflictUpdate(assignment.copyWith(
+        dataDownloaded: Value(existing.dataDownloaded),
+        downloadedAt: Value(existing.downloadedAt),
+      ));
+      return;
+    }
+    await into(scannerAssignments).insertOnConflictUpdate(assignment);
   }
 
   Future<ScannerAssignment?> getAssignment(String eventId) {

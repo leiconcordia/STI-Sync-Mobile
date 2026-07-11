@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -57,6 +57,46 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(cachedPayables, cachedPayables.profilePhotoUrl);
           await m.addColumn(cachedPayables, cachedPayables.eventTitle);
           await m.addColumn(cachedPayables, cachedPayables.courseInfo);
+        }
+        if (from < 3) {
+          // scanner_assignments gained eventTitle, eventFormat, eventEndTime,
+          // proposalStatus columns in schema v3.
+          await m.addColumn(
+              scannerAssignments, scannerAssignments.eventTitle);
+          await m.addColumn(
+              scannerAssignments, scannerAssignments.eventFormat);
+          await m.addColumn(
+              scannerAssignments, scannerAssignments.eventEndTime);
+          await m.addColumn(
+              scannerAssignments, scannerAssignments.proposalStatus);
+        }
+        if (from < 4) {
+          await m.deleteTable(cachedParticipants.actualTableName);
+          await m.createTable(cachedParticipants);
+        }
+        if (from < 5) {
+          // Recreate scanner_assignments to handle column rename/type change
+          await m.deleteTable(scannerAssignments.actualTableName);
+          await m.createTable(scannerAssignments);
+        }
+        if (from < 6) {
+          try {
+            await m.addColumn(scannerAssignments, scannerAssignments.gracePeriodMinutes);
+          } catch (e) {
+            // Ignore if column already exists
+          }
+          try {
+            await m.addColumn(offlineAttendance, offlineAttendance.status);
+          } catch (e) {
+            // Ignore if column already exists
+          }
+        }
+        if (from < 7) {
+          try {
+            await m.addColumn(scannerAssignments, scannerAssignments.gracePeriodMinutes);
+          } catch (e) {
+            // Ignore if column already exists
+          }
         }
       },
     );

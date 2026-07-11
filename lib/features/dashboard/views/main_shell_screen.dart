@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/shared/widgets/glass_bottom_nav.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
+import 'package:sti_sync/shared/providers/providers.dart';
 
-class MainShellScreen extends StatelessWidget {
+/// The root shell for all authenticated screens.
+///
+/// Renders the [GlassBottomNav] over the active branch of the
+/// [StatefulNavigationShell]. When the current user has no active scanner
+/// assignments the Scanner tab (branch index 2) is hidden and visual tab
+/// indices are remapped so Finance and Profile still navigate to their
+/// correct branches.
+///
+/// Branch index layout (fixed in app_router.dart):
+///   0 → dashboard
+///   1 → events
+///   2 → scanner   ← may be hidden
+///   3 → payables
+///   4 → profile
+class MainShellScreen extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   const MainShellScreen({
@@ -11,8 +27,11 @@ class MainShellScreen extends StatelessWidget {
     required this.navigationShell,
   });
 
-  NavTab _getNavTabFromIndex(int index) {
-    switch (index) {
+  // ─── Index mapping ─────────────────────────────────────────────────────
+
+  /// Converts the current branch index to the visible [NavTab].
+  NavTab _branchToTab(int branchIndex) {
+    switch (branchIndex) {
       case 0:
         return NavTab.home;
       case 1:
@@ -28,53 +47,57 @@ class MainShellScreen extends StatelessWidget {
     }
   }
 
-  void _onTabSelected(NavTab tab) {
-    int index;
+  /// Converts a tapped [NavTab] to the correct branch index.
+  int _tabToBranch(NavTab tab) {
     switch (tab) {
       case NavTab.home:
-        index = 0;
-        break;
+        return 0;
       case NavTab.events:
-        index = 1;
-        break;
+        return 1;
       case NavTab.scanner:
-        index = 2;
-        break;
+        return 2;
       case NavTab.finance:
-        index = 3;
-        break;
+        return 3;
       case NavTab.profile:
-        index = 4;
-        break;
+        return 4;
     }
-    
-    // Navigate to the correct branch
+  }
+
+  void _onTabSelected(NavTab tab) {
+    final branchIndex = _tabToBranch(tab);
     navigationShell.goBranch(
-      index,
-      // A common pattern when using bottom navigation bars is to support
-      // navigating to the initial location when tapping the item that is
-      // already active.
-      initialLocation: index == navigationShell.currentIndex,
+      branchIndex,
+      initialLocation: branchIndex == navigationShell.currentIndex,
     );
   }
 
+  // ─── Build ────────────────────────────────────────────────────────────
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Read live scanner state to decide whether to show the scanner tab
+    final scannerState = ref.watch(scannerViewModelProvider);
+    final showScanner = scannerState.hasActiveAssignments;
+
+    final selectedTab = _branchToTab(navigationShell.currentIndex);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // The current active screen from the shell
+          // Active screen from the navigation shell
           navigationShell,
-          
-          // The glass bottom nav pinned to the bottom
+
+          // Floating glass nav bar pinned to the bottom
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: GlassBottomNav(
-              selectedTab: _getNavTabFromIndex(navigationShell.currentIndex),
+              selectedTab: selectedTab,
               onTabSelected: _onTabSelected,
+              showScannerTab: showScanner,
+              hasActiveScannerAssignment: showScanner,
             ),
           ),
         ],

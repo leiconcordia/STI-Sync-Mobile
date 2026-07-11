@@ -465,7 +465,7 @@ class $CachedParticipantsTable extends CachedParticipants
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {id};
+  Set<GeneratedColumn> get $primaryKey => {id, eventId};
   @override
   CachedParticipant map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -931,6 +931,13 @@ class $OfflineAttendanceTable extends OfflineAttendance
   late final GeneratedColumn<int> conflictResolved = GeneratedColumn<int>(
       'conflict_resolved', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('Present'));
   @override
   List<GeneratedColumn> get $columns => [
         localId,
@@ -944,7 +951,8 @@ class $OfflineAttendanceTable extends OfflineAttendance
         scannedAt,
         synced,
         syncedAt,
-        conflictResolved
+        conflictResolved,
+        status
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1033,6 +1041,10 @@ class $OfflineAttendanceTable extends OfflineAttendance
     } else if (isInserting) {
       context.missing(_conflictResolvedMeta);
     }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
     return context;
   }
 
@@ -1066,6 +1078,8 @@ class $OfflineAttendanceTable extends OfflineAttendance
           .read(DriftSqlType.int, data['${effectivePrefix}synced_at']),
       conflictResolved: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}conflict_resolved'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
     );
   }
 
@@ -1089,6 +1103,7 @@ class OfflineAttendanceData extends DataClass
   final int synced;
   final int? syncedAt;
   final int conflictResolved;
+  final String status;
   const OfflineAttendanceData(
       {required this.localId,
       required this.eventId,
@@ -1101,7 +1116,8 @@ class OfflineAttendanceData extends DataClass
       required this.scannedAt,
       required this.synced,
       this.syncedAt,
-      required this.conflictResolved});
+      required this.conflictResolved,
+      required this.status});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1119,6 +1135,7 @@ class OfflineAttendanceData extends DataClass
       map['synced_at'] = Variable<int>(syncedAt);
     }
     map['conflict_resolved'] = Variable<int>(conflictResolved);
+    map['status'] = Variable<String>(status);
     return map;
   }
 
@@ -1138,6 +1155,7 @@ class OfflineAttendanceData extends DataClass
           ? const Value.absent()
           : Value(syncedAt),
       conflictResolved: Value(conflictResolved),
+      status: Value(status),
     );
   }
 
@@ -1157,6 +1175,7 @@ class OfflineAttendanceData extends DataClass
       synced: serializer.fromJson<int>(json['synced']),
       syncedAt: serializer.fromJson<int?>(json['syncedAt']),
       conflictResolved: serializer.fromJson<int>(json['conflictResolved']),
+      status: serializer.fromJson<String>(json['status']),
     );
   }
   @override
@@ -1175,6 +1194,7 @@ class OfflineAttendanceData extends DataClass
       'synced': serializer.toJson<int>(synced),
       'syncedAt': serializer.toJson<int?>(syncedAt),
       'conflictResolved': serializer.toJson<int>(conflictResolved),
+      'status': serializer.toJson<String>(status),
     };
   }
 
@@ -1190,7 +1210,8 @@ class OfflineAttendanceData extends DataClass
           int? scannedAt,
           int? synced,
           Value<int?> syncedAt = const Value.absent(),
-          int? conflictResolved}) =>
+          int? conflictResolved,
+          String? status}) =>
       OfflineAttendanceData(
         localId: localId ?? this.localId,
         eventId: eventId ?? this.eventId,
@@ -1204,6 +1225,7 @@ class OfflineAttendanceData extends DataClass
         synced: synced ?? this.synced,
         syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
         conflictResolved: conflictResolved ?? this.conflictResolved,
+        status: status ?? this.status,
       );
   OfflineAttendanceData copyWithCompanion(OfflineAttendanceCompanion data) {
     return OfflineAttendanceData(
@@ -1223,6 +1245,7 @@ class OfflineAttendanceData extends DataClass
       conflictResolved: data.conflictResolved.present
           ? data.conflictResolved.value
           : this.conflictResolved,
+      status: data.status.present ? data.status.value : this.status,
     );
   }
 
@@ -1240,7 +1263,8 @@ class OfflineAttendanceData extends DataClass
           ..write('scannedAt: $scannedAt, ')
           ..write('synced: $synced, ')
           ..write('syncedAt: $syncedAt, ')
-          ..write('conflictResolved: $conflictResolved')
+          ..write('conflictResolved: $conflictResolved, ')
+          ..write('status: $status')
           ..write(')'))
         .toString();
   }
@@ -1258,7 +1282,8 @@ class OfflineAttendanceData extends DataClass
       scannedAt,
       synced,
       syncedAt,
-      conflictResolved);
+      conflictResolved,
+      status);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1274,7 +1299,8 @@ class OfflineAttendanceData extends DataClass
           other.scannedAt == this.scannedAt &&
           other.synced == this.synced &&
           other.syncedAt == this.syncedAt &&
-          other.conflictResolved == this.conflictResolved);
+          other.conflictResolved == this.conflictResolved &&
+          other.status == this.status);
 }
 
 class OfflineAttendanceCompanion
@@ -1291,6 +1317,7 @@ class OfflineAttendanceCompanion
   final Value<int> synced;
   final Value<int?> syncedAt;
   final Value<int> conflictResolved;
+  final Value<String> status;
   final Value<int> rowid;
   const OfflineAttendanceCompanion({
     this.localId = const Value.absent(),
@@ -1305,6 +1332,7 @@ class OfflineAttendanceCompanion
     this.synced = const Value.absent(),
     this.syncedAt = const Value.absent(),
     this.conflictResolved = const Value.absent(),
+    this.status = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   OfflineAttendanceCompanion.insert({
@@ -1320,6 +1348,7 @@ class OfflineAttendanceCompanion
     required int synced,
     this.syncedAt = const Value.absent(),
     required int conflictResolved,
+    this.status = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : localId = Value(localId),
         eventId = Value(eventId),
@@ -1345,6 +1374,7 @@ class OfflineAttendanceCompanion
     Expression<int>? synced,
     Expression<int>? syncedAt,
     Expression<int>? conflictResolved,
+    Expression<String>? status,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1360,6 +1390,7 @@ class OfflineAttendanceCompanion
       if (synced != null) 'synced': synced,
       if (syncedAt != null) 'synced_at': syncedAt,
       if (conflictResolved != null) 'conflict_resolved': conflictResolved,
+      if (status != null) 'status': status,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1377,6 +1408,7 @@ class OfflineAttendanceCompanion
       Value<int>? synced,
       Value<int?>? syncedAt,
       Value<int>? conflictResolved,
+      Value<String>? status,
       Value<int>? rowid}) {
     return OfflineAttendanceCompanion(
       localId: localId ?? this.localId,
@@ -1391,6 +1423,7 @@ class OfflineAttendanceCompanion
       synced: synced ?? this.synced,
       syncedAt: syncedAt ?? this.syncedAt,
       conflictResolved: conflictResolved ?? this.conflictResolved,
+      status: status ?? this.status,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1434,6 +1467,9 @@ class OfflineAttendanceCompanion
     if (conflictResolved.present) {
       map['conflict_resolved'] = Variable<int>(conflictResolved.value);
     }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1455,6 +1491,7 @@ class OfflineAttendanceCompanion
           ..write('synced: $synced, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('conflictResolved: $conflictResolved, ')
+          ..write('status: $status, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2099,12 +2136,30 @@ class $ScannerAssignmentsTable extends ScannerAssignments
   late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
       'event_id', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _sessionIdsMeta =
-      const VerificationMeta('sessionIds');
+  static const VerificationMeta _eventTitleMeta =
+      const VerificationMeta('eventTitle');
   @override
-  late final GeneratedColumn<String> sessionIds = GeneratedColumn<String>(
-      'session_ids', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+  late final GeneratedColumn<String> eventTitle = GeneratedColumn<String>(
+      'event_title', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _eventFormatMeta =
+      const VerificationMeta('eventFormat');
+  @override
+  late final GeneratedColumn<String> eventFormat = GeneratedColumn<String>(
+      'event_format', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _sessionsMeta =
+      const VerificationMeta('sessions');
+  @override
+  late final GeneratedColumn<String> sessions = GeneratedColumn<String>(
+      'sessions', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('[]'));
   static const VerificationMeta _officerUserIdMeta =
       const VerificationMeta('officerUserId');
   @override
@@ -2117,6 +2172,28 @@ class $ScannerAssignmentsTable extends ScannerAssignments
   late final GeneratedColumn<String> permissions = GeneratedColumn<String>(
       'permissions', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _eventEndTimeMeta =
+      const VerificationMeta('eventEndTime');
+  @override
+  late final GeneratedColumn<int> eventEndTime = GeneratedColumn<int>(
+      'event_end_time', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _proposalStatusMeta =
+      const VerificationMeta('proposalStatus');
+  @override
+  late final GeneratedColumn<String> proposalStatus = GeneratedColumn<String>(
+      'proposal_status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _gracePeriodMinutesMeta =
+      const VerificationMeta('gracePeriodMinutes');
+  @override
+  late final GeneratedColumn<int> gracePeriodMinutes = GeneratedColumn<int>(
+      'grace_period_minutes', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _dataDownloadedMeta =
       const VerificationMeta('dataDownloaded');
   @override
@@ -2132,9 +2209,14 @@ class $ScannerAssignmentsTable extends ScannerAssignments
   @override
   List<GeneratedColumn> get $columns => [
         eventId,
-        sessionIds,
+        eventTitle,
+        eventFormat,
+        sessions,
         officerUserId,
         permissions,
+        eventEndTime,
+        proposalStatus,
+        gracePeriodMinutes,
         dataDownloaded,
         downloadedAt
       ];
@@ -2154,13 +2236,21 @@ class $ScannerAssignmentsTable extends ScannerAssignments
     } else if (isInserting) {
       context.missing(_eventIdMeta);
     }
-    if (data.containsKey('session_ids')) {
+    if (data.containsKey('event_title')) {
       context.handle(
-          _sessionIdsMeta,
-          sessionIds.isAcceptableOrUnknown(
-              data['session_ids']!, _sessionIdsMeta));
-    } else if (isInserting) {
-      context.missing(_sessionIdsMeta);
+          _eventTitleMeta,
+          eventTitle.isAcceptableOrUnknown(
+              data['event_title']!, _eventTitleMeta));
+    }
+    if (data.containsKey('event_format')) {
+      context.handle(
+          _eventFormatMeta,
+          eventFormat.isAcceptableOrUnknown(
+              data['event_format']!, _eventFormatMeta));
+    }
+    if (data.containsKey('sessions')) {
+      context.handle(_sessionsMeta,
+          sessions.isAcceptableOrUnknown(data['sessions']!, _sessionsMeta));
     }
     if (data.containsKey('officer_user_id')) {
       context.handle(
@@ -2177,6 +2267,24 @@ class $ScannerAssignmentsTable extends ScannerAssignments
               data['permissions']!, _permissionsMeta));
     } else if (isInserting) {
       context.missing(_permissionsMeta);
+    }
+    if (data.containsKey('event_end_time')) {
+      context.handle(
+          _eventEndTimeMeta,
+          eventEndTime.isAcceptableOrUnknown(
+              data['event_end_time']!, _eventEndTimeMeta));
+    }
+    if (data.containsKey('proposal_status')) {
+      context.handle(
+          _proposalStatusMeta,
+          proposalStatus.isAcceptableOrUnknown(
+              data['proposal_status']!, _proposalStatusMeta));
+    }
+    if (data.containsKey('grace_period_minutes')) {
+      context.handle(
+          _gracePeriodMinutesMeta,
+          gracePeriodMinutes.isAcceptableOrUnknown(
+              data['grace_period_minutes']!, _gracePeriodMinutesMeta));
     }
     if (data.containsKey('data_downloaded')) {
       context.handle(
@@ -2205,12 +2313,22 @@ class $ScannerAssignmentsTable extends ScannerAssignments
     return ScannerAssignment(
       eventId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}event_id'])!,
-      sessionIds: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}session_ids'])!,
+      eventTitle: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}event_title'])!,
+      eventFormat: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}event_format'])!,
+      sessions: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sessions'])!,
       officerUserId: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}officer_user_id'])!,
       permissions: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}permissions'])!,
+      eventEndTime: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}event_end_time'])!,
+      proposalStatus: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}proposal_status'])!,
+      gracePeriodMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}grace_period_minutes']),
       dataDownloaded: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}data_downloaded'])!,
       downloadedAt: attachedDatabase.typeMapping
@@ -2226,26 +2344,63 @@ class $ScannerAssignmentsTable extends ScannerAssignments
 
 class ScannerAssignment extends DataClass
     implements Insertable<ScannerAssignment> {
+  /// Firestore event document ID (primary key).
   final String eventId;
-  final String sessionIds;
+
+  /// Human-readable event name for offline display.
+  final String eventTitle;
+
+  /// Event format: 'On-Campus' | 'Online' | 'Hybrid'.
+  final String eventFormat;
+
+  /// JSON-encoded List<Map<String,dynamic>> of all sessions for this event.
+  final String sessions;
+
+  /// Firebase Auth UID of the officer who holds this assignment.
   final String officerUserId;
+
+  /// JSON-encoded Map<String, dynamic> of EventScanner permission flags.
   final String permissions;
+
+  /// End DateTime of the last session, stored as Unix milliseconds.
+  /// Used for offline `isActive` and `canScan` checks without hitting Firestore.
+  final int eventEndTime;
+
+  /// Firestore proposalStatus — 'approved' | 'draft'.
+  final String proposalStatus;
+  final int? gracePeriodMinutes;
+
+  /// 1 if participant data has been downloaded for offline scanning, else 0.
   final int dataDownloaded;
+
+  /// Unix milliseconds when participant data was last downloaded; 0 if never.
   final int downloadedAt;
   const ScannerAssignment(
       {required this.eventId,
-      required this.sessionIds,
+      required this.eventTitle,
+      required this.eventFormat,
+      required this.sessions,
       required this.officerUserId,
       required this.permissions,
+      required this.eventEndTime,
+      required this.proposalStatus,
+      this.gracePeriodMinutes,
       required this.dataDownloaded,
       required this.downloadedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['event_id'] = Variable<String>(eventId);
-    map['session_ids'] = Variable<String>(sessionIds);
+    map['event_title'] = Variable<String>(eventTitle);
+    map['event_format'] = Variable<String>(eventFormat);
+    map['sessions'] = Variable<String>(sessions);
     map['officer_user_id'] = Variable<String>(officerUserId);
     map['permissions'] = Variable<String>(permissions);
+    map['event_end_time'] = Variable<int>(eventEndTime);
+    map['proposal_status'] = Variable<String>(proposalStatus);
+    if (!nullToAbsent || gracePeriodMinutes != null) {
+      map['grace_period_minutes'] = Variable<int>(gracePeriodMinutes);
+    }
     map['data_downloaded'] = Variable<int>(dataDownloaded);
     map['downloaded_at'] = Variable<int>(downloadedAt);
     return map;
@@ -2254,9 +2409,16 @@ class ScannerAssignment extends DataClass
   ScannerAssignmentsCompanion toCompanion(bool nullToAbsent) {
     return ScannerAssignmentsCompanion(
       eventId: Value(eventId),
-      sessionIds: Value(sessionIds),
+      eventTitle: Value(eventTitle),
+      eventFormat: Value(eventFormat),
+      sessions: Value(sessions),
       officerUserId: Value(officerUserId),
       permissions: Value(permissions),
+      eventEndTime: Value(eventEndTime),
+      proposalStatus: Value(proposalStatus),
+      gracePeriodMinutes: gracePeriodMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gracePeriodMinutes),
       dataDownloaded: Value(dataDownloaded),
       downloadedAt: Value(downloadedAt),
     );
@@ -2267,9 +2429,14 @@ class ScannerAssignment extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ScannerAssignment(
       eventId: serializer.fromJson<String>(json['eventId']),
-      sessionIds: serializer.fromJson<String>(json['sessionIds']),
+      eventTitle: serializer.fromJson<String>(json['eventTitle']),
+      eventFormat: serializer.fromJson<String>(json['eventFormat']),
+      sessions: serializer.fromJson<String>(json['sessions']),
       officerUserId: serializer.fromJson<String>(json['officerUserId']),
       permissions: serializer.fromJson<String>(json['permissions']),
+      eventEndTime: serializer.fromJson<int>(json['eventEndTime']),
+      proposalStatus: serializer.fromJson<String>(json['proposalStatus']),
+      gracePeriodMinutes: serializer.fromJson<int?>(json['gracePeriodMinutes']),
       dataDownloaded: serializer.fromJson<int>(json['dataDownloaded']),
       downloadedAt: serializer.fromJson<int>(json['downloadedAt']),
     );
@@ -2279,9 +2446,14 @@ class ScannerAssignment extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'eventId': serializer.toJson<String>(eventId),
-      'sessionIds': serializer.toJson<String>(sessionIds),
+      'eventTitle': serializer.toJson<String>(eventTitle),
+      'eventFormat': serializer.toJson<String>(eventFormat),
+      'sessions': serializer.toJson<String>(sessions),
       'officerUserId': serializer.toJson<String>(officerUserId),
       'permissions': serializer.toJson<String>(permissions),
+      'eventEndTime': serializer.toJson<int>(eventEndTime),
+      'proposalStatus': serializer.toJson<String>(proposalStatus),
+      'gracePeriodMinutes': serializer.toJson<int?>(gracePeriodMinutes),
       'dataDownloaded': serializer.toJson<int>(dataDownloaded),
       'downloadedAt': serializer.toJson<int>(downloadedAt),
     };
@@ -2289,29 +2461,53 @@ class ScannerAssignment extends DataClass
 
   ScannerAssignment copyWith(
           {String? eventId,
-          String? sessionIds,
+          String? eventTitle,
+          String? eventFormat,
+          String? sessions,
           String? officerUserId,
           String? permissions,
+          int? eventEndTime,
+          String? proposalStatus,
+          Value<int?> gracePeriodMinutes = const Value.absent(),
           int? dataDownloaded,
           int? downloadedAt}) =>
       ScannerAssignment(
         eventId: eventId ?? this.eventId,
-        sessionIds: sessionIds ?? this.sessionIds,
+        eventTitle: eventTitle ?? this.eventTitle,
+        eventFormat: eventFormat ?? this.eventFormat,
+        sessions: sessions ?? this.sessions,
         officerUserId: officerUserId ?? this.officerUserId,
         permissions: permissions ?? this.permissions,
+        eventEndTime: eventEndTime ?? this.eventEndTime,
+        proposalStatus: proposalStatus ?? this.proposalStatus,
+        gracePeriodMinutes: gracePeriodMinutes.present
+            ? gracePeriodMinutes.value
+            : this.gracePeriodMinutes,
         dataDownloaded: dataDownloaded ?? this.dataDownloaded,
         downloadedAt: downloadedAt ?? this.downloadedAt,
       );
   ScannerAssignment copyWithCompanion(ScannerAssignmentsCompanion data) {
     return ScannerAssignment(
       eventId: data.eventId.present ? data.eventId.value : this.eventId,
-      sessionIds:
-          data.sessionIds.present ? data.sessionIds.value : this.sessionIds,
+      eventTitle:
+          data.eventTitle.present ? data.eventTitle.value : this.eventTitle,
+      eventFormat:
+          data.eventFormat.present ? data.eventFormat.value : this.eventFormat,
+      sessions: data.sessions.present ? data.sessions.value : this.sessions,
       officerUserId: data.officerUserId.present
           ? data.officerUserId.value
           : this.officerUserId,
       permissions:
           data.permissions.present ? data.permissions.value : this.permissions,
+      eventEndTime: data.eventEndTime.present
+          ? data.eventEndTime.value
+          : this.eventEndTime,
+      proposalStatus: data.proposalStatus.present
+          ? data.proposalStatus.value
+          : this.proposalStatus,
+      gracePeriodMinutes: data.gracePeriodMinutes.present
+          ? data.gracePeriodMinutes.value
+          : this.gracePeriodMinutes,
       dataDownloaded: data.dataDownloaded.present
           ? data.dataDownloaded.value
           : this.dataDownloaded,
@@ -2325,9 +2521,14 @@ class ScannerAssignment extends DataClass
   String toString() {
     return (StringBuffer('ScannerAssignment(')
           ..write('eventId: $eventId, ')
-          ..write('sessionIds: $sessionIds, ')
+          ..write('eventTitle: $eventTitle, ')
+          ..write('eventFormat: $eventFormat, ')
+          ..write('sessions: $sessions, ')
           ..write('officerUserId: $officerUserId, ')
           ..write('permissions: $permissions, ')
+          ..write('eventEndTime: $eventEndTime, ')
+          ..write('proposalStatus: $proposalStatus, ')
+          ..write('gracePeriodMinutes: $gracePeriodMinutes, ')
           ..write('dataDownloaded: $dataDownloaded, ')
           ..write('downloadedAt: $downloadedAt')
           ..write(')'))
@@ -2335,65 +2536,105 @@ class ScannerAssignment extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(eventId, sessionIds, officerUserId,
-      permissions, dataDownloaded, downloadedAt);
+  int get hashCode => Object.hash(
+      eventId,
+      eventTitle,
+      eventFormat,
+      sessions,
+      officerUserId,
+      permissions,
+      eventEndTime,
+      proposalStatus,
+      gracePeriodMinutes,
+      dataDownloaded,
+      downloadedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ScannerAssignment &&
           other.eventId == this.eventId &&
-          other.sessionIds == this.sessionIds &&
+          other.eventTitle == this.eventTitle &&
+          other.eventFormat == this.eventFormat &&
+          other.sessions == this.sessions &&
           other.officerUserId == this.officerUserId &&
           other.permissions == this.permissions &&
+          other.eventEndTime == this.eventEndTime &&
+          other.proposalStatus == this.proposalStatus &&
+          other.gracePeriodMinutes == this.gracePeriodMinutes &&
           other.dataDownloaded == this.dataDownloaded &&
           other.downloadedAt == this.downloadedAt);
 }
 
 class ScannerAssignmentsCompanion extends UpdateCompanion<ScannerAssignment> {
   final Value<String> eventId;
-  final Value<String> sessionIds;
+  final Value<String> eventTitle;
+  final Value<String> eventFormat;
+  final Value<String> sessions;
   final Value<String> officerUserId;
   final Value<String> permissions;
+  final Value<int> eventEndTime;
+  final Value<String> proposalStatus;
+  final Value<int?> gracePeriodMinutes;
   final Value<int> dataDownloaded;
   final Value<int> downloadedAt;
   final Value<int> rowid;
   const ScannerAssignmentsCompanion({
     this.eventId = const Value.absent(),
-    this.sessionIds = const Value.absent(),
+    this.eventTitle = const Value.absent(),
+    this.eventFormat = const Value.absent(),
+    this.sessions = const Value.absent(),
     this.officerUserId = const Value.absent(),
     this.permissions = const Value.absent(),
+    this.eventEndTime = const Value.absent(),
+    this.proposalStatus = const Value.absent(),
+    this.gracePeriodMinutes = const Value.absent(),
     this.dataDownloaded = const Value.absent(),
     this.downloadedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ScannerAssignmentsCompanion.insert({
     required String eventId,
-    required String sessionIds,
+    this.eventTitle = const Value.absent(),
+    this.eventFormat = const Value.absent(),
+    this.sessions = const Value.absent(),
     required String officerUserId,
     required String permissions,
+    this.eventEndTime = const Value.absent(),
+    this.proposalStatus = const Value.absent(),
+    this.gracePeriodMinutes = const Value.absent(),
     required int dataDownloaded,
     required int downloadedAt,
     this.rowid = const Value.absent(),
   })  : eventId = Value(eventId),
-        sessionIds = Value(sessionIds),
         officerUserId = Value(officerUserId),
         permissions = Value(permissions),
         dataDownloaded = Value(dataDownloaded),
         downloadedAt = Value(downloadedAt);
   static Insertable<ScannerAssignment> custom({
     Expression<String>? eventId,
-    Expression<String>? sessionIds,
+    Expression<String>? eventTitle,
+    Expression<String>? eventFormat,
+    Expression<String>? sessions,
     Expression<String>? officerUserId,
     Expression<String>? permissions,
+    Expression<int>? eventEndTime,
+    Expression<String>? proposalStatus,
+    Expression<int>? gracePeriodMinutes,
     Expression<int>? dataDownloaded,
     Expression<int>? downloadedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (eventId != null) 'event_id': eventId,
-      if (sessionIds != null) 'session_ids': sessionIds,
+      if (eventTitle != null) 'event_title': eventTitle,
+      if (eventFormat != null) 'event_format': eventFormat,
+      if (sessions != null) 'sessions': sessions,
       if (officerUserId != null) 'officer_user_id': officerUserId,
       if (permissions != null) 'permissions': permissions,
+      if (eventEndTime != null) 'event_end_time': eventEndTime,
+      if (proposalStatus != null) 'proposal_status': proposalStatus,
+      if (gracePeriodMinutes != null)
+        'grace_period_minutes': gracePeriodMinutes,
       if (dataDownloaded != null) 'data_downloaded': dataDownloaded,
       if (downloadedAt != null) 'downloaded_at': downloadedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2402,17 +2643,27 @@ class ScannerAssignmentsCompanion extends UpdateCompanion<ScannerAssignment> {
 
   ScannerAssignmentsCompanion copyWith(
       {Value<String>? eventId,
-      Value<String>? sessionIds,
+      Value<String>? eventTitle,
+      Value<String>? eventFormat,
+      Value<String>? sessions,
       Value<String>? officerUserId,
       Value<String>? permissions,
+      Value<int>? eventEndTime,
+      Value<String>? proposalStatus,
+      Value<int?>? gracePeriodMinutes,
       Value<int>? dataDownloaded,
       Value<int>? downloadedAt,
       Value<int>? rowid}) {
     return ScannerAssignmentsCompanion(
       eventId: eventId ?? this.eventId,
-      sessionIds: sessionIds ?? this.sessionIds,
+      eventTitle: eventTitle ?? this.eventTitle,
+      eventFormat: eventFormat ?? this.eventFormat,
+      sessions: sessions ?? this.sessions,
       officerUserId: officerUserId ?? this.officerUserId,
       permissions: permissions ?? this.permissions,
+      eventEndTime: eventEndTime ?? this.eventEndTime,
+      proposalStatus: proposalStatus ?? this.proposalStatus,
+      gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
       dataDownloaded: dataDownloaded ?? this.dataDownloaded,
       downloadedAt: downloadedAt ?? this.downloadedAt,
       rowid: rowid ?? this.rowid,
@@ -2425,14 +2676,29 @@ class ScannerAssignmentsCompanion extends UpdateCompanion<ScannerAssignment> {
     if (eventId.present) {
       map['event_id'] = Variable<String>(eventId.value);
     }
-    if (sessionIds.present) {
-      map['session_ids'] = Variable<String>(sessionIds.value);
+    if (eventTitle.present) {
+      map['event_title'] = Variable<String>(eventTitle.value);
+    }
+    if (eventFormat.present) {
+      map['event_format'] = Variable<String>(eventFormat.value);
+    }
+    if (sessions.present) {
+      map['sessions'] = Variable<String>(sessions.value);
     }
     if (officerUserId.present) {
       map['officer_user_id'] = Variable<String>(officerUserId.value);
     }
     if (permissions.present) {
       map['permissions'] = Variable<String>(permissions.value);
+    }
+    if (eventEndTime.present) {
+      map['event_end_time'] = Variable<int>(eventEndTime.value);
+    }
+    if (proposalStatus.present) {
+      map['proposal_status'] = Variable<String>(proposalStatus.value);
+    }
+    if (gracePeriodMinutes.present) {
+      map['grace_period_minutes'] = Variable<int>(gracePeriodMinutes.value);
     }
     if (dataDownloaded.present) {
       map['data_downloaded'] = Variable<int>(dataDownloaded.value);
@@ -2450,9 +2716,14 @@ class ScannerAssignmentsCompanion extends UpdateCompanion<ScannerAssignment> {
   String toString() {
     return (StringBuffer('ScannerAssignmentsCompanion(')
           ..write('eventId: $eventId, ')
-          ..write('sessionIds: $sessionIds, ')
+          ..write('eventTitle: $eventTitle, ')
+          ..write('eventFormat: $eventFormat, ')
+          ..write('sessions: $sessions, ')
           ..write('officerUserId: $officerUserId, ')
           ..write('permissions: $permissions, ')
+          ..write('eventEndTime: $eventEndTime, ')
+          ..write('proposalStatus: $proposalStatus, ')
+          ..write('gracePeriodMinutes: $gracePeriodMinutes, ')
           ..write('dataDownloaded: $dataDownloaded, ')
           ..write('downloadedAt: $downloadedAt, ')
           ..write('rowid: $rowid')
@@ -2936,6 +3207,7 @@ typedef $$OfflineAttendanceTableCreateCompanionBuilder
   required int synced,
   Value<int?> syncedAt,
   required int conflictResolved,
+  Value<String> status,
   Value<int> rowid,
 });
 typedef $$OfflineAttendanceTableUpdateCompanionBuilder
@@ -2952,6 +3224,7 @@ typedef $$OfflineAttendanceTableUpdateCompanionBuilder
   Value<int> synced,
   Value<int?> syncedAt,
   Value<int> conflictResolved,
+  Value<String> status,
   Value<int> rowid,
 });
 
@@ -3000,6 +3273,9 @@ class $$OfflineAttendanceTableFilterComposer
   ColumnFilters<int> get conflictResolved => $composableBuilder(
       column: $table.conflictResolved,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
 }
 
 class $$OfflineAttendanceTableOrderingComposer
@@ -3047,6 +3323,9 @@ class $$OfflineAttendanceTableOrderingComposer
   ColumnOrderings<int> get conflictResolved => $composableBuilder(
       column: $table.conflictResolved,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
 }
 
 class $$OfflineAttendanceTableAnnotationComposer
@@ -3093,6 +3372,9 @@ class $$OfflineAttendanceTableAnnotationComposer
 
   GeneratedColumn<int> get conflictResolved => $composableBuilder(
       column: $table.conflictResolved, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 }
 
 class $$OfflineAttendanceTableTableManager extends RootTableManager<
@@ -3136,6 +3418,7 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             Value<int> synced = const Value.absent(),
             Value<int?> syncedAt = const Value.absent(),
             Value<int> conflictResolved = const Value.absent(),
+            Value<String> status = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               OfflineAttendanceCompanion(
@@ -3151,6 +3434,7 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             synced: synced,
             syncedAt: syncedAt,
             conflictResolved: conflictResolved,
+            status: status,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -3166,6 +3450,7 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             required int synced,
             Value<int?> syncedAt = const Value.absent(),
             required int conflictResolved,
+            Value<String> status = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               OfflineAttendanceCompanion.insert(
@@ -3181,6 +3466,7 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             synced: synced,
             syncedAt: syncedAt,
             conflictResolved: conflictResolved,
+            status: status,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
@@ -3495,9 +3781,14 @@ typedef $$CachedPayablesTableProcessedTableManager = ProcessedTableManager<
 typedef $$ScannerAssignmentsTableCreateCompanionBuilder
     = ScannerAssignmentsCompanion Function({
   required String eventId,
-  required String sessionIds,
+  Value<String> eventTitle,
+  Value<String> eventFormat,
+  Value<String> sessions,
   required String officerUserId,
   required String permissions,
+  Value<int> eventEndTime,
+  Value<String> proposalStatus,
+  Value<int?> gracePeriodMinutes,
   required int dataDownloaded,
   required int downloadedAt,
   Value<int> rowid,
@@ -3505,9 +3796,14 @@ typedef $$ScannerAssignmentsTableCreateCompanionBuilder
 typedef $$ScannerAssignmentsTableUpdateCompanionBuilder
     = ScannerAssignmentsCompanion Function({
   Value<String> eventId,
-  Value<String> sessionIds,
+  Value<String> eventTitle,
+  Value<String> eventFormat,
+  Value<String> sessions,
   Value<String> officerUserId,
   Value<String> permissions,
+  Value<int> eventEndTime,
+  Value<String> proposalStatus,
+  Value<int?> gracePeriodMinutes,
   Value<int> dataDownloaded,
   Value<int> downloadedAt,
   Value<int> rowid,
@@ -3525,14 +3821,31 @@ class $$ScannerAssignmentsTableFilterComposer
   ColumnFilters<String> get eventId => $composableBuilder(
       column: $table.eventId, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get sessionIds => $composableBuilder(
-      column: $table.sessionIds, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get eventFormat => $composableBuilder(
+      column: $table.eventFormat, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get sessions => $composableBuilder(
+      column: $table.sessions, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get officerUserId => $composableBuilder(
       column: $table.officerUserId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get permissions => $composableBuilder(
       column: $table.permissions, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get eventEndTime => $composableBuilder(
+      column: $table.eventEndTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get proposalStatus => $composableBuilder(
+      column: $table.proposalStatus,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get gracePeriodMinutes => $composableBuilder(
+      column: $table.gracePeriodMinutes,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get dataDownloaded => $composableBuilder(
       column: $table.dataDownloaded,
@@ -3554,8 +3867,14 @@ class $$ScannerAssignmentsTableOrderingComposer
   ColumnOrderings<String> get eventId => $composableBuilder(
       column: $table.eventId, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get sessionIds => $composableBuilder(
-      column: $table.sessionIds, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get eventFormat => $composableBuilder(
+      column: $table.eventFormat, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get sessions => $composableBuilder(
+      column: $table.sessions, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get officerUserId => $composableBuilder(
       column: $table.officerUserId,
@@ -3563,6 +3882,18 @@ class $$ScannerAssignmentsTableOrderingComposer
 
   ColumnOrderings<String> get permissions => $composableBuilder(
       column: $table.permissions, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get eventEndTime => $composableBuilder(
+      column: $table.eventEndTime,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get proposalStatus => $composableBuilder(
+      column: $table.proposalStatus,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get gracePeriodMinutes => $composableBuilder(
+      column: $table.gracePeriodMinutes,
+      builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get dataDownloaded => $composableBuilder(
       column: $table.dataDownloaded,
@@ -3585,14 +3916,29 @@ class $$ScannerAssignmentsTableAnnotationComposer
   GeneratedColumn<String> get eventId =>
       $composableBuilder(column: $table.eventId, builder: (column) => column);
 
-  GeneratedColumn<String> get sessionIds => $composableBuilder(
-      column: $table.sessionIds, builder: (column) => column);
+  GeneratedColumn<String> get eventTitle => $composableBuilder(
+      column: $table.eventTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get eventFormat => $composableBuilder(
+      column: $table.eventFormat, builder: (column) => column);
+
+  GeneratedColumn<String> get sessions =>
+      $composableBuilder(column: $table.sessions, builder: (column) => column);
 
   GeneratedColumn<String> get officerUserId => $composableBuilder(
       column: $table.officerUserId, builder: (column) => column);
 
   GeneratedColumn<String> get permissions => $composableBuilder(
       column: $table.permissions, builder: (column) => column);
+
+  GeneratedColumn<int> get eventEndTime => $composableBuilder(
+      column: $table.eventEndTime, builder: (column) => column);
+
+  GeneratedColumn<String> get proposalStatus => $composableBuilder(
+      column: $table.proposalStatus, builder: (column) => column);
+
+  GeneratedColumn<int> get gracePeriodMinutes => $composableBuilder(
+      column: $table.gracePeriodMinutes, builder: (column) => column);
 
   GeneratedColumn<int> get dataDownloaded => $composableBuilder(
       column: $table.dataDownloaded, builder: (column) => column);
@@ -3630,36 +3976,56 @@ class $$ScannerAssignmentsTableTableManager extends RootTableManager<
                   $db: db, $table: table),
           updateCompanionCallback: ({
             Value<String> eventId = const Value.absent(),
-            Value<String> sessionIds = const Value.absent(),
+            Value<String> eventTitle = const Value.absent(),
+            Value<String> eventFormat = const Value.absent(),
+            Value<String> sessions = const Value.absent(),
             Value<String> officerUserId = const Value.absent(),
             Value<String> permissions = const Value.absent(),
+            Value<int> eventEndTime = const Value.absent(),
+            Value<String> proposalStatus = const Value.absent(),
+            Value<int?> gracePeriodMinutes = const Value.absent(),
             Value<int> dataDownloaded = const Value.absent(),
             Value<int> downloadedAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ScannerAssignmentsCompanion(
             eventId: eventId,
-            sessionIds: sessionIds,
+            eventTitle: eventTitle,
+            eventFormat: eventFormat,
+            sessions: sessions,
             officerUserId: officerUserId,
             permissions: permissions,
+            eventEndTime: eventEndTime,
+            proposalStatus: proposalStatus,
+            gracePeriodMinutes: gracePeriodMinutes,
             dataDownloaded: dataDownloaded,
             downloadedAt: downloadedAt,
             rowid: rowid,
           ),
           createCompanionCallback: ({
             required String eventId,
-            required String sessionIds,
+            Value<String> eventTitle = const Value.absent(),
+            Value<String> eventFormat = const Value.absent(),
+            Value<String> sessions = const Value.absent(),
             required String officerUserId,
             required String permissions,
+            Value<int> eventEndTime = const Value.absent(),
+            Value<String> proposalStatus = const Value.absent(),
+            Value<int?> gracePeriodMinutes = const Value.absent(),
             required int dataDownloaded,
             required int downloadedAt,
             Value<int> rowid = const Value.absent(),
           }) =>
               ScannerAssignmentsCompanion.insert(
             eventId: eventId,
-            sessionIds: sessionIds,
+            eventTitle: eventTitle,
+            eventFormat: eventFormat,
+            sessions: sessions,
             officerUserId: officerUserId,
             permissions: permissions,
+            eventEndTime: eventEndTime,
+            proposalStatus: proposalStatus,
+            gracePeriodMinutes: gracePeriodMinutes,
             dataDownloaded: dataDownloaded,
             downloadedAt: downloadedAt,
             rowid: rowid,

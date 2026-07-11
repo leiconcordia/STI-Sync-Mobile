@@ -58,7 +58,9 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
     final studentAuthUid = student.id;
 
     try {
-      if (_repository.isOnline) {
+      final isOnline = await _repository.checkOnline();
+      
+      if (isOnline) {
         // We already have the fully populated student data!
         final eventTitle = await _repository.getEventTitle(eventId);
         

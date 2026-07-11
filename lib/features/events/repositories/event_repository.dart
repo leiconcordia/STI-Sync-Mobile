@@ -55,21 +55,12 @@ class EventRepository {
           final isDeptEligible = event.targetDepartmentIds.isEmpty ||
               event.targetDepartmentIds.contains(student.departmentId);
 
-          final isYearEligible = event.targetYearLevels.isEmpty ||
-              event.targetYearLevels.contains(student.yearLevel);
-
-          return isDeptEligible && isYearEligible;
+          return isDeptEligible;
         }).toList();
 
-        // Deduplicate by event title to prevent accidental duplicates
-        final uniqueEvents = <String, EventModel>{};
-        for (var event in filtered) {
-          uniqueEvents[event.title.toLowerCase().trim()] = event;
-        }
-
-        final deduplicatedList = uniqueEvents.values.toList();
-        deduplicatedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return deduplicatedList;
+        // Sort by newest first
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return filtered;
       },
     ).handleError((e) {
       if (e is FirebaseException) {

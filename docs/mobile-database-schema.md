@@ -130,6 +130,7 @@ class EventModel {
   final bool mandatoryAttendance;
   final bool lockAfterApproval;
   final String scannerActivationCode;
+  final List<String> scannerUserIds; // Added for mobile querying of scanner assignments
 
   // ─── Lifecycle ───
   final String proposalStatus; // draft | approved
@@ -153,7 +154,7 @@ class EventSessionModel {
 ```
 
 **Firestore path:** `/events/{eventId}`
-**Mobile query:**
+**Mobile query (student — approved events they are eligible for):**
 ```dart
 // Only show approved events the student is eligible for
 _firestore
@@ -163,6 +164,19 @@ _firestore
   .orderBy('createdAt', descending: true)
   .snapshots()
 ```
+
+**Mobile query (scanner officer — events where this user is assigned as scanner):**
+```dart
+// Requires denormalized scannerUserIds field on each event document.
+// Populated by the web admin service whenever scanners[] array is updated.
+_firestore
+  .collection(FirestorePaths.events)
+  .where('proposalStatus', isEqualTo: 'approved')
+  .where('scannerUserIds', arrayContains: officerUserId)
+  .snapshots()
+```
+> **Schema note (scannerUserIds):** Added by web admin `event.service.ts` on every
+> create/update. Required for this query; Firestore cannot filter by nested array object fields.
 
 ---
 
@@ -542,9 +556,17 @@ interface FlaggedAttendanceDocument {
 #### `scanner_assignments`
 | Column | Type | Notes |
 |---|---|---|
-| eventId | TEXT PK | |
-| sessionIds | TEXT | JSON array |
-| officerUserId | TEXT | |
-| permissions | TEXT | JSON of EventScanner object |
-| dataDownloaded | INTEGER | 0/1 |
-| downloadedAt | INTEGER | Unix ms |
+| eventId | TEXT PK | Firestore event ID |
+| eventTitle | TEXT | Denormalized — for offline display |
+| eventFormat | TEXT | 'On-Campus' \| 'Online' \| 'Hybrid' |
+| sessionIds | TEXT | JSON array of session ID strings |
+| officerUserId | TEXT | Firebase Auth UID of the officer |
+| permissions | TEXT | JSON of EventScanner permission flags |
+| eventEndTime | INTEGER | Unix ms — last session end; drives `isActive` offline |
+| proposalStatus | TEXT | 'approved' \| 'draft' — drives `canScan` offline |
+| dataDownloaded | INTEGER | 0 or 1 |
+| downloadedAt | INTEGER | Unix ms or 0 |
+
+// AGENT-UPDATED: 2026-07-11 — Added scannerUserIds field documentation to events
+// section; updated scanner_assignments Drift table with eventTitle, eventFormat,
+// eventEndTime, proposalStatus columns (schema v3).

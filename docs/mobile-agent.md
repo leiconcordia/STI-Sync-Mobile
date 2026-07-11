@@ -584,7 +584,7 @@ Use `connectivity_plus` package. All repositories check
 | Name | Path | Screen |
 |---|---|---|
 | `scannerHome` | `/scanner` | `ScannerHomeScreen` |
-| `scannerCamera` | `/scanner/:eventId/:sessionId/:gateType` | `ScannerCameraScreen` |
+| `scannerCamera` | `/scanner/camera/:eventId/:sessionId/:gateType` | `ScannerCameraScreen` |
 | `scannerLogs` | `/scanner/:eventId/logs` | `ScannerLogsScreen` |
 | `manualAttendance` | `/scanner/:eventId/manual` | `ManualAttendanceScreen` |
 | `syncConflicts` | `/scanner/sync-conflicts` | `SyncConflictsScreen` |
@@ -605,7 +605,7 @@ lib/features/
 │   │   ├── scanner_repository.dart
 │   │   └── offline_attendance_repository.dart
 │   ├── viewmodels/
-│   │   ├── scanner_viewmodel.dart
+│   │   ├── scanner_viewmodel.dart        # ScannerState + ScannerViewModel
 │   │   └── sync_viewmodel.dart
 │   ├── views/
 │   │   ├── scanner_home_screen.dart
@@ -618,6 +618,9 @@ lib/features/
 │       ├── session_selector_sheet.dart
 │       ├── conflict_review_tile.dart
 │       └── scanner_metric_card.dart
+// AGENT-UPDATED: 2026-07-11 — Added viewmodels/ directory to scanner feature;
+// scannerViewModelProvider + activeScannerAssignmentsProvider registered in providers.dart
+// AGENT-UPDATED: 2026-07-11 — Added offline_attendance_repository.dart to handle student + payables downloads.
 ├── qr_ticket/
 │   ├── models/
 │   │   └── qr_ticket_model.dart

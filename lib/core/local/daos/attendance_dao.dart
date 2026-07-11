@@ -38,4 +38,15 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
   Future<List<OfflineAttendanceData>> getAllForSession(String sessionId) {
     return (select(offlineAttendance)..where((t) => t.sessionId.equals(sessionId))).get();
   }
+
+  Stream<List<OfflineAttendanceData>> watchAllForSession(String sessionId) {
+    return (select(offlineAttendance)..where((t) => t.sessionId.equals(sessionId))).watch();
+  }
+
+  Future<void> deleteRecordsForStudent(String studentId, String sessionId) {
+    return (delete(offlineAttendance)
+          ..where((t) =>
+              t.studentId.equals(studentId) & t.sessionId.equals(sessionId)))
+        .go();
+  }
 }

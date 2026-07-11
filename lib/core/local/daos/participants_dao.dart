@@ -24,6 +24,10 @@ class ParticipantsDao extends DatabaseAccessor<AppDatabase> with _$ParticipantsD
     return (select(cachedParticipants)..where((t) => t.eventId.equals(eventId))).get();
   }
 
+  Stream<List<CachedParticipant>> watchAllForEvent(String eventId) {
+    return (select(cachedParticipants)..where((t) => t.eventId.equals(eventId))).watch();
+  }
+
   Future<void> purgeEventParticipants(String eventId) {
     return (delete(cachedParticipants)..where((t) => t.eventId.equals(eventId))).go();
   }

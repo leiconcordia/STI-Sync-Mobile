@@ -12,6 +12,9 @@ import '../../features/events/repositories/event_repository.dart';
 import '../../features/events/viewmodels/event_viewmodel.dart';
 import '../../features/qr_ticket/repositories/qr_ticket_repository.dart';
 import '../../features/qr_ticket/viewmodels/qr_ticket_viewmodel.dart';
+import '../../features/scanner/repositories/scanner_repository.dart';
+import '../../features/scanner/repositories/offline_attendance_repository.dart';
+import '../../features/scanner/viewmodels/scanner_viewmodel.dart';
 import '../../core/local/app_database.dart';
 
 /// Events feature
@@ -177,3 +180,60 @@ final qrTicketViewModelProvider =
   (ref, eventId) => QrTicketViewModel(ref.watch(qrTicketRepositoryProvider)),
 );
 
+/// Scanner feature
+final offlineAttendanceRepositoryProvider = Provider<OfflineAttendanceRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return OfflineAttendanceRepository(
+    firestore: ref.watch(firestoreProvider),
+    participantsDao: db.participantsDao,
+    payablesDao: db.payablesDao,
+    scannerDao: db.scannerDao,
+  );
+});
+final scannerRepositoryProvider = Provider<ScannerRepository>((ref) {
+  return ScannerRepository(
+    firestore: ref.watch(firestoreProvider),
+    scannerDao: ref.watch(appDatabaseProvider).scannerDao,
+  );
+});
+
+final scannerViewModelProvider =
+    StateNotifierProvider<ScannerViewModel, ScannerState>(
+  (ref) {
+    final viewModel = ScannerViewModel(
+      ref.watch(scannerRepositoryProvider),
+      ref.watch(offlineAttendanceRepositoryProvider),
+    );
+    
+    // Automatically load assignments when the user logs in
+    ref.listen<String?>(
+      authViewModelProvider.select((state) => state.student?.id),
+      (previous, next) {
+        if (next != null && next.isNotEmpty && next != previous) {
+          // Delay the state modification to avoid modifying the provider
+          // while the widget tree is still building.
+          Future.microtask(() => viewModel.loadAssignments(next));
+        }
+      },
+      fireImmediately: true,
+    );
+    
+    return viewModel;
+  },
+);
+
+/// Convenience stream: resolves the current user UID and streams active
+/// scanner assignments. Watches authViewModelProvider so it re-subscribes
+/// if the user logs in/out.
+final activeScannerAssignmentsProvider = StreamProvider(
+  (ref) {
+    final authState = ref.watch(authViewModelProvider);
+    final uid = authState.student?.id ?? '';
+    if (uid.isEmpty) {
+      return const Stream.empty();
+    }
+    return ref
+        .watch(scannerRepositoryProvider)
+        .watchScannerAssignments(uid);
+  },
+);

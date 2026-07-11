@@ -13,6 +13,7 @@ import 'package:sti_sync/features/events/views/event_detail_screen.dart';
 import 'package:sti_sync/features/qr_ticket/views/qr_ticket_screen.dart';
 import 'package:sti_sync/features/scanner/views/scanner_download_screen.dart';
 import 'package:sti_sync/features/scanner/views/scanner_mode_screen.dart';
+import 'package:sti_sync/features/scanner/views/scanner_camera_screen.dart';
 import 'package:sti_sync/features/payables/views/payables_screen.dart';
 import 'package:sti_sync/features/profile/views/profile_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
@@ -90,6 +91,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           eventId: state.pathParameters['eventId']!,
         ),
       ),
+      GoRoute(
+        name: 'scannerMode',
+        path: '/scanner/mode',
+        builder: (context, state) => const ScannerModeScreen(),
+      ),
+      GoRoute(
+        name: 'scannerCamera',
+        path: '/scanner/camera/:eventId/:sessionId/:gateType',
+        builder: (context, state) => ScannerCameraScreen(
+          eventId: state.pathParameters['eventId']!,
+          sessionId: state.pathParameters['sessionId']!,
+          gateType: state.pathParameters['gateType']!,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return MainShellScreen(navigationShell: navigationShell);
@@ -128,13 +143,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                 name: 'scanner',
                 path: '/scanner',
                 builder: (context, state) => const ScannerDownloadScreen(),
-                routes: [
-                  GoRoute(
-                    name: 'scannerMode',
-                    path: 'mode',
-                    builder: (context, state) => const ScannerModeScreen(),
-                  ),
-                ],
               ),
             ],
           ),

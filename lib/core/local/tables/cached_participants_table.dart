@@ -13,5 +13,5 @@ class CachedParticipants extends Table {
   IntColumn get downloadedAt => integer()();
 
   @override
-  Set<Column> get primaryKey => {id};
+  Set<Column> get primaryKey => {id, eventId};
 }

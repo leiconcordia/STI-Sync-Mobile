@@ -13,6 +13,7 @@ class OfflineAttendance extends Table {
   IntColumn get synced => integer()();
   IntColumn get syncedAt => integer().nullable()();
   IntColumn get conflictResolved => integer()();
+  TextColumn get status => text().withDefault(const Constant('Present'))();
 
   @override
   Set<Column> get primaryKey => {localId};

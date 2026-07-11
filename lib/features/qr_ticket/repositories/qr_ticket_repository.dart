@@ -158,4 +158,6 @@ class QrTicketRepository {
   }
 
   bool get isOnline => _connectivity.isOnline;
+  
+  Future<bool> checkOnline() => _connectivity.checkConnectivity();
 }
