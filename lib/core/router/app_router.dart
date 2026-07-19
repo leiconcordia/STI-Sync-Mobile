@@ -14,9 +14,13 @@ import 'package:sti_sync/features/qr_ticket/views/qr_ticket_screen.dart';
 import 'package:sti_sync/features/scanner/views/scanner_download_screen.dart';
 import 'package:sti_sync/features/scanner/views/scanner_mode_screen.dart';
 import 'package:sti_sync/features/scanner/views/scanner_camera_screen.dart';
+import 'package:sti_sync/features/scanner/views/manual_attendance_screen.dart';
+import 'package:sti_sync/features/scanner/views/scanner_logs_screen.dart';
+import 'package:sti_sync/features/scanner/views/sync_conflicts_screen.dart';
 import 'package:sti_sync/features/payables/views/payables_screen.dart';
 import 'package:sti_sync/features/profile/views/profile_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
+import 'package:sti_sync/features/sync/models/sync_status_model.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authViewModelProvider);
@@ -103,6 +107,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           eventId: state.pathParameters['eventId']!,
           sessionId: state.pathParameters['sessionId']!,
           gateType: state.pathParameters['gateType']!,
+        ),
+      ),
+      GoRoute(
+        name: 'manualAttendance',
+        path: '/scanner/:eventId/manual',
+        builder: (context, state) => ManualAttendanceScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
+      ),
+      GoRoute(
+        name: 'scannerLogs',
+        path: '/scanner/:eventId/logs',
+        builder: (context, state) => ScannerLogsScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
+      ),
+      GoRoute(
+        name: 'syncConflicts',
+        path: '/scanner/sync-conflicts',
+        builder: (context, state) => SyncConflictsScreen(
+          conflicts: state.extra as List<SyncConflict>? ?? [],
         ),
       ),
       StatefulShellRoute.indexedStack(

@@ -205,4 +205,33 @@ class OfflineAttendanceRepository {
     // Mark as downloaded
     await _scannerDao.markDataDownloaded(eventId);
   }
+
+  /// Inserts a flagged/manual attendance record into the local Drift queue.
+  ///
+  /// The record will be uploaded to `/flagged_attendance` (instead of
+  /// `/attendance`) when [SyncService.uploadPendingAttendance] runs.
+  Future<void> saveFlaggedRecord(OfflineAttendanceCompanion record) async {
+    await _participantsDao.db.attendanceDao.insertOfflineRecord(record);
+  }
+
+  /// Searches cached participants by name or student number (offline-capable).
+  ///
+  /// Returns all participants for [eventId] whose `studentName` or
+  /// `studentNumber` contains the [query] string (case-insensitive).
+  Future<List<CachedParticipant>> searchParticipants(
+    String eventId,
+    String query,
+  ) async {
+    if (query.isEmpty) return [];
+
+    final all = await _participantsDao.getAllForEvent(eventId);
+    final lowerQuery = query.toLowerCase();
+
+    return all.where((p) {
+      final nameMatch = p.studentName.toLowerCase().contains(lowerQuery);
+      final numberMatch =
+          p.studentNumber?.toLowerCase().contains(lowerQuery) ?? false;
+      return nameMatch || numberMatch;
+    }).toList();
+  }
 }

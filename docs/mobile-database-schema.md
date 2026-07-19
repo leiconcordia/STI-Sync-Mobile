@@ -468,7 +468,7 @@ interface ScannerSessionDocument {
 
 ### 1.13 `flagged_attendance` (Firestore)
 
-**Path:** `/flagged_attendance/{flagId}`
+**Path:** `/events/{eventId}/flagged_attendance/{flagId}`
 
 > Separate collection for manual/flagged entries. 
 > Only scanners with allowManualAttendance can write here.
@@ -541,6 +541,10 @@ interface FlaggedAttendanceDocument {
 | synced | INTEGER | 0 = pending, 1 = uploaded |
 | syncedAt | INTEGER | Unix ms or null |
 | conflictResolved | INTEGER | 0/1 |
+| isFlagged | INTEGER | 0/1 |
+| flagReason | TEXT | 'no_phone'\|'payment_pending'\|'not_registered'\|'device_error'\|'other' |
+| flagNote | TEXT | Optional note |
+| isManual | INTEGER | 0/1 |
 
 #### `cached_payables`
 | Column | Type | Notes |
@@ -570,3 +574,5 @@ interface FlaggedAttendanceDocument {
 // AGENT-UPDATED: 2026-07-11 — Added scannerUserIds field documentation to events
 // section; updated scanner_assignments Drift table with eventTitle, eventFormat,
 // eventEndTime, proposalStatus columns (schema v3).
+
+// AGENT-UPDATED: 2026-07-19 — Added isFlagged, flagReason, flagNote, isManual to offline_attendance (schema v8).

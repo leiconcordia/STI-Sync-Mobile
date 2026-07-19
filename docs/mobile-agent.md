@@ -503,6 +503,8 @@ Run this before writing any code:
 // smart QR attendance system, scanner role enforcement, 
 // payables gate control, and flagged/manual attendance rules
 
+// AGENT-UPDATED: 2026-07-19 — Implemented Sync conflicts, scanner logs, and manual attendance screens.
+
 ---
 
 ## 11. Offline Mode Architecture (Mandatory)

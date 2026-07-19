@@ -27,9 +27,21 @@ class AppTextStyles {
         color: AppColors.textPrimary,
       );
 
+  static TextStyle get bodySmall => GoogleFonts.inter(
+        fontSize: 12,
+        fontWeight: FontWeight.normal,
+        color: AppColors.textPrimary,
+      );
+
   static TextStyle get labelSmall => GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
+      );
+
+  static TextStyle get headlineMedium => GoogleFonts.inter(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textPrimary,
       );
 }

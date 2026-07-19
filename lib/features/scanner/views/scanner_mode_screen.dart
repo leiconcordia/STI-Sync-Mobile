@@ -82,11 +82,42 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                     Positioned(
                       bottom: 32,
                       right: 24,
-                      child: FloatingActionButton(
-                        onPressed: _openScannerConfig,
-                        backgroundColor: AppColors.secondary,
-                        elevation: 4,
-                        child: const Icon(Icons.qr_code_scanner, color: AppColors.primaryDark, size: 28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // View Logs FAB
+                          if (eventId != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FloatingActionButton.small(
+                                heroTag: 'logs_fab',
+                                onPressed: () => context.push('/scanner/$eventId/logs'),
+                                backgroundColor: Colors.white,
+                                elevation: 3,
+                                child: Icon(Icons.list_alt, color: AppColors.primary, size: 22),
+                              ),
+                            ),
+                          // Manual Attendance FAB — only if allowManualAttendance
+                          if (eventId != null && _hasManualPermission)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FloatingActionButton.small(
+                                heroTag: 'manual_fab',
+                                onPressed: () => context.push('/scanner/$eventId/manual'),
+                                backgroundColor: Colors.white,
+                                elevation: 3,
+                                child: Icon(Icons.person_add_alt_1, color: Colors.amber.shade700, size: 22),
+                              ),
+                            ),
+                          // QR Scanner FAB
+                          FloatingActionButton(
+                            heroTag: 'scan_fab',
+                            onPressed: _openScannerConfig,
+                            backgroundColor: AppColors.secondary,
+                            elevation: 4,
+                            child: const Icon(Icons.qr_code_scanner, color: AppColors.primaryDark, size: 28),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -127,6 +158,14 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
       if (a.eventId == eventId) return a;
     }
     return null;
+  }
+
+  /// Whether the current scanner assignment allows manual attendance entry.
+  bool get _hasManualPermission {
+    final assignment = _assignment;
+    if (assignment == null) return false;
+    return assignment.permissions['fullAccess'] == true ||
+        assignment.permissions['allowManualAttendance'] == true;
   }
 
   Widget _buildHeader(BuildContext context) {

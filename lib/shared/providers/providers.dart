@@ -8,6 +8,8 @@ import '../../features/auth/viewmodels/auth_viewmodel.dart';
 import '../../features/auth/viewmodels/registration_viewmodel.dart';
 import '../../services/cloudinary_service.dart';
 import '../../features/sync/services/connectivity_service.dart';
+import '../../features/sync/services/sync_service.dart';
+import '../../features/sync/services/event_cleanup_service.dart';
 import '../../features/events/repositories/event_repository.dart';
 import '../../features/events/viewmodels/event_viewmodel.dart';
 import '../../features/qr_ticket/repositories/qr_ticket_repository.dart';
@@ -237,3 +239,35 @@ final activeScannerAssignmentsProvider = StreamProvider(
         .watchScannerAssignments(uid);
   },
 );
+
+/// Sync service — handles uploading pending offline attendance to Firestore,
+/// duplicate detection, and conflict resolution.
+final syncServiceProvider = Provider<SyncService>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final service = SyncService(
+    firestore: ref.watch(firestoreProvider),
+    attendanceDao: db.attendanceDao,
+    participantsDao: db.participantsDao,
+    connectivityService: ref.watch(connectivityServiceProvider),
+    getCurrentStudent: () => ref.read(authViewModelProvider).student,
+  );
+  service.startAutoSync();
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+
+/// Event cleanup service — purges locally cached data for expired events.
+/// Runs a 30-minute periodic check while the app is open.
+final eventCleanupServiceProvider = Provider<EventCleanupService>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final service = EventCleanupService(
+    attendanceDao: db.attendanceDao,
+    participantsDao: db.participantsDao,
+    payablesDao: db.payablesDao,
+    scannerDao: db.scannerDao,
+    syncService: ref.watch(syncServiceProvider),
+  );
+  service.startPeriodicCheck();
+  ref.onDispose(() => service.dispose());
+  return service;
+});

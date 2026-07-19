@@ -3,6 +3,11 @@ class FirestorePaths {
   static const String events = 'events';
   static const String eventSessions = 'event_sessions';
   static const String attendance = 'attendance';
+  static const String flaggedAttendance = 'flagged_attendance';
+  
+  static String eventAttendance(String eventId) => 'events/$eventId/attendance';
+  static String eventFlaggedAttendance(String eventId) => 'events/$eventId/flagged_attendance';
+
   static const String payables = 'payables';
   static const String announcements = 'announcements';
   static const String certificates = 'certificates';

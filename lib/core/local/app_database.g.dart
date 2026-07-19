@@ -938,6 +938,34 @@ class $OfflineAttendanceTable extends OfflineAttendance
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('Present'));
+  static const VerificationMeta _isFlaggedMeta =
+      const VerificationMeta('isFlagged');
+  @override
+  late final GeneratedColumn<int> isFlagged = GeneratedColumn<int>(
+      'is_flagged', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _flagReasonMeta =
+      const VerificationMeta('flagReason');
+  @override
+  late final GeneratedColumn<String> flagReason = GeneratedColumn<String>(
+      'flag_reason', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _flagNoteMeta =
+      const VerificationMeta('flagNote');
+  @override
+  late final GeneratedColumn<String> flagNote = GeneratedColumn<String>(
+      'flag_note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isManualMeta =
+      const VerificationMeta('isManual');
+  @override
+  late final GeneratedColumn<int> isManual = GeneratedColumn<int>(
+      'is_manual', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   @override
   List<GeneratedColumn> get $columns => [
         localId,
@@ -952,7 +980,11 @@ class $OfflineAttendanceTable extends OfflineAttendance
         synced,
         syncedAt,
         conflictResolved,
-        status
+        status,
+        isFlagged,
+        flagReason,
+        flagNote,
+        isManual
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1045,6 +1077,24 @@ class $OfflineAttendanceTable extends OfflineAttendance
       context.handle(_statusMeta,
           status.isAcceptableOrUnknown(data['status']!, _statusMeta));
     }
+    if (data.containsKey('is_flagged')) {
+      context.handle(_isFlaggedMeta,
+          isFlagged.isAcceptableOrUnknown(data['is_flagged']!, _isFlaggedMeta));
+    }
+    if (data.containsKey('flag_reason')) {
+      context.handle(
+          _flagReasonMeta,
+          flagReason.isAcceptableOrUnknown(
+              data['flag_reason']!, _flagReasonMeta));
+    }
+    if (data.containsKey('flag_note')) {
+      context.handle(_flagNoteMeta,
+          flagNote.isAcceptableOrUnknown(data['flag_note']!, _flagNoteMeta));
+    }
+    if (data.containsKey('is_manual')) {
+      context.handle(_isManualMeta,
+          isManual.isAcceptableOrUnknown(data['is_manual']!, _isManualMeta));
+    }
     return context;
   }
 
@@ -1080,6 +1130,14 @@ class $OfflineAttendanceTable extends OfflineAttendance
           .read(DriftSqlType.int, data['${effectivePrefix}conflict_resolved'])!,
       status: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      isFlagged: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}is_flagged'])!,
+      flagReason: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}flag_reason']),
+      flagNote: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}flag_note']),
+      isManual: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}is_manual'])!,
     );
   }
 
@@ -1104,6 +1162,18 @@ class OfflineAttendanceData extends DataClass
   final int? syncedAt;
   final int conflictResolved;
   final String status;
+
+  /// 1 = flagged for review, 0 = normal scan
+  final int isFlagged;
+
+  /// Reason for flagging: 'no_phone' | 'payment_pending' | 'not_registered' | 'device_error' | 'other'
+  final String? flagReason;
+
+  /// Optional free-text note from the scanner officer
+  final String? flagNote;
+
+  /// 1 = manually entered (not QR scanned), 0 = QR scanned
+  final int isManual;
   const OfflineAttendanceData(
       {required this.localId,
       required this.eventId,
@@ -1117,7 +1187,11 @@ class OfflineAttendanceData extends DataClass
       required this.synced,
       this.syncedAt,
       required this.conflictResolved,
-      required this.status});
+      required this.status,
+      required this.isFlagged,
+      this.flagReason,
+      this.flagNote,
+      required this.isManual});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1136,6 +1210,14 @@ class OfflineAttendanceData extends DataClass
     }
     map['conflict_resolved'] = Variable<int>(conflictResolved);
     map['status'] = Variable<String>(status);
+    map['is_flagged'] = Variable<int>(isFlagged);
+    if (!nullToAbsent || flagReason != null) {
+      map['flag_reason'] = Variable<String>(flagReason);
+    }
+    if (!nullToAbsent || flagNote != null) {
+      map['flag_note'] = Variable<String>(flagNote);
+    }
+    map['is_manual'] = Variable<int>(isManual);
     return map;
   }
 
@@ -1156,6 +1238,14 @@ class OfflineAttendanceData extends DataClass
           : Value(syncedAt),
       conflictResolved: Value(conflictResolved),
       status: Value(status),
+      isFlagged: Value(isFlagged),
+      flagReason: flagReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(flagReason),
+      flagNote: flagNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(flagNote),
+      isManual: Value(isManual),
     );
   }
 
@@ -1176,6 +1266,10 @@ class OfflineAttendanceData extends DataClass
       syncedAt: serializer.fromJson<int?>(json['syncedAt']),
       conflictResolved: serializer.fromJson<int>(json['conflictResolved']),
       status: serializer.fromJson<String>(json['status']),
+      isFlagged: serializer.fromJson<int>(json['isFlagged']),
+      flagReason: serializer.fromJson<String?>(json['flagReason']),
+      flagNote: serializer.fromJson<String?>(json['flagNote']),
+      isManual: serializer.fromJson<int>(json['isManual']),
     );
   }
   @override
@@ -1195,6 +1289,10 @@ class OfflineAttendanceData extends DataClass
       'syncedAt': serializer.toJson<int?>(syncedAt),
       'conflictResolved': serializer.toJson<int>(conflictResolved),
       'status': serializer.toJson<String>(status),
+      'isFlagged': serializer.toJson<int>(isFlagged),
+      'flagReason': serializer.toJson<String?>(flagReason),
+      'flagNote': serializer.toJson<String?>(flagNote),
+      'isManual': serializer.toJson<int>(isManual),
     };
   }
 
@@ -1211,7 +1309,11 @@ class OfflineAttendanceData extends DataClass
           int? synced,
           Value<int?> syncedAt = const Value.absent(),
           int? conflictResolved,
-          String? status}) =>
+          String? status,
+          int? isFlagged,
+          Value<String?> flagReason = const Value.absent(),
+          Value<String?> flagNote = const Value.absent(),
+          int? isManual}) =>
       OfflineAttendanceData(
         localId: localId ?? this.localId,
         eventId: eventId ?? this.eventId,
@@ -1226,6 +1328,10 @@ class OfflineAttendanceData extends DataClass
         syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
         conflictResolved: conflictResolved ?? this.conflictResolved,
         status: status ?? this.status,
+        isFlagged: isFlagged ?? this.isFlagged,
+        flagReason: flagReason.present ? flagReason.value : this.flagReason,
+        flagNote: flagNote.present ? flagNote.value : this.flagNote,
+        isManual: isManual ?? this.isManual,
       );
   OfflineAttendanceData copyWithCompanion(OfflineAttendanceCompanion data) {
     return OfflineAttendanceData(
@@ -1246,6 +1352,11 @@ class OfflineAttendanceData extends DataClass
           ? data.conflictResolved.value
           : this.conflictResolved,
       status: data.status.present ? data.status.value : this.status,
+      isFlagged: data.isFlagged.present ? data.isFlagged.value : this.isFlagged,
+      flagReason:
+          data.flagReason.present ? data.flagReason.value : this.flagReason,
+      flagNote: data.flagNote.present ? data.flagNote.value : this.flagNote,
+      isManual: data.isManual.present ? data.isManual.value : this.isManual,
     );
   }
 
@@ -1264,7 +1375,11 @@ class OfflineAttendanceData extends DataClass
           ..write('synced: $synced, ')
           ..write('syncedAt: $syncedAt, ')
           ..write('conflictResolved: $conflictResolved, ')
-          ..write('status: $status')
+          ..write('status: $status, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('flagReason: $flagReason, ')
+          ..write('flagNote: $flagNote, ')
+          ..write('isManual: $isManual')
           ..write(')'))
         .toString();
   }
@@ -1283,7 +1398,11 @@ class OfflineAttendanceData extends DataClass
       synced,
       syncedAt,
       conflictResolved,
-      status);
+      status,
+      isFlagged,
+      flagReason,
+      flagNote,
+      isManual);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1300,7 +1419,11 @@ class OfflineAttendanceData extends DataClass
           other.synced == this.synced &&
           other.syncedAt == this.syncedAt &&
           other.conflictResolved == this.conflictResolved &&
-          other.status == this.status);
+          other.status == this.status &&
+          other.isFlagged == this.isFlagged &&
+          other.flagReason == this.flagReason &&
+          other.flagNote == this.flagNote &&
+          other.isManual == this.isManual);
 }
 
 class OfflineAttendanceCompanion
@@ -1318,6 +1441,10 @@ class OfflineAttendanceCompanion
   final Value<int?> syncedAt;
   final Value<int> conflictResolved;
   final Value<String> status;
+  final Value<int> isFlagged;
+  final Value<String?> flagReason;
+  final Value<String?> flagNote;
+  final Value<int> isManual;
   final Value<int> rowid;
   const OfflineAttendanceCompanion({
     this.localId = const Value.absent(),
@@ -1333,6 +1460,10 @@ class OfflineAttendanceCompanion
     this.syncedAt = const Value.absent(),
     this.conflictResolved = const Value.absent(),
     this.status = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    this.flagReason = const Value.absent(),
+    this.flagNote = const Value.absent(),
+    this.isManual = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   OfflineAttendanceCompanion.insert({
@@ -1349,6 +1480,10 @@ class OfflineAttendanceCompanion
     this.syncedAt = const Value.absent(),
     required int conflictResolved,
     this.status = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    this.flagReason = const Value.absent(),
+    this.flagNote = const Value.absent(),
+    this.isManual = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : localId = Value(localId),
         eventId = Value(eventId),
@@ -1375,6 +1510,10 @@ class OfflineAttendanceCompanion
     Expression<int>? syncedAt,
     Expression<int>? conflictResolved,
     Expression<String>? status,
+    Expression<int>? isFlagged,
+    Expression<String>? flagReason,
+    Expression<String>? flagNote,
+    Expression<int>? isManual,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1391,6 +1530,10 @@ class OfflineAttendanceCompanion
       if (syncedAt != null) 'synced_at': syncedAt,
       if (conflictResolved != null) 'conflict_resolved': conflictResolved,
       if (status != null) 'status': status,
+      if (isFlagged != null) 'is_flagged': isFlagged,
+      if (flagReason != null) 'flag_reason': flagReason,
+      if (flagNote != null) 'flag_note': flagNote,
+      if (isManual != null) 'is_manual': isManual,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1409,6 +1552,10 @@ class OfflineAttendanceCompanion
       Value<int?>? syncedAt,
       Value<int>? conflictResolved,
       Value<String>? status,
+      Value<int>? isFlagged,
+      Value<String?>? flagReason,
+      Value<String?>? flagNote,
+      Value<int>? isManual,
       Value<int>? rowid}) {
     return OfflineAttendanceCompanion(
       localId: localId ?? this.localId,
@@ -1424,6 +1571,10 @@ class OfflineAttendanceCompanion
       syncedAt: syncedAt ?? this.syncedAt,
       conflictResolved: conflictResolved ?? this.conflictResolved,
       status: status ?? this.status,
+      isFlagged: isFlagged ?? this.isFlagged,
+      flagReason: flagReason ?? this.flagReason,
+      flagNote: flagNote ?? this.flagNote,
+      isManual: isManual ?? this.isManual,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1470,6 +1621,18 @@ class OfflineAttendanceCompanion
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
+    if (isFlagged.present) {
+      map['is_flagged'] = Variable<int>(isFlagged.value);
+    }
+    if (flagReason.present) {
+      map['flag_reason'] = Variable<String>(flagReason.value);
+    }
+    if (flagNote.present) {
+      map['flag_note'] = Variable<String>(flagNote.value);
+    }
+    if (isManual.present) {
+      map['is_manual'] = Variable<int>(isManual.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1492,6 +1655,10 @@ class OfflineAttendanceCompanion
           ..write('syncedAt: $syncedAt, ')
           ..write('conflictResolved: $conflictResolved, ')
           ..write('status: $status, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('flagReason: $flagReason, ')
+          ..write('flagNote: $flagNote, ')
+          ..write('isManual: $isManual, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3208,6 +3375,10 @@ typedef $$OfflineAttendanceTableCreateCompanionBuilder
   Value<int?> syncedAt,
   required int conflictResolved,
   Value<String> status,
+  Value<int> isFlagged,
+  Value<String?> flagReason,
+  Value<String?> flagNote,
+  Value<int> isManual,
   Value<int> rowid,
 });
 typedef $$OfflineAttendanceTableUpdateCompanionBuilder
@@ -3225,6 +3396,10 @@ typedef $$OfflineAttendanceTableUpdateCompanionBuilder
   Value<int?> syncedAt,
   Value<int> conflictResolved,
   Value<String> status,
+  Value<int> isFlagged,
+  Value<String?> flagReason,
+  Value<String?> flagNote,
+  Value<int> isManual,
   Value<int> rowid,
 });
 
@@ -3276,6 +3451,18 @@ class $$OfflineAttendanceTableFilterComposer
 
   ColumnFilters<String> get status => $composableBuilder(
       column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get isFlagged => $composableBuilder(
+      column: $table.isFlagged, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get flagReason => $composableBuilder(
+      column: $table.flagReason, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get flagNote => $composableBuilder(
+      column: $table.flagNote, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get isManual => $composableBuilder(
+      column: $table.isManual, builder: (column) => ColumnFilters(column));
 }
 
 class $$OfflineAttendanceTableOrderingComposer
@@ -3326,6 +3513,18 @@ class $$OfflineAttendanceTableOrderingComposer
 
   ColumnOrderings<String> get status => $composableBuilder(
       column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get isFlagged => $composableBuilder(
+      column: $table.isFlagged, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get flagReason => $composableBuilder(
+      column: $table.flagReason, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get flagNote => $composableBuilder(
+      column: $table.flagNote, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get isManual => $composableBuilder(
+      column: $table.isManual, builder: (column) => ColumnOrderings(column));
 }
 
 class $$OfflineAttendanceTableAnnotationComposer
@@ -3375,6 +3574,18 @@ class $$OfflineAttendanceTableAnnotationComposer
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get isFlagged =>
+      $composableBuilder(column: $table.isFlagged, builder: (column) => column);
+
+  GeneratedColumn<String> get flagReason => $composableBuilder(
+      column: $table.flagReason, builder: (column) => column);
+
+  GeneratedColumn<String> get flagNote =>
+      $composableBuilder(column: $table.flagNote, builder: (column) => column);
+
+  GeneratedColumn<int> get isManual =>
+      $composableBuilder(column: $table.isManual, builder: (column) => column);
 }
 
 class $$OfflineAttendanceTableTableManager extends RootTableManager<
@@ -3419,6 +3630,10 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             Value<int?> syncedAt = const Value.absent(),
             Value<int> conflictResolved = const Value.absent(),
             Value<String> status = const Value.absent(),
+            Value<int> isFlagged = const Value.absent(),
+            Value<String?> flagReason = const Value.absent(),
+            Value<String?> flagNote = const Value.absent(),
+            Value<int> isManual = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               OfflineAttendanceCompanion(
@@ -3435,6 +3650,10 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             syncedAt: syncedAt,
             conflictResolved: conflictResolved,
             status: status,
+            isFlagged: isFlagged,
+            flagReason: flagReason,
+            flagNote: flagNote,
+            isManual: isManual,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -3451,6 +3670,10 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             Value<int?> syncedAt = const Value.absent(),
             required int conflictResolved,
             Value<String> status = const Value.absent(),
+            Value<int> isFlagged = const Value.absent(),
+            Value<String?> flagReason = const Value.absent(),
+            Value<String?> flagNote = const Value.absent(),
+            Value<int> isManual = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               OfflineAttendanceCompanion.insert(
@@ -3467,6 +3690,10 @@ class $$OfflineAttendanceTableTableManager extends RootTableManager<
             syncedAt: syncedAt,
             conflictResolved: conflictResolved,
             status: status,
+            isFlagged: isFlagged,
+            flagReason: flagReason,
+            flagNote: flagNote,
+            isManual: isManual,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0

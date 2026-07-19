@@ -40,7 +40,7 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
     super.initState();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 1500),
     );
     
     _progressController.reverse(from: 1.0).then((_) {
