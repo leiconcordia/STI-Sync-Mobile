@@ -41,6 +41,7 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
     required String studentId,
     String? studentNumber,
     required String eventId,
+    required String sessionId,
     required String gateType,
   }) {
     final isTimeIn = gateType == 'Time-In' || gateType == 'time_in';
@@ -54,7 +55,11 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
                 ? (t.gateType.equals('Time-In') | t.gateType.equals('time_in'))
                 : (t.gateType.equals('Time-Out') | t.gateType.equals('time_out'));
 
-            return t.eventId.equals(eventId) & idPredicate & gatePredicate;
+            Expression<bool> sessionPredicate = sessionId.isNotEmpty
+                ? (t.sessionId.equals(sessionId) | t.sessionId.equals(''))
+                : const Constant(true);
+
+            return t.eventId.equals(eventId) & sessionPredicate & idPredicate & gatePredicate;
           }))
         .getSingleOrNull();
   }

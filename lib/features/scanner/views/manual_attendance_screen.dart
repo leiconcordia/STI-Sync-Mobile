@@ -168,6 +168,7 @@ class _ManualAttendanceScreenState
           studentId: studentId,
           studentNumber: _selectedParticipant?.studentNumber,
           eventId: widget.eventId,
+          sessionId: sessionId,
           gateType: _gateType,
         );
         if (existing != null) {

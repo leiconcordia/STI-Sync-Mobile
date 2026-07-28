@@ -164,7 +164,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
             const SizedBox(height: 12),
             _buildSessionSelector(),
             const SizedBox(height: 16),
-            _buildCollapsibleStatsRow(attendanceAsync, participantsAsync),
+            _buildCollapsibleStatsRow(attendanceAsync, participantsAsync, activeSessionId),
             const SizedBox(height: 16),
             Expanded(
               child: Container(
@@ -188,7 +188,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                             onRefresh: () async {
                               _refreshData();
                             },
-                            child: _buildAttendanceList(attendanceAsync),
+                            child: _buildAttendanceList(attendanceAsync, activeSessionId),
                           ),
                         ),
                       ],
@@ -316,6 +316,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
       return const SizedBox.shrink();
     }
 
+    final eventId = ref.read(scannerViewModelProvider).selectedEventId;
     final activeSessionId = _selectedSessionId ??
         assignment.sessions.first['id'] as String?;
 
@@ -334,7 +335,12 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: () => setState(() => _selectedSessionId = id),
+              onTap: () {
+                setState(() => _selectedSessionId = id);
+                if (eventId != null) {
+                  ref.read(scannerViewModelProvider.notifier).selectSession(eventId, id);
+                }
+              },
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -378,6 +384,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
   Widget _buildCollapsibleStatsRow(
     AsyncValue<List<OfflineAttendanceData>> attendanceAsync,
     AsyncValue<List<CachedParticipant>> participantsAsync,
+    String? activeSessionId,
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -433,7 +440,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
           ),
           if (_showSummary) ...[
             const SizedBox(height: 12),
-            _buildStatsRow(attendanceAsync, participantsAsync),
+            _buildStatsRow(attendanceAsync, participantsAsync, activeSessionId),
           ],
         ],
       ),
@@ -443,16 +450,24 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
   Widget _buildStatsRow(
     AsyncValue<List<OfflineAttendanceData>> attendanceAsync,
     AsyncValue<List<CachedParticipant>> participantsAsync,
+    String? activeSessionId,
   ) {
     return attendanceAsync.when(
-      data: (attendance) {
+      data: (allAttendance) {
+        // Filter records by the active session
+        final attendance = allAttendance.where((r) =>
+            activeSessionId == null ||
+            activeSessionId.isEmpty ||
+            r.sessionId == activeSessionId ||
+            r.sessionId.isEmpty).toList();
+
         int inCount = 0;
         int outCount = 0;
         int flaggedCount = 0;
 
         for (var r in attendance) {
-          if (r.gateType == 'Time-In') inCount++;
-          if (r.gateType == 'Time-Out') outCount++;
+          if (r.gateType == 'Time-In' || r.gateType == 'time_in') inCount++;
+          if (r.gateType == 'Time-Out' || r.gateType == 'time_out') outCount++;
           if (r.isFlagged == 1) flaggedCount++;
         }
 
@@ -589,7 +604,9 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
   // ─── Attendance List ───────────────────────────────────────────────────────
 
   Widget _buildAttendanceList(
-      AsyncValue<List<OfflineAttendanceData>> attendanceAsync) {
+    AsyncValue<List<OfflineAttendanceData>> attendanceAsync,
+    String? activeSessionId,
+  ) {
     final eventId = ref.watch(scannerViewModelProvider).selectedEventId;
     if (eventId == null) {
       return const Center(child: Text('No event selected'));
@@ -597,160 +614,170 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
 
     final participantsAsync = ref.watch(sessionParticipantsProvider(eventId));
 
-    return participantsAsync.when(
-      data: (participants) {
-        final attendanceList = attendanceAsync.valueOrNull ?? [];
+    return attendanceAsync.when(
+      data: (allAttendanceList) {
+        // Filter attendance records by active session
+        final attendanceList = allAttendanceList.where((r) =>
+            activeSessionId == null ||
+            activeSessionId.isEmpty ||
+            r.sessionId == activeSessionId ||
+            r.sessionId.isEmpty).toList();
 
-        // Build combined unique map (cached participants + unknown manual walk-ins from attendance records)
-        final uniqueParticipantsMap = <String, CachedParticipant>{};
-        for (final p in participants) {
-          final key = (p.studentNumber != null && p.studentNumber!.isNotEmpty)
-              ? p.studentNumber!
-              : p.id;
-          if (!uniqueParticipantsMap.containsKey(key)) {
-            uniqueParticipantsMap[key] = p;
-          }
-          // Also map by Auth UID if different
-          if (!uniqueParticipantsMap.containsKey(p.id)) {
-            uniqueParticipantsMap[p.id] = p;
-          }
-        }
+        return participantsAsync.when(
+          data: (participants) {
+            // Build combined unique map (cached participants + unknown manual walk-ins from attendance records)
+            final uniqueParticipantsMap = <String, CachedParticipant>{};
+            for (final p in participants) {
+              final key = (p.studentNumber != null && p.studentNumber!.isNotEmpty)
+                  ? p.studentNumber!
+                  : p.id;
+              if (!uniqueParticipantsMap.containsKey(key)) {
+                uniqueParticipantsMap[key] = p;
+              }
+              if (!uniqueParticipantsMap.containsKey(p.id)) {
+                uniqueParticipantsMap[p.id] = p;
+              }
+            }
 
-        // Synthesize entries for any walk-in attendance records not in cached_participants
-        for (final record in attendanceList) {
-          if (!uniqueParticipantsMap.containsKey(record.studentId)) {
-            final synthStudent = CachedParticipant(
-              id: record.studentId,
-              eventId: eventId,
-              studentName: record.studentName.isNotEmpty
-                  ? record.studentName
-                  : 'Unknown Walk-in',
-              studentNumber: record.studentId.length <= 15
-                  ? record.studentId
-                  : 'Walk-in',
-              course: 'Manual Entry',
-              yearLevel: 0,
-              qrTicketUnlocked: 1,
-              participantJson: '{}',
-              downloadedAt: DateTime.now().millisecondsSinceEpoch,
-            );
-            uniqueParticipantsMap[record.studentId] = synthStudent;
-          }
-        }
+            // Synthesize entries for any walk-in attendance records not in cached_participants
+            for (final record in attendanceList) {
+              if (!uniqueParticipantsMap.containsKey(record.studentId)) {
+                final synthStudent = CachedParticipant(
+                  id: record.studentId,
+                  eventId: eventId,
+                  studentName: record.studentName.isNotEmpty
+                      ? record.studentName
+                      : 'Unknown Walk-in',
+                  studentNumber: record.studentId.length <= 15
+                      ? record.studentId
+                      : 'Walk-in',
+                  course: 'Manual Entry',
+                  yearLevel: 0,
+                  qrTicketUnlocked: 1,
+                  participantJson: '{}',
+                  downloadedAt: DateTime.now().millisecondsSinceEpoch,
+                );
+                uniqueParticipantsMap[record.studentId] = synthStudent;
+              }
+            }
 
-        final uniqueParticipants =
-            uniqueParticipantsMap.values.toSet().toList();
+            final uniqueParticipants =
+                uniqueParticipantsMap.values.toSet().toList();
 
-        // Filter participants based on _searchQuery AND _selectedFilter
-        final filteredParticipants = uniqueParticipants.where((student) {
-          // Search query check
-          if (_searchQuery.trim().isNotEmpty) {
-            final query = _searchQuery.trim().toLowerCase();
-            final nameMatch = student.studentName.toLowerCase().contains(query);
-            final numMatch =
-                (student.studentNumber?.toLowerCase() ?? '').contains(query);
-            if (!nameMatch && !numMatch) return false;
-          }
+            // Filter participants based on _searchQuery AND _selectedFilter
+            final filteredParticipants = uniqueParticipants.where((student) {
+              // Search query check
+              if (_searchQuery.trim().isNotEmpty) {
+                final query = _searchQuery.trim().toLowerCase();
+                final nameMatch = student.studentName.toLowerCase().contains(query);
+                final numMatch =
+                    (student.studentNumber?.toLowerCase() ?? '').contains(query);
+                if (!nameMatch && !numMatch) return false;
+              }
 
-          // Category filter check — match by Auth UID OR student number
-          final studentId = student.id;
-          final studentNum = student.studentNumber;
-          final records = attendanceList.where((r) =>
-              r.studentId == studentId ||
-              (studentNum != null && studentNum.isNotEmpty && r.studentId == studentNum)).toList();
-          final timeInRecord =
-              records.where((r) => r.gateType == 'Time-In').firstOrNull;
-          final timeOutRecord =
-              records.where((r) => r.gateType == 'Time-Out').firstOrNull;
-          final isFlagged = records.any((r) => r.isFlagged == 1);
+              // Category filter check — match by Auth UID OR student number
+              final studentId = student.id;
+              final studentNum = student.studentNumber;
+              final records = attendanceList.where((r) =>
+                  r.studentId == studentId ||
+                  (studentNum != null && studentNum.isNotEmpty && r.studentId == studentNum)).toList();
+              final timeInRecord =
+                  records.where((r) => r.gateType == 'Time-In').firstOrNull;
+              final timeOutRecord =
+                  records.where((r) => r.gateType == 'Time-Out').firstOrNull;
+              final isFlagged = records.any((r) => r.isFlagged == 1);
 
-          if (_selectedFilter == 'Checked In') {
-            return timeInRecord != null && timeOutRecord == null;
-          } else if (_selectedFilter == 'Checked Out') {
-            return timeOutRecord != null;
-          } else if (_selectedFilter == 'Absent') {
-            return timeInRecord == null && !isFlagged;
-          } else if (_selectedFilter == 'Flagged') {
-            return isFlagged;
-          }
-          return true; // 'All'
-        }).toList();
+              if (_selectedFilter == 'Checked In') {
+                return timeInRecord != null && timeOutRecord == null;
+              } else if (_selectedFilter == 'Checked Out') {
+                return timeOutRecord != null;
+              } else if (_selectedFilter == 'Absent') {
+                return timeInRecord == null && !isFlagged;
+              } else if (_selectedFilter == 'Flagged') {
+                return isFlagged;
+              }
+              return true; // 'All'
+            }).toList();
 
-        if (filteredParticipants.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
-                const SizedBox(height: 12),
-                Text(
-                  _searchQuery.isNotEmpty
-                      ? 'No students match "$_searchQuery"'
-                      : 'No records match filter "$_selectedFilter"',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            if (filteredParticipants.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    Text(
+                      _searchQuery.isNotEmpty
+                          ? 'No students match "$_searchQuery"'
+                          : 'No records match filter "$_selectedFilter"',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        }
+              );
+            }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedFilter,
+                            style: AppTextStyles.labelSmall
+                                .copyWith(color: Colors.grey.shade600),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
                       Text(
-                        _selectedFilter,
+                        '${filteredParticipants.length} student${filteredParticipants.length == 1 ? '' : 's'}',
                         style: AppTextStyles.labelSmall
                             .copyWith(color: Colors.grey.shade600),
                       ),
                     ],
                   ),
-                  Text(
-                    '${filteredParticipants.length} student${filteredParticipants.length == 1 ? '' : 's'}',
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: Colors.grey.shade600),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 100),
+                    itemCount: filteredParticipants.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final student = filteredParticipants[index];
+                      final studentId = student.id;
+                      final studentNum = student.studentNumber;
+                      final records = attendanceList
+                          .where((r) =>
+                              r.studentId == studentId ||
+                              (studentNum != null &&
+                                  studentNum.isNotEmpty &&
+                                  r.studentId == studentNum))
+                          .toList();
+                      return _buildStudentCard(student, records);
+                    },
                   ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(24, 4, 24, 100),
-                itemCount: filteredParticipants.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final student = filteredParticipants[index];
-                  final studentId = student.id;
-                  final studentNum = student.studentNumber;
-                  final records = attendanceList
-                      .where((r) =>
-                          r.studentId == studentId ||
-                          (studentNum != null &&
-                              studentNum.isNotEmpty &&
-                              r.studentId == studentNum))
-                      .toList();
-                  return _buildStudentCard(student, records);
-                },
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, st) => Center(child: Text('Error: $e')),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),

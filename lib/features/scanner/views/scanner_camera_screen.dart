@@ -106,6 +106,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         studentId: studentAuthUid,
         studentNumber: participant.studentNumber,
         eventId: widget.eventId,
+        sessionId: widget.sessionId,
         gateType: widget.gateType,
       );
 

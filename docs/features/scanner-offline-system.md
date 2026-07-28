@@ -101,6 +101,13 @@ When a QR code is scanned via the camera, the app executes **4 mandatory validat
 
 ### 2.5 Scanner Mode Screen Attendance List (`ScannerModeScreen`)
 
+- **Multi-Session Support & Session Filtering:**
+  - The horizontal session selector allows officers to switch between event sessions (e.g. Session 1, Session 2).
+  - Tapping a session updates `_selectedSessionId` and dynamically filters the summary stats (`In`, `Out`, `Absent`, `Flagged`) and student attendance list to show records **for that session only**.
+  - A student checked in for Session 1 will correctly show as `Absent` (Not Scanned) for Session 2 until scanned for Session 2.
+- **Session-Scoped Duplicate Detection:**
+  - Duplicate validation (`AttendanceDao.checkDuplicate`) is scoped to `eventId` + `sessionId` + `gateType`.
+  - Scanning a student in Session 1 will NOT block that student from scanning in Session 2. Scanning twice for the *same* session and gate type triggers an instant **Duplicate Scan** overlay.
 - **Manual Refresh Action & Remote Subcollection Sync:**
   - Contains a Refresh icon button in the header and supports `RefreshIndicator` over the list.
   - **Delete-then-refetch strategy:** First deletes all previously-synced local records (`synced=1`) for the event, then re-fetches both `/events/{eventId}/attendance` AND `/events/{eventId}/flagged_attendance` from Firestore and caches them into Drift SQLite (`synced = 1`). This ensures records deleted from Firestore are properly removed locally on refresh.
