@@ -12,7 +12,7 @@
 2. **MVVM is non-negotiable.** Every feature = Model + ViewModel + View. No business logic in widgets.
 3. **Firestore is the only database.** All data is read/written through the repository layer — never directly from a ViewModel or widget.
 4. **Realtime first.** Any data that can change while the app is open (events, attendance status, payment status, announcements) must use `snapshots()` streams — no one-time `get()` calls for live data.
-5. **After every implementation, update the relevant docs.** See Section 8.
+5. **After every implementation, update or create relevant docs.** Update `mobile-database-schema.md` for schema changes, update matching `docs/features/*.md` docs for business logic changes, **and create a new feature doc under `docs/features/<feature-name>.md` (and register it in Phase 3 Doc Routing) whenever a new feature domain is added.**
 
 ---
 
@@ -32,10 +32,15 @@ Parse the prompt and extract:
 
 ### Phase 3: Doc Routing
 
-| Condition | Load These Docs |
+| Condition / Feature Area | Load These Docs |
 |---|---|
 | UI-only change (widget, style, layout) | `mobile-agent.md` (this file) |
 | Any Firestore read or write | `mobile-database-schema.md` |
+| Scanner, QR Scanning, Sync, Offline Logs | `docs/features/scanner-offline-system.md` |
+| Student QR Ticket & Lock State | `docs/features/qr-ticket-system.md` |
+| Events, Eligibility, Session Schedule | `docs/features/events-eligibility-system.md` |
+| Payables, Financial Gate Control | `docs/features/payables-system.md` |
+| **New Feature Domain** | **Create `docs/features/<feature-name>.md` first & register here** |
 | New screen or navigation change | `mobile-agent.md` Section 4 (routes) |
 | New entity or schema change | Update `mobile-database-schema.md` first |
 | Auth / login flow | `mobile-database-schema.md` (students collection) |
@@ -504,6 +509,8 @@ Run this before writing any code:
 // payables gate control, and flagged/manual attendance rules
 
 // AGENT-UPDATED: 2026-07-19 — Implemented Sync conflicts, scanner logs, and manual attendance screens.
+
+// AGENT-UPDATED: 2026-07-28 — Created dedicated feature documentation suite in docs/features/ (Scanner & Offline, QR Ticket, Events Eligibility, Payables Gate) and wired into Phase 3 Doc Routing table.
 
 ---
 

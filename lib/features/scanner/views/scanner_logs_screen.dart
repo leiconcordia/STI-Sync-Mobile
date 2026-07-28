@@ -8,23 +8,23 @@ import '../../../core/local/app_database.dart';
 import '../../../shared/providers/providers.dart';
 import '../../sync/models/sync_status_model.dart';
 
-/// Provider that streams all offline attendance records for a given event.
+/// Provider that streams only pending (unsynced) offline attendance records for a given event.
 final eventAttendanceProvider =
     StreamProvider.family.autoDispose<List<OfflineAttendanceData>, String>(
   (ref, eventId) {
     return ref
         .watch(appDatabaseProvider)
         .attendanceDao
-        .watchAllForEvent(eventId);
+        .watchUnsyncedForEvent(eventId);
   },
 );
 
-/// Scanner attendance logs showing all local + synced records for an event.
+/// Scanner attendance logs showing unsynced pending records for an event.
 ///
 /// Route: `/scanner/:eventId/logs`
 ///
-/// Hybrid data source: reads from Drift offline_attendance (including unsynced).
-/// Provides filter pills, metric cards, and a "Sync Now" button.
+/// Shows only unsynced records (synced records are removed once posted to DB).
+/// Pressing and holding an item allows deleting the unsynced entry locally.
 class ScannerLogsScreen extends ConsumerStatefulWidget {
   final String eventId;
 
@@ -35,34 +35,6 @@ class ScannerLogsScreen extends ConsumerStatefulWidget {
 }
 
 class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
-  String _activeFilter = 'All';
-
-  static const _filters = [
-    'All',
-    'Time-In',
-    'Time-Out',
-    'Flagged',
-    'Manual',
-    'Pending Sync',
-  ];
-
-  List<OfflineAttendanceData> _applyFilter(List<OfflineAttendanceData> all) {
-    switch (_activeFilter) {
-      case 'Time-In':
-        return all.where((r) => r.gateType == 'Time-In').toList();
-      case 'Time-Out':
-        return all.where((r) => r.gateType == 'Time-Out').toList();
-      case 'Flagged':
-        return all.where((r) => r.isFlagged == 1).toList();
-      case 'Manual':
-        return all.where((r) => r.isManual == 1).toList();
-      case 'Pending Sync':
-        return all.where((r) => r.synced == 0).toList();
-      default:
-        return all;
-    }
-  }
-
   Future<void> _syncNow() async {
     final syncService = ref.read(syncServiceProvider);
     final result = await syncService.uploadPendingAttendance();
@@ -91,6 +63,49 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
     }
   }
 
+  Future<void> _confirmDeleteUnsynced(OfflineAttendanceData record) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Unsynced Entry?'),
+        content: Text(
+          'Remove offline scan for "${record.studentName}"?\n\nThis record has not been synced to the database yet and will be permanently deleted locally.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await ref
+          .read(appDatabaseProvider)
+          .attendanceDao
+          .deleteRecordByLocalId(record.localId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deleted unsynced scan for ${record.studentName}'),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final attendanceAsync = ref.watch(eventAttendanceProvider(widget.eventId));
@@ -102,15 +117,15 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('Attendance Logs'),
+        title: const Text('Unsynced Attendance Logs'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
         actions: [
           attendanceAsync.whenOrNull(
-                data: (all) {
-                  final pendingCount = all.where((r) => r.synced == 0).length;
+                data: (unsyncedRecords) {
+                  final pendingCount = unsyncedRecords.length;
                   if (pendingCount > 0 && isOnline) {
                     return TextButton.icon(
                       onPressed: _syncNow,
@@ -136,9 +151,8 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
           child: Text('Error loading logs: $e',
               style: const TextStyle(color: AppColors.error)),
         ),
-        data: (allRecords) {
-          final filtered = _applyFilter(allRecords);
-          final pendingCount = allRecords.where((r) => r.synced == 0).length;
+        data: (unsyncedRecords) {
+          final pendingCount = unsyncedRecords.length;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -149,22 +163,41 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
                 // Pending sync banner
                 if (pendingCount > 0) _buildPendingBanner(pendingCount),
 
-                // Metric cards
-                _buildMetricCards(allRecords),
+                // Metric summary cards
+                _buildMetricCards(unsyncedRecords),
 
-                // Filter pills
-                _buildFilterPills(),
+                // Subtitle instructions
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Hold (long press) any entry to delete it before syncing.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
                 // Attendance list
                 Expanded(
-                  child: filtered.isEmpty
+                  child: unsyncedRecords.isEmpty
                       ? _buildEmptyState()
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
-                          itemCount: filtered.length,
+                          itemCount: unsyncedRecords.length,
                           itemBuilder: (context, index) =>
-                              _buildAttendanceRow(filtered[index]),
+                              _buildAttendanceRow(unsyncedRecords[index]),
                         ),
                 ),
               ],
@@ -187,7 +220,7 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
           Icon(Icons.sync_problem, color: Colors.amber.shade700, size: 20),
           const SizedBox(width: 8),
           Text(
-            '$count record${count == 1 ? '' : 's'} pending sync',
+            '$count unsynced record${count == 1 ? '' : 's'} pending upload',
             style: AppTextStyles.bodySmall.copyWith(
               color: Colors.amber.shade800,
               fontWeight: FontWeight.w600,
@@ -200,24 +233,24 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
 
   // ─── Metric Cards ───────────────────────────────────────────────────────
 
-  Widget _buildMetricCards(List<OfflineAttendanceData> all) {
-    final checkedIn = all.where((r) => r.gateType == 'Time-In').length;
-    final checkedOut = all.where((r) => r.gateType == 'Time-Out').length;
-    final flagged = all.where((r) => r.isFlagged == 1).length;
-    final pending = all.where((r) => r.synced == 0).length;
+  Widget _buildMetricCards(List<OfflineAttendanceData> unsynced) {
+    final checkedIn = unsynced.where((r) => r.gateType == 'Time-In').length;
+    final checkedOut = unsynced.where((r) => r.gateType == 'Time-Out').length;
+    final flagged = unsynced.where((r) => r.isFlagged == 1).length;
+    final totalPending = unsynced.length;
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Row(
         children: [
           Expanded(
-            child:
-                _buildMetricCard('Checked In', checkedIn, AppColors.success),
+            child: _buildMetricCard(
+                'Pending In', checkedIn, AppColors.success),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: _buildMetricCard(
-                'Checked Out', checkedOut, const Color(0xFF1565C0)),
+                'Pending Out', checkedOut, const Color(0xFF1565C0)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -227,7 +260,7 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: _buildMetricCard(
-                'Pending', pending, Colors.orange.shade700),
+                'Total Unsynced', totalPending, Colors.orange.shade700),
           ),
         ],
       ),
@@ -267,45 +300,6 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
     );
   }
 
-  // ─── Filter Pills ──────────────────────────────────────────────────────
-
-  Widget _buildFilterPills() {
-    return SizedBox(
-      height: 44,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _filters.length,
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isActive = _activeFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(filter),
-              selected: isActive,
-              onSelected: (_) => setState(() => _activeFilter = filter),
-              selectedColor: AppColors.primary.withValues(alpha: 0.15),
-              checkmarkColor: AppColors.primary,
-              labelStyle: AppTextStyles.bodySmall.copyWith(
-                color: isActive ? AppColors.primary : AppColors.textSecondary,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              side: BorderSide(
-                color: isActive
-                    ? AppColors.primary
-                    : Colors.grey.shade300,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   // ─── Attendance Rows ───────────────────────────────────────────────────
 
   Widget _buildAttendanceRow(OfflineAttendanceData record) {
@@ -313,97 +307,101 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
       DateTime.fromMillisecondsSinceEpoch(record.scannedAt),
     );
     final isEntry = record.gateType == 'Time-In';
-    final isPending = record.synced == 0;
     final isFlagged = record.isFlagged == 1;
     final isManual = record.isManual == 1;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            // Avatar
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: Text(
-                record.studentName.isNotEmpty
-                    ? record.studentName[0].toUpperCase()
-                    : '?',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
+      child: InkWell(
+        onLongPress: () => _confirmDeleteUnsynced(record),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                child: Text(
+                  record.studentName.isNotEmpty
+                      ? record.studentName[0].toUpperCase()
+                      : '?',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-            // Name + ID
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    record.studentName,
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      FutureBuilder<CachedParticipant?>(
-                        future: ref.read(appDatabaseProvider)
-                            .participantsDao
-                            .getParticipantByStudentId(record.studentId, widget.eventId),
-                        builder: (context, snapshot) {
-                          final studentIdDisplay = snapshot.data?.studentNumber ??
-                              (record.studentId.length > 20
-                                  ? '${record.studentId.substring(0, 8)}...'
-                                  : record.studentId);
-                          return Text(
-                            studentIdDisplay,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.textSecondary),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        time,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                  // Pills row
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      _buildSmallPill(
-                        isEntry ? 'Time-In' : 'Time-Out',
-                        isEntry ? AppColors.success : AppColors.error,
-                      ),
-                      if (isManual)
-                        _buildSmallPill('Manual', Colors.amber.shade700),
-                      if (isFlagged)
-                        _buildSmallPill(
-                          _flagReasonLabel(record.flagReason),
-                          Colors.amber.shade700,
+              // Name + ID
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.studentName,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        FutureBuilder<CachedParticipant?>(
+                          future: ref
+                              .read(appDatabaseProvider)
+                              .participantsDao
+                              .getParticipantByStudentId(
+                                  record.studentId, widget.eventId),
+                          builder: (context, snapshot) {
+                            final studentIdDisplay = snapshot
+                                    .data?.studentNumber ??
+                                (record.studentId.length > 20
+                                    ? '${record.studentId.substring(0, 8)}...'
+                                    : record.studentId);
+                            return Text(
+                              studentIdDisplay,
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textSecondary),
+                            );
+                          },
                         ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 8),
+                        Text(
+                          time,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    // Pills row
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        _buildSmallPill(
+                          isEntry ? 'Time-In' : 'Time-Out',
+                          isEntry ? AppColors.success : AppColors.error,
+                        ),
+                        if (isManual)
+                          _buildSmallPill('Manual', Colors.amber.shade700),
+                        if (isFlagged)
+                          _buildSmallPill(
+                            _flagReasonLabel(record.flagReason),
+                            Colors.amber.shade700,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            // Pending sync dot
-            if (isPending)
+              // Pending indicator dot
               Container(
                 width: 10,
                 height: 10,
@@ -412,7 +410,8 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
                   shape: BoxShape.circle,
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -458,20 +457,18 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_note,
+          Icon(Icons.cloud_done_outlined,
               size: 56,
-              color: AppColors.textSecondary.withValues(alpha: 0.3)),
+              color: AppColors.success.withValues(alpha: 0.5)),
           const SizedBox(height: 12),
           Text(
-            'No records',
+            'All records synced!',
             style: AppTextStyles.bodyLarge
-                .copyWith(color: AppColors.textSecondary),
+                .copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
-            _activeFilter == 'All'
-                ? 'No attendance records yet'
-                : 'No records match this filter',
+            'There are no pending offline attendance logs.',
             style: AppTextStyles.bodySmall
                 .copyWith(color: AppColors.textSecondary),
           ),
@@ -480,4 +477,3 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
     );
   }
 }
-

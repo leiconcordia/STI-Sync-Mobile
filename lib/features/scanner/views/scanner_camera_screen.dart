@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:drift/drift.dart' as drift;
+import 'package:intl/intl.dart';
 import '../../../shared/providers/providers.dart';
 import '../../../core/local/app_database.dart';
 import '../widgets/scan_result_overlay.dart';
@@ -102,9 +103,10 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
 
       // VALIDATION 4: Duplicate check
       final existing = await db.attendanceDao.checkDuplicate(
-        studentAuthUid,
-        widget.sessionId,
-        widget.gateType,
+        studentId: studentAuthUid,
+        studentNumber: participant.studentNumber,
+        eventId: widget.eventId,
+        gateType: widget.gateType,
       );
 
       if (existing != null) {
@@ -143,18 +145,18 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
             orElse: () => {},
           );
           
-          final startTimeStr = session['startTime'] as String?;
+          final timeInOpenStr = (session['timeInOpen'] as String?) ?? (session['startTime'] as String?);
           final dateStr = session['date'] as String?;
-          final gracePeriod = assignment.gracePeriodMinutes ?? 0;
+          final gracePeriod = assignment.gracePeriodMinutes ?? (session['gracePeriodMinutes'] as num?)?.toInt() ?? 0;
           
-          if (startTimeStr != null && dateStr != null) {
-             final sessionStart = DateTime.parse('${dateStr}T$startTimeStr:00');
-             final lateThreshold = sessionStart.add(Duration(minutes: gracePeriod));
-             final scanTime = DateTime.fromMillisecondsSinceEpoch(now);
-             
-             if (scanTime.isAfter(lateThreshold)) {
-               scanStatus = 'Late';
-             }
+          final sessionStart = _parseSessionStart(dateStr, timeInOpenStr);
+          if (sessionStart != null) {
+            final lateThreshold = sessionStart.add(Duration(minutes: gracePeriod));
+            final scanTime = DateTime.fromMillisecondsSinceEpoch(now);
+            
+            if (scanTime.isAfter(lateThreshold)) {
+              scanStatus = 'Late';
+            }
           }
         } catch (e) {
           debugPrint('Failed to calculate Late status: $e');
@@ -330,5 +332,29 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         ],
       ),
     );
+  }
+
+  DateTime? _parseSessionStart(String? dateStr, String? timeStr) {
+    if (dateStr == null || timeStr == null || timeStr.trim().isEmpty) return null;
+    try {
+      final cleanTime = timeStr.trim();
+      final cleanDate = dateStr.trim();
+      if (cleanTime.toUpperCase().contains('AM') || cleanTime.toUpperCase().contains('PM')) {
+        final format = DateFormat('yyyy-MM-dd h:mm a');
+        return format.parse('$cleanDate $cleanTime', true).toLocal();
+      } else {
+        final parts = cleanTime.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final dateParts = cleanDate.split('-');
+        final year = int.parse(dateParts[0]);
+        final month = int.parse(dateParts[1]);
+        final day = int.parse(dateParts[2]);
+        return DateTime(year, month, day, hour, minute);
+      }
+    } catch (e) {
+      debugPrint('Error parsing session date/time ($dateStr $timeStr): $e');
+      return null;
+    }
   }
 }

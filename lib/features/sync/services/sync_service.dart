@@ -33,20 +33,9 @@ class SyncService {
         _connectivityService = connectivityService,
         _getCurrentStudent = getCurrentStudent;
 
-  /// Starts listening for connectivity changes to auto-trigger sync.
-  ///
-  /// When connectivity transitions from offline → online, automatically
-  /// attempts to upload pending attendance records.
+  /// Auto-sync disabled — sync is strictly manual via Sync button in ScannerLogsScreen.
   void startAutoSync() {
     _connectivitySubscription?.cancel();
-    _connectivitySubscription = _connectivityService.connectivityStream.listen(
-      (isOnline) {
-        if (isOnline) {
-          debugPrint('SyncService: Connectivity restored — triggering auto-sync');
-          uploadPendingAttendance();
-        }
-      },
-    );
   }
 
   /// Uploads all pending (unsynced) offline attendance records to Firestore.
@@ -72,26 +61,31 @@ class SyncService {
       final List<SyncConflict> conflicts = [];
       final List<dynamic> uploadList = []; // OfflineAttendanceData items
 
-      // Check each record for Firestore duplicates
+      // Check each record for Firestore duplicates across both subcollections (normal and flagged)
+      // and checking both Auth UID and 11-digit Student Number.
       for (final record in pending) {
-        final collection = record.isFlagged == 1
-            ? FirestorePaths.eventFlaggedAttendance(record.eventId)
-            : FirestorePaths.eventAttendance(record.eventId);
+        String? studentNumber;
+        if (record.studentId.isNotEmpty) {
+          final participant = await _participantsDao.getParticipantByStudentId(
+            record.studentId,
+            record.eventId,
+          );
+          studentNumber = participant?.studentNumber;
+        }
 
-        final query = await _firestore
-            .collection(collection)
-            .where('eventId', isEqualTo: record.eventId)
-            .where('sessionId', isEqualTo: record.sessionId)
-            .where('studentId', isEqualTo: record.studentId)
-            .where('gateType', isEqualTo: record.gateType == 'Time-In' ? 'time_in' : 'time_out')
-            .limit(1)
-            .get();
+        final dupDoc = await _findFirestoreDuplicate(
+          eventId: record.eventId,
+          sessionId: record.sessionId,
+          studentId: record.studentId,
+          studentNumber: studentNumber,
+          gateType: record.gateType,
+        );
 
-        if (query.docs.isNotEmpty) {
+        if (dupDoc != null) {
           conflicts.add(SyncConflict(
             localRecord: record,
-            firestoreRecord: query.docs.first.data(),
-            firestoreDocId: query.docs.first.id,
+            firestoreRecord: dupDoc.data(),
+            firestoreDocId: dupDoc.id,
           ));
         } else {
           uploadList.add(record);
@@ -277,6 +271,60 @@ class SyncService {
       'createdAt': FieldValue.serverTimestamp(),
       'localId': record.localId,
     };
+  }
+
+  /// Checks both /attendance and /flagged_attendance collections for any existing document
+  /// matching eventId, gateType, and studentId (checking both Auth UID and Student Number).
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _findFirestoreDuplicate({
+    required String eventId,
+    required String sessionId,
+    required String studentId,
+    String? studentNumber,
+    required String gateType,
+  }) async {
+    final collections = [
+      FirestorePaths.eventAttendance(eventId),
+      FirestorePaths.eventFlaggedAttendance(eventId),
+    ];
+
+    final targetStudentIds = <String>{
+      if (studentId.isNotEmpty) studentId,
+      if (studentNumber != null && studentNumber.isNotEmpty) studentNumber,
+    };
+
+    if (targetStudentIds.isEmpty) return null;
+
+    final isTimeIn = gateType == 'Time-In' || gateType == 'time_in';
+
+    for (final collPath in collections) {
+      for (final sId in targetStudentIds) {
+        try {
+          final snap = await _firestore
+              .collection(collPath)
+              .where('eventId', isEqualTo: eventId)
+              .where('studentId', isEqualTo: sId)
+              .get();
+
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final docSessionId = data['sessionId'] as String? ?? '';
+            final docGateType = data['gateType'] as String? ?? '';
+            final isDocTimeIn = docGateType == 'time_in' || docGateType == 'Time-In';
+            final isDocTimeOut = docGateType == 'time_out' || docGateType == 'Time-Out';
+
+            final gateMatches = isTimeIn ? isDocTimeIn : isDocTimeOut;
+            final sessionMatches = sessionId.isEmpty || docSessionId.isEmpty || docSessionId == sessionId;
+
+            if (gateMatches && sessionMatches) {
+              return doc;
+            }
+          }
+        } catch (e) {
+          debugPrint('SyncService: Error checking duplicates in $collPath for $sId: $e');
+        }
+      }
+    }
+    return null;
   }
 
   /// Splits a list into chunks of [size].

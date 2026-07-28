@@ -251,7 +251,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     connectivityService: ref.watch(connectivityServiceProvider),
     getCurrentStudent: () => ref.read(authViewModelProvider).student,
   );
-  service.startAutoSync();
+  // Auto-sync disabled per user requirement — sync is strictly manual via Sync button
   ref.onDispose(() => service.dispose());
   return service;
 });

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:drift/drift.dart';
 import '../../../core/local/app_database.dart';
@@ -204,6 +205,112 @@ class OfflineAttendanceRepository {
 
     // Mark as downloaded
     await _scannerDao.markDataDownloaded(eventId);
+
+    // Fetch existing cloud attendance and flagged attendance records into local SQLite
+    await fetchAndCacheRemoteAttendance(eventId);
+  }
+
+  /// Fetches existing attendance records from both `/events/{eventId}/attendance`
+  /// AND `/events/{eventId}/flagged_attendance` in Firestore and caches them
+  /// locally in Drift SQLite database with `synced = 1`.
+  Future<void> fetchAndCacheRemoteAttendance(String eventId) async {
+    try {
+      final attendanceDao = _participantsDao.db.attendanceDao;
+
+      // 0. Delete all previously-synced records for this event so that
+      //    records deleted from Firestore are also removed locally.
+      await attendanceDao.deleteSyncedForEvent(eventId);
+
+      // 1. Fetch normal attendance subcollection
+      final attendanceSnap = await _firestore
+          .collection(FirestorePaths.eventAttendance(eventId))
+          .get();
+
+      for (final doc in attendanceSnap.docs) {
+        final data = doc.data();
+        final localId = data['localId'] as String? ?? doc.id;
+        final rawGateType = data['gateType'] as String? ?? 'Time-In';
+        final normalizedGateType = (rawGateType == 'time_in' || rawGateType == 'Time-In')
+            ? 'Time-In'
+            : (rawGateType == 'time_out' || rawGateType == 'Time-Out' ? 'Time-Out' : rawGateType);
+
+        final scannedAtTs = data['scannedAt'];
+        int scannedAtMs = DateTime.now().millisecondsSinceEpoch;
+        if (scannedAtTs is Timestamp) {
+          scannedAtMs = scannedAtTs.millisecondsSinceEpoch;
+        } else if (scannedAtTs is int) {
+          scannedAtMs = scannedAtTs;
+        }
+
+        final companion = OfflineAttendanceCompanion(
+          localId: Value(localId),
+          eventId: Value(eventId),
+          sessionId: Value(data['sessionId'] as String? ?? ''),
+          studentId: Value(data['studentId'] as String? ?? ''),
+          studentName: Value(data['studentName'] as String? ?? ''),
+          gateType: Value(normalizedGateType),
+          scanMethod: Value(data['scanMethod'] as String? ?? 'QR'),
+          scannedBy: Value(data['scannedByName'] as String? ?? data['scannedBy'] as String? ?? ''),
+          scannedAt: Value(scannedAtMs),
+          synced: const Value(1),
+          syncedAt: Value(scannedAtMs),
+          conflictResolved: const Value(0),
+          status: Value(data['status'] as String? ?? 'Present'),
+          isFlagged: Value(data['isFlagged'] == true ? 1 : 0),
+          flagReason: Value(data['flagReason'] as String?),
+          flagNote: Value(data['flagNote'] as String?),
+          isManual: Value(data['isManual'] == true ? 1 : 0),
+        );
+
+        await attendanceDao.upsertOfflineRecord(companion);
+      }
+
+      // 2. Fetch flagged attendance subcollection
+      final flaggedSnap = await _firestore
+          .collection(FirestorePaths.eventFlaggedAttendance(eventId))
+          .get();
+
+      for (final doc in flaggedSnap.docs) {
+        final data = doc.data();
+        final localId = data['localId'] as String? ?? doc.id;
+        final rawGateType = data['gateType'] as String? ?? 'Time-In';
+        final normalizedGateType = (rawGateType == 'time_in' || rawGateType == 'Time-In')
+            ? 'Time-In'
+            : (rawGateType == 'time_out' || rawGateType == 'Time-Out' ? 'Time-Out' : rawGateType);
+
+        final scannedAtTs = data['scannedAt'];
+        int scannedAtMs = DateTime.now().millisecondsSinceEpoch;
+        if (scannedAtTs is Timestamp) {
+          scannedAtMs = scannedAtTs.millisecondsSinceEpoch;
+        } else if (scannedAtTs is int) {
+          scannedAtMs = scannedAtTs;
+        }
+
+        final companion = OfflineAttendanceCompanion(
+          localId: Value(localId),
+          eventId: Value(eventId),
+          sessionId: Value(data['sessionId'] as String? ?? ''),
+          studentId: Value(data['studentId'] as String? ?? ''),
+          studentName: Value(data['studentName'] as String? ?? ''),
+          gateType: Value(normalizedGateType),
+          scanMethod: Value(data['scanMethod'] as String? ?? 'MANUAL'),
+          scannedBy: Value(data['flaggedByName'] as String? ?? data['scannedByName'] as String? ?? data['scannedBy'] as String? ?? ''),
+          scannedAt: Value(scannedAtMs),
+          synced: const Value(1),
+          syncedAt: Value(scannedAtMs),
+          conflictResolved: const Value(0),
+          status: Value(data['status'] as String? ?? 'Present'),
+          isFlagged: const Value(1), // Always flagged
+          flagReason: Value(data['flagReason'] as String?),
+          flagNote: Value(data['flagNote'] as String?),
+          isManual: Value(data['isManual'] == true ? 1 : 0),
+        );
+
+        await attendanceDao.upsertOfflineRecord(companion);
+      }
+    } catch (e) {
+      debugPrint('OfflineAttendanceRepository: Error fetching remote attendance: $e');
+    }
   }
 
   /// Inserts a flagged/manual attendance record into the local Drift queue.
@@ -233,5 +340,55 @@ class OfflineAttendanceRepository {
           p.studentNumber?.toLowerCase().contains(lowerQuery) ?? false;
       return nameMatch || numberMatch;
     }).toList();
+  }
+
+  /// Deletes attendance records for a student from both Firestore subcollections
+  /// (`/events/{eventId}/attendance` and `/events/{eventId}/flagged_attendance`)
+  /// and the local Drift database.
+  Future<void> deleteAttendanceRecord({
+    required String eventId,
+    required String sessionId,
+    required String studentId,
+    String? studentNumber,
+  }) async {
+    // 1. Delete from Firestore (both /attendance and /flagged_attendance)
+    try {
+      final targetStudentIds = <String>{
+        if (studentId.isNotEmpty) studentId,
+        if (studentNumber != null && studentNumber.isNotEmpty) studentNumber,
+      };
+
+      final collections = [
+        FirestorePaths.eventAttendance(eventId),
+        FirestorePaths.eventFlaggedAttendance(eventId),
+      ];
+
+      for (final collPath in collections) {
+        for (final sId in targetStudentIds) {
+          final snap = await _firestore
+              .collection(collPath)
+              .where('studentId', isEqualTo: sId)
+              .get();
+
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final docSessionId = data['sessionId'] as String? ?? '';
+            if (sessionId.isEmpty || docSessionId.isEmpty || docSessionId == sessionId) {
+              await doc.reference.delete();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('OfflineAttendanceRepository: Error deleting attendance from Firestore: $e');
+    }
+
+    // 2. Delete from local Drift database (both normal and flagged)
+    await _participantsDao.db.attendanceDao.deleteRecordsForStudent(
+      eventId: eventId,
+      studentId: studentId,
+      studentNumber: studentNumber,
+      sessionId: sessionId,
+    );
   }
 }

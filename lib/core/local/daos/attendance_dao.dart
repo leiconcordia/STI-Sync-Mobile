@@ -12,6 +12,10 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
     return into(offlineAttendance).insert(record);
   }
 
+  Future<void> upsertOfflineRecord(OfflineAttendanceCompanion record) {
+    return into(offlineAttendance).insertOnConflictUpdate(record);
+  }
+
   Future<List<OfflineAttendanceData>> getPendingSyncs() {
     return (select(offlineAttendance)..where((t) => t.synced.equals(0))).get();
   }
@@ -33,12 +37,25 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
     );
   }
 
-  Future<OfflineAttendanceData?> checkDuplicate(String studentId, String sessionId, String gateType) {
+  Future<OfflineAttendanceData?> checkDuplicate({
+    required String studentId,
+    String? studentNumber,
+    required String eventId,
+    required String gateType,
+  }) {
+    final isTimeIn = gateType == 'Time-In' || gateType == 'time_in';
     return (select(offlineAttendance)
-          ..where((t) =>
-              t.studentId.equals(studentId) &
-              t.sessionId.equals(sessionId) &
-              t.gateType.equals(gateType)))
+          ..where((t) {
+            Expression<bool> idPredicate = t.studentId.equals(studentId);
+            if (studentNumber != null && studentNumber.isNotEmpty) {
+              idPredicate = idPredicate | t.studentId.equals(studentNumber);
+            }
+            Expression<bool> gatePredicate = isTimeIn
+                ? (t.gateType.equals('Time-In') | t.gateType.equals('time_in'))
+                : (t.gateType.equals('Time-Out') | t.gateType.equals('time_out'));
+
+            return t.eventId.equals(eventId) & idPredicate & gatePredicate;
+          }))
         .getSingleOrNull();
   }
 
@@ -54,6 +71,24 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
   Stream<List<OfflineAttendanceData>> watchAllForEvent(String eventId) {
     return (select(offlineAttendance)
           ..where((t) => t.eventId.equals(eventId))
+          ..orderBy([(t) => OrderingTerm.desc(t.scannedAt)]))
+        .watch();
+  }
+
+  /// Streams only SYNCED attendance records for an event.
+  /// Use this for the Scanner Attendance List so local unsynced flagged entries
+  /// don't appear until they're uploaded to Firestore.
+  Stream<List<OfflineAttendanceData>> watchSyncedForEvent(String eventId) {
+    return (select(offlineAttendance)
+          ..where((t) => t.eventId.equals(eventId) & t.synced.equals(1))
+          ..orderBy([(t) => OrderingTerm.desc(t.scannedAt)]))
+        .watch();
+  }
+
+  /// Streams only pending (unsynced) attendance records for an event.
+  Stream<List<OfflineAttendanceData>> watchUnsyncedForEvent(String eventId) {
+    return (select(offlineAttendance)
+          ..where((t) => t.eventId.equals(eventId) & t.synced.equals(0))
           ..orderBy([(t) => OrderingTerm.desc(t.scannedAt)]))
         .watch();
   }
@@ -76,10 +111,29 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
         .go();
   }
 
-  Future<void> deleteRecordsForStudent(String studentId, String sessionId) {
+  Future<void> deleteRecordsForStudent({
+    required String eventId,
+    required String studentId,
+    String? studentNumber,
+    String? sessionId,
+  }) {
     return (delete(offlineAttendance)
-          ..where((t) =>
-              t.studentId.equals(studentId) & t.sessionId.equals(sessionId)))
+          ..where((t) {
+            Expression<bool> idPredicate = t.studentId.equals(studentId);
+            if (studentNumber != null && studentNumber.isNotEmpty) {
+              idPredicate = idPredicate | t.studentId.equals(studentNumber);
+            }
+            Expression<bool> predicate = t.eventId.equals(eventId) & idPredicate;
+            if (sessionId != null && sessionId.isNotEmpty) {
+              predicate = predicate & (t.sessionId.equals(sessionId) | t.sessionId.equals(''));
+            }
+            return predicate;
+          }))
         .go();
+  }
+
+  /// Deletes a single offline attendance record by its localId.
+  Future<void> deleteRecordByLocalId(String localId) {
+    return (delete(offlineAttendance)..where((t) => t.localId.equals(localId))).go();
   }
 }

@@ -162,6 +162,30 @@ class _ManualAttendanceScreenState
       final scannerState = ref.read(scannerViewModelProvider);
       final sessionId = scannerState.selectedSessionId ?? '';
 
+      // Local duplicate check before saving
+      if (studentId.isNotEmpty) {
+        final existing = await ref.read(appDatabaseProvider).attendanceDao.checkDuplicate(
+          studentId: studentId,
+          studentNumber: _selectedParticipant?.studentNumber,
+          eventId: widget.eventId,
+          gateType: _gateType,
+        );
+        if (existing != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Duplicate: $studentName already has a $_gateType record for this event.'),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          }
+          setState(() => _isSubmitting = false);
+          return;
+        }
+      }
+
       final localId = 'manual_${studentId.isNotEmpty ? studentId : studentName.hashCode}_${sessionId}_${_gateType}_$now';
 
       final record = OfflineAttendanceCompanion(
@@ -234,9 +258,22 @@ class _ManualAttendanceScreenState
       _permissions['fullAccess'] == true ||
       _permissions['canCheckIn'] == true;
 
-  bool get _canCheckOut =>
-      _permissions['fullAccess'] == true ||
-      _permissions['canCheckOut'] == true;
+  bool get _canCheckOut {
+    final scannerState = ref.read(scannerViewModelProvider);
+    final assignment = scannerState.assignments.firstWhere(
+      (a) => a.eventId == widget.eventId,
+      orElse: () => scannerState.assignments.first,
+    );
+    final activeSessionId = scannerState.selectedSessionId;
+    final activeSession = assignment.sessions.firstWhere(
+      (s) => s['id'] == activeSessionId,
+      orElse: () => assignment.sessions.isNotEmpty ? assignment.sessions.first : {},
+    );
+    final bool sessionHasTimeOut = activeSession['hasTimeOut'] == true;
+    final permissionCheckOut = _permissions['fullAccess'] == true ||
+        _permissions['canCheckOut'] == true;
+    return permissionCheckOut && sessionHasTimeOut;
+  }
 
   // ─── Build ──────────────────────────────────────────────────────────────
 
@@ -268,24 +305,44 @@ class _ManualAttendanceScreenState
         Container(
           padding: const EdgeInsets.all(16),
           color: AppColors.primary,
-          child: TextField(
-            controller: _searchController,
-            onChanged: _performSearch,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Search by name or student number...',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-              prefixIcon:
-                  Icon(Icons.search, color: Colors.white.withValues(alpha: 0.8)),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.15),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                onChanged: _performSearch,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Search by name or student number...',
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  prefixIcon:
+                      Icon(Icons.search, color: Colors.white.withValues(alpha: 0.8)),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.15),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
+              const SizedBox(height: 12),
+              // Add Unknown Attendee button — always visible below search bar
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _selectUnknownAttendee,
+                  icon: const Icon(Icons.person_add_alt_1, color: Colors.white),
+                  label: const Text('Add Unknown Attendee'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
