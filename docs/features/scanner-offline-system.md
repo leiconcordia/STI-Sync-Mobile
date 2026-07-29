@@ -15,7 +15,7 @@ The **Scanner & Offline Attendance System** allows authorized scanner officers t
 
 ### 2.1 QR Code Scanning Validations (`ScannerCameraScreen`)
 
-When a QR code is scanned via the camera, the app executes **4 mandatory validations** in strict sequential order before recording attendance:
+When a QR code is scanned via the camera, the app executes **3 mandatory validations** in strict sequential order before recording attendance:
 
 ```
 [QR Code Scanned]
@@ -30,10 +30,7 @@ When a QR code is scanned via the camera, the app executes **4 mandatory validat
 3. Participant Check ───────► (Not in Drift?) ────► [SHOW NOT REGISTERED OVERLAY]
         │
         ▼
-4. Payment Gate Check ──────► (Payable locked?) ──► [SHOW PAYMENT REQUIRED OVERLAY]
-        │
-        ▼
-5. Duplicate Check ─────────► (Already scanned?) ─► [SHOW DUPLICATE OVERLAY]
+4. Duplicate Check ─────────► (Already scanned?) ─► [SHOW DUPLICATE OVERLAY]
         │
         ▼
 [SAVE LOCAL RECORD TO DRIFT] ──► [SHOW SUCCESS OVERLAY]
@@ -49,12 +46,11 @@ When a QR code is scanned via the camera, the app executes **4 mandatory validat
 3. **Participant Eligibility Validation:**
    - Searches local Drift `cached_participants` by `studentAuthUid` for `eventId`.
    - If student is not found -> **Result:** `ScanResultType.notRegistered` ("Student Not Eligible / Not Registered").
-4. **Payment Gate (Payables) Validation:**
-   - Checks `cached_payables` or `participant.qrTicketUnlocked`.
-   - If `qrTicketUnlocked == false` -> **Result:** `ScanResultType.paymentRequired` ("Payment Required / QR Locked").
-5. **Duplicate Check Validation:**
+4. **Duplicate Check Validation:**
    - Queries `offline_attendance` where `studentId == studentAuthUid`, `sessionId == currentSessionId`, and `gateType == selectedGateType` (`Time-In` or `Time-Out`).
    - If record exists -> **Result:** `ScanResultType.duplicate` ("Already scanned for [Time-In/Time-Out] at [Time]").
+
+*Note: Payment gate validation is strictly enforced on the student side during QR generation (`QrTicketScreen`). If unpaid, the student app will not generate a QR code. Any valid QR code scanned by the camera scanner is trusted for attendance entry.*
 
 ---
 
@@ -78,7 +74,8 @@ When a QR code is scanned via the camera, the app executes **4 mandatory validat
 - **Role Enforcement:** Accessible ONLY if scanner permission `allowManualAttendance == true`.
 - **Add Unknown Attendee Button:** Displayed **directly below the search bar** at all times (no search required). Officers can immediately tap to add a walk-in attendee.
 - **Search Capabilities:** Officer searches local Drift `cached_participants` by student name or student number (works 100% offline).
-- **Gate Type Enforcement:** The `Time-Out` gate chip is only visible when the active session has `hasTimeOut == true`. Events with Time-In only will not show the Time-Out option.
+- **Gate Type Enforcement:** The `Time-Out` gate chip is displayed whenever the active session has `hasTimeOut == true` (resolved from `scannerViewModelProvider.selectedSessionId` or the active event session fallback). Sessions with Time-In only will not show the Time-Out option.
+- **Session & Gate Type Resolution (Offline & Online):** Both known participant and unknown walk-in attendee records bind directly to the active `sessionId` and selected `gateType` (`Time-In` or `Time-Out`). This ensures records are properly categorized in local SQLite (`offline_attendance`) and when synced to Firebase Firestore (`/events/{eventId}/flagged_attendance`).
 - **Flagged Entry Handling:**
   - If a student cannot present a QR code or has issues, officer select a `flagReason`:
     - `'no_phone'` | `'payment_pending'` | `'not_registered'` | `'device_error'` | `'other'`

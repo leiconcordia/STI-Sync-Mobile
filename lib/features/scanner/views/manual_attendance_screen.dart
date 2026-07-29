@@ -103,11 +103,21 @@ class _ManualAttendanceScreenState
     });
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_canCheckIn && _canCheckOut) {
+        setState(() => _gateType = 'Time-Out');
+      }
+    });
+  }
+
   void _clearSelection() {
     setState(() {
       _selectedParticipant = null;
       _isUnknownAttendee = false;
-      _gateType = 'Time-In';
+      _gateType = _canCheckIn ? 'Time-In' : 'Time-Out';
       _flagReason = null;
       _noteController.clear();
       _nameController.clear();
@@ -158,9 +168,14 @@ class _ManualAttendanceScreenState
         studentName = _nameController.text.trim();
       }
 
-      // Get the active session ID from scanner state
+      // Get the active session ID from scanner state or assignment sessions fallback
       final scannerState = ref.read(scannerViewModelProvider);
-      final sessionId = scannerState.selectedSessionId ?? '';
+      final assignment = scannerState.assignments.firstWhere(
+        (a) => a.eventId == widget.eventId,
+        orElse: () => scannerState.assignments.first,
+      );
+      final sessionId = scannerState.selectedSessionId ??
+          (assignment.sessions.isNotEmpty ? assignment.sessions.first['id'] as String? ?? '' : '');
 
       // Local duplicate check before saving
       if (studentId.isNotEmpty) {
@@ -265,7 +280,8 @@ class _ManualAttendanceScreenState
       (a) => a.eventId == widget.eventId,
       orElse: () => scannerState.assignments.first,
     );
-    final activeSessionId = scannerState.selectedSessionId;
+    final activeSessionId = scannerState.selectedSessionId ??
+        (assignment.sessions.isNotEmpty ? assignment.sessions.first['id'] as String? : null);
     final activeSession = assignment.sessions.firstWhere(
       (s) => s['id'] == activeSessionId,
       orElse: () => assignment.sessions.isNotEmpty ? assignment.sessions.first : {},

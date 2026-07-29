@@ -217,8 +217,14 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: FloatingActionButton.small(
                                 heroTag: 'manual_fab',
-                                onPressed: () =>
-                                    context.push('/scanner/$eventId/manual'),
+                                onPressed: () {
+                                  if (activeSessionId != null) {
+                                    ref
+                                        .read(scannerViewModelProvider.notifier)
+                                        .setSelectedSessionId(activeSessionId);
+                                  }
+                                  context.push('/scanner/$eventId/manual');
+                                },
                                 backgroundColor: Colors.white,
                                 elevation: 3,
                                 child: Icon(Icons.person_add_alt_1,
@@ -316,7 +322,6 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
       return const SizedBox.shrink();
     }
 
-    final eventId = ref.read(scannerViewModelProvider).selectedEventId;
     final activeSessionId = _selectedSessionId ??
         assignment.sessions.first['id'] as String?;
 
@@ -337,9 +342,9 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
             child: GestureDetector(
               onTap: () {
                 setState(() => _selectedSessionId = id);
-                if (eventId != null) {
-                  ref.read(scannerViewModelProvider.notifier).selectSession(eventId, id);
-                }
+                ref
+                    .read(scannerViewModelProvider.notifier)
+                    .setSelectedSessionId(id);
               },
               child: Container(
                 padding:

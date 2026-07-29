@@ -90,18 +90,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
-      // VALIDATION 3: Payment gate
-      final isUnlocked = await db.participantsDao.isQrUnlocked(
-        studentAuthUid,
-        widget.eventId,
-      );
-
-      if (!isUnlocked) {
-        await _showOverlay(ScanResultType.paymentRequired, participant);
-        return;
-      }
-
-      // VALIDATION 4: Duplicate check
+      // VALIDATION 3: Duplicate check
       final existing = await db.attendanceDao.checkDuplicate(
         studentId: studentAuthUid,
         studentNumber: participant.studentNumber,

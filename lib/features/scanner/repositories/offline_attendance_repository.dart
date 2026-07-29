@@ -54,38 +54,42 @@ class OfflineAttendanceRepository {
     final List<String> targetYearLevels = List<String>.from(eventData['targetYearLevels'] ?? []);
     final bool payablesEnabled = eventData['studentPayablesEnabled'] ?? false;
 
-    if (targetDeptIds.isEmpty || targetYearLevels.isEmpty) {
-      // Event has no target participants
-      await _finalizeDownload(eventId, [], []);
-      onProgress?.call(1.0);
-      return DownloadResult(studentCount: 0, downloadedAt: DateTime.now());
-    }
-
     onProgress?.call(0.2);
 
-    // 2. Query Students in batches (whereIn limit is 30)
+    // 2. Query Students (handling empty target arrays as "ALL")
     final List<StudentModel> allStudents = [];
-    final int batchSize = 30;
-    
-    // Split department IDs into chunks of 30
-    for (int i = 0; i < targetDeptIds.length; i += batchSize) {
-      final deptBatch = targetDeptIds.sublist(
-        i,
-        i + batchSize > targetDeptIds.length ? targetDeptIds.length : i + batchSize,
-      );
 
+    if (targetDeptIds.isNotEmpty) {
+      final int batchSize = 30;
+      for (int i = 0; i < targetDeptIds.length; i += batchSize) {
+        final deptBatch = targetDeptIds.sublist(
+          i,
+          i + batchSize > targetDeptIds.length ? targetDeptIds.length : i + batchSize,
+        );
+
+        final querySnapshot = await _firestore
+            .collection(FirestorePaths.students)
+            .where('departmentId', whereIn: deptBatch)
+            .get();
+
+        for (var doc in querySnapshot.docs) {
+          final student = StudentModel.fromFirestore(doc);
+          final isStatusActive = student.status.toUpperCase() == 'ACTIVE' || student.status.isEmpty;
+          if (isStatusActive && _isYearLevelMatching(student.yearLevel, targetYearLevels)) {
+            allStudents.add(student);
+          }
+        }
+      }
+    } else {
+      // targetDeptIds is empty -> Target ALL departments
       final querySnapshot = await _firestore
           .collection(FirestorePaths.students)
-          .where('departmentId', whereIn: deptBatch)
-          // Note: you can only have one 'whereIn' or 'arrayContainsAny' clause in Firestore.
-          // Since yearLevel is also a list, we must filter yearLevel on the client side!
-          // We also filter 'status' == 'ACTIVE' on the client side to avoid requiring a composite index.
           .get();
 
       for (var doc in querySnapshot.docs) {
         final student = StudentModel.fromFirestore(doc);
-        // Client-side filter for yearLevel and active status
-        if (student.status == 'ACTIVE' && targetYearLevels.contains(student.yearLevel)) {
+        final isStatusActive = student.status.toUpperCase() == 'ACTIVE' || student.status.isEmpty;
+        if (isStatusActive && _isYearLevelMatching(student.yearLevel, targetYearLevels)) {
           allStudents.add(student);
         }
       }
@@ -143,13 +147,16 @@ class OfflineAttendanceRepository {
       studentMap['createdAt'] = student.createdAt.toIso8601String();
       studentMap['updatedAt'] = student.updatedAt.toIso8601String();
 
+      final numericYearStr = student.yearLevel.replaceAll(RegExp(r'[^0-9]'), '');
+      final parsedYearLevel = int.tryParse(numericYearStr) ?? 1;
+
       participantCompanions.add(CachedParticipantsCompanion(
         id: Value(student.id),
         eventId: Value(eventId),
         studentName: Value('${student.firstName} ${student.lastName}'),
         studentNumber: Value(student.studentId),
         course: Value(student.courseCode),
-        yearLevel: Value(int.tryParse(student.yearLevel.split(' ').first) ?? 1),
+        yearLevel: Value(parsedYearLevel),
         profilePhotoUrl: Value(student.profilePhotoUrl),
         qrTicketUnlocked: Value(qrTicketUnlocked),
         participantJson: Value(json.encode(studentMap)),
@@ -184,6 +191,18 @@ class OfflineAttendanceRepository {
       studentCount: allStudents.length,
       downloadedAt: DateTime.now(),
     );
+  }
+
+  bool _isYearLevelMatching(String studentYearLevel, List<String> targetYearLevels) {
+    if (targetYearLevels.isEmpty) return true;
+    if (targetYearLevels.contains(studentYearLevel)) return true;
+    final studentDigits = studentYearLevel.replaceAll(RegExp(r'[^0-9]'), '');
+    for (final target in targetYearLevels) {
+      if (target == studentYearLevel) return true;
+      final targetDigits = target.replaceAll(RegExp(r'[^0-9]'), '');
+      if (studentDigits.isNotEmpty && studentDigits == targetDigits) return true;
+    }
+    return false;
   }
 
   Future<void> _finalizeDownload(

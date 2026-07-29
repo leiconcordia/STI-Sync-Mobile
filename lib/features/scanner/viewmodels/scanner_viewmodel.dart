@@ -188,6 +188,11 @@ class ScannerViewModel extends StateNotifier<ScannerState> {
     );
   }
 
+  /// Sets the currently selected session ID.
+  void setSelectedSessionId(String sessionId) {
+    state = state.copyWith(selectedSessionId: sessionId);
+  }
+
   /// Initiates an offline participant data download for [eventId].
   Future<void> downloadParticipantData(String eventId) async {
     if (state.downloadingEventId != null) return; // Prevent concurrent downloads
