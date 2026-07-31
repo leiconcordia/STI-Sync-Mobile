@@ -31,7 +31,7 @@ final isEligible = event.proposalStatus == 'approved' &&
 
 ### 2.2 Scanner Role Assignment & Permissions
 
-Scanner assignments are stored in the Firestore `events` collection inside a `scanners[]` array and denormalized into `scannerUserIds[]`.
+Scanner assignments are stored in the Firestore `events` collection inside a `scanners[]` array and denormalized into `scannerUserIds[]` as `organization_officers` document IDs. The mobile client queries `organization_officers` by `studentId == studentAuthUid` to resolve these officer record IDs before querying upcoming scanner assignments.
 
 #### Permissions Breakdown (`ScannerAssignmentModel.permissions`):
 - `canCheckIn` (`bool`): Enables Time-In scan mode. If `false`, Time-In is disabled.
@@ -62,3 +62,11 @@ Scanner assignments are stored in the Firestore `events` collection inside a `sc
 | **Department Mismatch** | BSIT student views Event targeted ONLY at BSBA | Event does NOT appear in student's event feed. |
 | **Scanner Manual Permission OFF** | Officer with `allowManualAttendance: false` logs in | `Add Person` FAB is hidden. Route `/manual` is blocked. |
 | **Event Concluded Cleanup** | 12 hours pass after event last session end | `EventCleanupService` automatically purges local cached participant data. |
+
+---
+
+## 4. Student Event Details, Budget, and Attendance Guide
+
+- While online, the eligible-event stream caches each full event document in Drift. Event Details resolves from Firestore online and from `cached_events` offline.
+- Each session uses 12-hour student-facing times. Time-In Opens uses `timeInOpen` (or session start), On-Time Until uses `startTime + gracePeriodMinutes` (or zero-minute grace), and Late Until uses `startTime + lateThresholdMinutes`. If no late threshold is set, `timeInClose`, then `endTime`, is the fallback cutoff.
+- Students see `totalApprovedBudget` and can expand the `budgetItems` breakdown. `adminFeeOverride` is labelled Event Fee; it is not an admin charge and payment unlocks the QR ticket.

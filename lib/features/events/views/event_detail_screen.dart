@@ -6,6 +6,7 @@ import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
+import 'package:sti_sync/features/events/models/event_model.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   final String eventId;
@@ -31,7 +32,8 @@ class EventDetailScreen extends ConsumerWidget {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: AppColors.primaryDark),
+            icon:
+                const Icon(Icons.share_outlined, color: AppColors.primaryDark),
             onPressed: () {},
           ),
         ],
@@ -44,20 +46,24 @@ class EventDetailScreen extends ConsumerWidget {
 
           final venueName = ref.watch(venueNameProvider(event.venueId));
           final orgDataAsync = ref.watch(orgProvider(event.hostingOrgId));
-          final categoryName = ref.watch(categoryNameProvider(event.eventCategoryId));
+          final categoryName =
+              ref.watch(categoryNameProvider(event.eventCategoryId));
 
           String orgName = 'Loading...';
           String? logoUrl;
           orgDataAsync.whenData((orgMap) {
             if (orgMap != null) {
-              orgName = orgMap['name'] as String? ?? orgMap['acronym'] as String? ?? 'Unknown Org';
+              orgName = orgMap['name'] as String? ??
+                  orgMap['acronym'] as String? ??
+                  'Unknown Org';
               logoUrl = orgMap['logoUrl'] as String?;
             } else {
               orgName = 'Unknown Org';
             }
           });
 
-          final actualParticipantCount = ref.watch(actualParticipantCountProvider(event));
+          final actualParticipantCount =
+              ref.watch(actualParticipantCountProvider(event));
 
           return Stack(
             children: [
@@ -66,7 +72,8 @@ class EventDetailScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (event.bannerImageUrl != null && event.bannerImageUrl!.isNotEmpty)
+                    if (event.bannerImageUrl != null &&
+                        event.bannerImageUrl!.isNotEmpty)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: CachedNetworkImage(
@@ -86,10 +93,12 @@ class EventDetailScreen extends ConsumerWidget {
                             color: AppColors.primary,
                             alignment: Alignment.center,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16.0),
                               child: Text(
                                 event.title,
-                                style: AppTextStyles.h1.copyWith(color: Colors.white),
+                                style: AppTextStyles.h1
+                                    .copyWith(color: Colors.white),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -109,7 +118,8 @@ class EventDetailScreen extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: Text(
                             event.title,
-                            style: AppTextStyles.h1.copyWith(color: Colors.white),
+                            style:
+                                AppTextStyles.h1.copyWith(color: Colors.white),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -119,9 +129,10 @@ class EventDetailScreen extends ConsumerWidget {
                       children: [
                         if (event.eventCategoryId.isNotEmpty) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
@@ -135,7 +146,8 @@ class EventDetailScreen extends ConsumerWidget {
                           const SizedBox(width: 8),
                         ],
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
@@ -150,19 +162,26 @@ class EventDetailScreen extends ConsumerWidget {
                                         width: 20,
                                         height: 20,
                                         fit: BoxFit.cover,
-                                        placeholder: (context, url) => Container(
+                                        placeholder: (context, url) =>
+                                            Container(
                                           width: 20,
                                           height: 20,
                                           color: Colors.grey.shade300,
                                         ),
-                                        errorWidget: (context, url, error) => Container(
+                                        errorWidget: (context, url, error) =>
+                                            Container(
                                           width: 20,
                                           height: 20,
                                           color: AppColors.primary,
                                           alignment: Alignment.center,
                                           child: Text(
-                                            orgName.isNotEmpty ? orgName.substring(0, 1) : 'O',
-                                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                            orgName.isNotEmpty
+                                                ? orgName.substring(0, 1)
+                                                : 'O',
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 8,
+                                                fontWeight: FontWeight.bold),
                                           ),
                                         ),
                                       )
@@ -172,8 +191,13 @@ class EventDetailScreen extends ConsumerWidget {
                                         color: AppColors.primary,
                                         alignment: Alignment.center,
                                         child: Text(
-                                          orgName.isNotEmpty ? orgName.substring(0, 1) : 'O',
-                                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                          orgName.isNotEmpty
+                                              ? orgName.substring(0, 1)
+                                              : 'O',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold),
                                         ),
                                       ),
                               ),
@@ -193,7 +217,8 @@ class EventDetailScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     Text(
                       event.title,
-                      style: AppTextStyles.h1.copyWith(color: AppColors.primaryDark, fontSize: 26),
+                      style: AppTextStyles.h1
+                          .copyWith(color: AppColors.primaryDark, fontSize: 26),
                     ),
                     const SizedBox(height: 24),
                     Container(
@@ -204,9 +229,11 @@ class EventDetailScreen extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          _buildInfoRow(Icons.location_on_outlined, 'Venue', venueName.valueOrNull ?? 'Loading...'),
+                          _buildInfoRow(Icons.location_on_outlined, 'Venue',
+                              venueName.valueOrNull ?? 'Loading...'),
                           Divider(color: Colors.grey.shade200, height: 1),
-                          _buildInfoRow(Icons.people_outline, 'Attendees', '${actualParticipantCount.valueOrNull ?? '...'} expected'),
+                          _buildInfoRow(Icons.people_outline, 'Attendees',
+                              '${actualParticipantCount.valueOrNull ?? '...'} expected'),
                         ],
                       ),
                     ),
@@ -232,84 +259,39 @@ class EventDetailScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  session.title.isNotEmpty ? session.title : 'Session',
+                                  session.title.isNotEmpty
+                                      ? session.title
+                                      : 'Session',
                                   style: AppTextStyles.bodyLarge.copyWith(
                                     color: AppColors.primaryDark,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today, size: 16, color: AppColors.textSecondary),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      session.date,
-                                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                                    ),
-                                  ],
+                                _buildSessionInfo(
+                                  Icons.calendar_today,
+                                  _formatSessionDate(session.date),
                                 ),
                                 const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.schedule, size: 16, color: AppColors.textSecondary),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${session.startTime} to ${session.endTime}',
-                                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                                    ),
-                                  ],
+                                _buildSessionInfo(
+                                  Icons.schedule,
+                                  '${_formatSessionTime(session, session.startTime)} to '
+                                  '${_formatSessionTime(session, session.endTime)}',
                                 ),
                                 const SizedBox(height: 12),
                                 Divider(color: Colors.grey.shade200, height: 1),
                                 const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Time In', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                                          Text(
-                                            '${session.timeInOpen}',
-                                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
-                                          ),
-                                          if (_calculateTimeWithOffset(session.timeInClose, event.lateThresholdMinutes) != null)
-                                            Text(
-                                              'Late after ${_calculateTimeWithOffset(session.timeInClose, event.lateThresholdMinutes)}',
-                                              style: AppTextStyles.labelSmall.copyWith(color: Colors.orange.shade700),
-                                            ),
-                                          if (_calculateTimeWithOffset(session.timeInClose, event.gracePeriodMinutes) != null)
-                                            Text(
-                                              'Absent after ${_calculateTimeWithOffset(session.timeInClose, event.gracePeriodMinutes)}',
-                                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.error),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (session.hasTimeOut)
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text('Time Out', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                                            Text(
-                                              '${session.timeOutOpen ?? '?'} - ${session.timeOutClose ?? '?'}',
-                                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                                _buildAttendanceGuide(event, session),
                               ],
                             ),
                           )),
                       const SizedBox(height: 12),
                     ],
-                    if (event.studentPayablesEnabled) ...[
+                    if (event.budgetItems.isNotEmpty ||
+                        event.totalApprovedBudget > 0 ||
+                        (event.adminFeeOverride ?? 0) > 0) ...[
                       Text(
-                        'Budget & Payables',
+                        'Budget & Event Fee',
                         style: AppTextStyles.bodyLarge.copyWith(
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
@@ -324,13 +306,76 @@ class EventDetailScreen extends ConsumerWidget {
                         ),
                         child: Column(
                           children: [
-                            _buildInfoRow(Icons.payments_outlined, 'Expected', '₱${(event.suggestedFeePerStudent ?? 0).toStringAsFixed(2)}'),
-                            if (event.adminFeeOverride != null && event.adminFeeOverride! > 0) ...[
+                            ExpansionTile(
+                              tilePadding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              childrenPadding: const EdgeInsets.only(bottom: 8),
+                              title: Row(
+                                children: [
+                                  const Icon(
+                                      Icons.account_balance_wallet_outlined,
+                                      color: AppColors.primary,
+                                      size: 20),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      'Total Budget',
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatCurrency(event.totalApprovedBudget),
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: AppColors.primaryDark,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                'View budget breakdown',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              children: event.budgetItems.isEmpty
+                                  ? [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            16, 0, 16, 12),
+                                        child: Text(
+                                          'No budget items were provided.',
+                                          style:
+                                              AppTextStyles.bodyMedium.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                    ]
+                                  : event.budgetItems
+                                      .map(_buildBudgetItem)
+                                      .toList(),
+                            ),
+                            if ((event.adminFeeOverride ?? 0) > 0) ...[
                               Divider(color: Colors.grey.shade200, height: 1),
-                              _buildInfoRow(Icons.admin_panel_settings_outlined, 'Admin Fee', '₱${event.adminFeeOverride!.toStringAsFixed(2)}'),
+                              _buildInfoRow(
+                                Icons.confirmation_number_outlined,
+                                'Event Fee',
+                                _formatCurrency(event.adminFeeOverride!),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                child: Text(
+                                  'Payment of the event fee is required to unlock your QR ticket.',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
                             ],
-                            Divider(color: Colors.grey.shade200, height: 1),
-                            _buildInfoRow(Icons.account_balance_wallet_outlined, 'Total Budget', '₱${(event.totalExpectedCollection ?? 0).toStringAsFixed(2)}'),
                           ],
                         ),
                       ),
@@ -356,13 +401,17 @@ class EventDetailScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            event.description.isNotEmpty ? event.description : 'No description provided.',
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary, height: 1.5),
+                            event.description.isNotEmpty
+                                ? event.description
+                                : 'No description provided.',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textSecondary, height: 1.5),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 100), // Padding for sticky bottom button
+                    const SizedBox(
+                        height: 100), // Padding for sticky bottom button
                   ],
                 ),
               ),
@@ -376,7 +425,7 @@ class EventDetailScreen extends ConsumerWidget {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, -5),
                       ),
@@ -384,7 +433,8 @@ class EventDetailScreen extends ConsumerWidget {
                   ),
                   child: SafeArea(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -402,12 +452,13 @@ class EventDetailScreen extends ConsumerWidget {
                           ),
                           GestureDetector(
                             onTap: () {
-                              context.goNamed('qrTicket', pathParameters: {'eventId': eventId});
+                              context.goNamed('qrTicket',
+                                  pathParameters: {'eventId': eventId});
                             },
                             child: Text(
                               'View Ticket',
                               style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.orange.shade700, 
+                                color: Colors.orange.shade700,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -422,29 +473,206 @@ class EventDetailScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.red))),
+        error: (err, stack) => Center(
+            child:
+                Text('Error: $err', style: const TextStyle(color: Colors.red))),
       ),
     );
   }
 
-  String? _calculateTimeWithOffset(String timeString, int? minutesToAdd) {
-    if (minutesToAdd == null || minutesToAdd == 0 || timeString.isEmpty) return null;
+  Widget _buildSessionInfo(IconData icon, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceGuide(EventModel event, EventSessionModel session) {
+    final start = _parseSessionDateTime(session, session.startTime);
+    final opens = _parseSessionDateTime(session, session.timeInOpen) ?? start;
+    final graceMinutes =
+        (event.gracePeriodMinutes ?? 0).clamp(0, 24 * 60).toInt();
+    final onTimeUntil = start?.add(Duration(minutes: graceMinutes));
+    final configuredClose = _parseSessionDateTime(session, session.timeInClose);
+    final fallbackClose = configuredClose ??
+        _parseSessionDateTime(session, session.endTime) ??
+        onTimeUntil ??
+        start;
+    final thresholdClose = event.lateThresholdMinutes == null || start == null
+        ? fallbackClose
+        : start.add(
+            Duration(
+              minutes: event.lateThresholdMinutes!.clamp(0, 24 * 60).toInt(),
+            ),
+          );
+    final lateUntil = thresholdClose != null &&
+            onTimeUntil != null &&
+            thresholdClose.isBefore(onTimeUntil)
+        ? onTimeUntil
+        : thresholdClose;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Attendance Guide',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildGuideRow('Time-In Opens', _formatTime(opens)),
+        _buildGuideRow('Session Starts', _formatTime(start)),
+        _buildGuideRow('On-Time Until', _formatTime(onTimeUntil)),
+        _buildGuideRow('Late Until / Time-In Closes', _formatTime(lateUntil)),
+        if (event.gracePeriodMinutes == null)
+          _buildGuideNotice(
+              'No grace period is set. Check in by the session start time to be on time.'),
+        if (event.lateThresholdMinutes == null)
+          _buildGuideNotice(
+              'The configured time-in closing time is used as the late cutoff.'),
+        if (session.hasTimeOut) ...[
+          const SizedBox(height: 8),
+          _buildGuideRow(
+            'Time-Out Window',
+            '${_formatSessionTime(session, session.timeOutOpen ?? '')} to '
+                '${_formatSessionTime(session, session.timeOutClose ?? '')}',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGuideRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.primaryDark,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideNotice(String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        value,
+        style:
+            AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+      ),
+    );
+  }
+
+  Widget _buildBudgetItem(BudgetItemModel item) {
+    final status = item.status.isEmpty ? 'pending' : item.status;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.item.isEmpty ? 'Budget item' : item.item,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Text(
+                _formatCurrency(item.approvedAmount),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.primaryDark,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          if (item.description.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              item.description,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 2),
+          Text(
+            '${_formatNumber(item.quantity)} × ${_formatCurrency(item.unitCost)} · ${_capitalize(status)}',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DateTime? _parseSessionDateTime(EventSessionModel session, String time) {
+    if (session.date.isEmpty || time.isEmpty) return null;
     try {
-      final format = DateFormat('h:mm a'); 
-      final parsed = format.parse(timeString);
-      final added = parsed.add(Duration(minutes: minutesToAdd));
-      return format.format(added);
+      return DateFormat('yyyy-MM-dd HH:mm')
+          .parseStrict('${session.date} $time');
     } catch (_) {
       try {
-        final format2 = DateFormat('HH:mm'); 
-        final parsed2 = format2.parse(timeString);
-        final added2 = parsed2.add(Duration(minutes: minutesToAdd));
-        return DateFormat('h:mm a').format(added2);
+        return DateFormat('yyyy-MM-dd h:mm a')
+            .parseStrict('${session.date} $time');
       } catch (_) {
-         return null;
+        return null;
       }
     }
   }
+
+  String _formatSessionDate(String value) {
+    try {
+      return DateFormat('MMM d, y').format(DateTime.parse(value));
+    } catch (_) {
+      return value.isEmpty ? 'Date to be announced' : value;
+    }
+  }
+
+  String _formatSessionTime(EventSessionModel session, String value) {
+    return _formatTime(_parseSessionDateTime(session, value));
+  }
+
+  String _formatTime(DateTime? value) =>
+      value == null ? 'Not set' : DateFormat('h:mm a').format(value);
+
+  String _formatCurrency(double value) => '₱${value.toStringAsFixed(2)}';
+
+  String _formatNumber(double value) =>
+      value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
+
+  String _capitalize(String value) =>
+      value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
@@ -457,7 +685,8 @@ class EventDetailScreen extends ConsumerWidget {
             width: 80,
             child: Text(
               label,
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
             ),
           ),
           Expanded(

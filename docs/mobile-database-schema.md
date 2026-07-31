@@ -17,6 +17,7 @@
 | `announcements` | Read all targeted at student/org | `snapshots()` stream |
 | `certificates` | Read own issued certificates | `snapshots()` stream |
 | `organizations` | Read org info (name, logo) | One-time `get()` |
+| `organization_officers` | Resolve current student's officer record IDs | `snapshots()` stream |
 
 ---
 
@@ -122,15 +123,22 @@ class EventModel {
   // ─── Payables ───
   final bool studentPayablesEnabled;
   final double? suggestedFeePerStudent;
+  /// Student-facing Event Fee. Copied to payables.amountDue when enabled.
   final double? adminFeeOverride;
   final double? totalExpectedCollection;
+
+  // Budget (student read-only display)
+  final List<BudgetItemModel> budgetItems;
+  final double totalApprovedBudget;
 
   // ─── Settings ───
   final bool enableQRTickets;
   final bool mandatoryAttendance;
   final bool lockAfterApproval;
   final String scannerActivationCode;
-  final List<String> scannerUserIds; // Added for mobile querying of scanner assignments
+  /// Organization-officer document IDs assigned as scanners. These are not
+  /// Firebase Auth UIDs.
+  final List<String> scannerUserIds;
 
   // ─── Lifecycle ───
   final String proposalStatus; // draft | approved
@@ -151,6 +159,16 @@ class EventSessionModel {
   final String? timeOutOpen;
   final String? timeOutClose;
 }
+
+class BudgetItemModel {
+  final String id;
+  final String item;
+  final String description;
+  final double quantity;
+  final double unitCost;
+  final double approvedAmount;
+  final String status; // approved | reduced | rejected | pending
+}
 ```
 
 **Firestore path:** `/events/{eventId}`
@@ -167,16 +185,15 @@ _firestore
 
 **Mobile query (scanner officer — events where this user is assigned as scanner):**
 ```dart
-// Requires denormalized scannerUserIds field on each event document.
-// Populated by the web admin service whenever scanners[] array is updated.
+// Resolves current student's organization_officers doc IDs via /organization_officers
+// collection (where studentId == authUid), then queries events collection:
 _firestore
   .collection(FirestorePaths.events)
   .where('proposalStatus', isEqualTo: 'approved')
-  .where('scannerUserIds', arrayContains: officerUserId)
+  .where('scannerUserIds', arrayContainsAny: targetOfficerIds)
   .snapshots()
 ```
-> **Schema note (scannerUserIds):** Added by web admin `event.service.ts` on every
-> create/update. Required for this query; Firestore cannot filter by nested array object fields.
+> **Schema note (scannerUserIds):** Populated by web admin `event.service.ts` on event approval with `organization_officers` document IDs. The mobile client maps logged-in student `authUid` to their `organization_officers` ID(s) first before querying.
 
 ---
 
@@ -387,6 +404,70 @@ class OrganizationModel {
 
 ---
 
+### 2.8 `organization_officers/{officerId}`
+
+```dart
+/// Represents an officer assignment for an organization.
+class OrganizationOfficerModel {
+  final String id;              // Document ID (organization_officers doc ID)
+  final String organizationId;  // FK → /organizations
+  final String studentId;       // FK → /students (Firebase Auth UID)
+  final String position;        // e.g. "President", "Secretary"
+  final String status;          // 'active' | 'inactive'
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+```
+
+**Firestore path:** `/organization_officers/{officerId}`
+**Mobile read query** (resolves officer record IDs for the logged-in student):
+```dart
+_firestore
+  .collection(FirestorePaths.organizationOfficers)
+  .where('studentId', isEqualTo: currentStudentAuthUid)
+  .snapshots()
+```
+
+---
+
+### 2.9 `organization_members/{memberId}`
+
+```dart
+/// Shared web + mobile schema for organization membership records.
+class OrganizationMemberDocument {
+  final String id;              // Document ID (member ID)
+  final String organizationId;  // FK → /organizations
+  final String studentId;       // Official STI Student ID (e.g. "02000108642")
+  final String studentAuthUid;  // Firebase Auth UID (doc ID in /students)
+  final String studentName;     // Full student name (e.g. "Sophia Bennette")
+  final String email;           // Student email
+  final String contactNumber;   // Contact phone number
+  final String course;          // e.g. "BSIT"
+  final String department;      // Department name
+  final String year;            // e.g. "2nd Year"
+  final String status;          // 'pending' (mobile request) | 'active' (approved) | 'inactive'
+  final String paymentStatus;   // 'outstanding' | 'paid'
+  final bool isOfficer;         // true if appointed as an officer
+  final String addedBy;         // 'self' (mobile app) or admin studentId (web)
+  final DateTime dateJoined;    // Timestamp
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+```
+
+**Firestore path:** `/organization_members/{memberId}`
+**Mobile write (Join Request):**
+`status: 'pending'`, `isOfficer: false`, `paymentStatus: 'outstanding'`, `addedBy: 'self'`, `dateJoined: serverTimestamp()`.
+**Mobile read query:**
+```dart
+_firestore
+  .collection(FirestorePaths.organizationMembers)
+  .where('studentAuthUid', isEqualTo: currentStudentAuthUid)
+  .snapshots()
+```
+
+---
+
 ## 3. Firestore Path Constants
 
 Keep all paths in `lib/core/constants/firestore_paths.dart`. Reference below for completeness:
@@ -570,6 +651,10 @@ interface FlaggedAttendanceDocument {
 | proposalStatus | TEXT | 'approved' \| 'draft' — drives `canScan` offline |
 | dataDownloaded | INTEGER | 0 or 1 |
 | downloadedAt | INTEGER | Unix ms or 0 |
+
+// AGENT-UPDATED: 2026-07-31 — Added events.budgetItems and totalApprovedBudget.
+// adminFeeOverride is the student Event Fee copied to payables.amountDue;
+// suggestedFeePerStudent and totalExpectedCollection are not student-facing.
 
 // AGENT-UPDATED: 2026-07-11 — Added scannerUserIds field documentation to events
 // section; updated scanner_assignments Drift table with eventTitle, eventFormat,

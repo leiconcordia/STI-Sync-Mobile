@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
-import 'package:sti_sync/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:sti_sync/features/profile/widgets/profile_header.dart';
 import 'package:sti_sync/features/profile/widgets/profile_info_card.dart';
 import 'package:sti_sync/features/profile/widgets/profile_danger_card.dart';
+import 'package:sti_sync/features/organizations/widgets/join_organization_sheet.dart';
+import 'package:sti_sync/features/organizations/models/organization_member_model.dart';
 import 'package:intl/intl.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -133,46 +134,120 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                     
-                    // Mock Organizations
-                    ProfileInfoCard(
-                      title: 'My Organizations',
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                      children: [
-                        _MockOrgRow(
-                          initials: 'IC',
-                          title: 'ICT Student Org',
-                          subtitle: 'Academic',
-                          role: 'Member',
-                        ),
-                        const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-                        _MockOrgRow(
-                          initials: 'ST',
-                          title: "Student Gov't",
-                          subtitle: 'Governance',
-                          role: 'Representative',
-                        ),
-                        const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-                        InkWell(
-                          onTap: () {},
-                          child: const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Row(
-                              children: [
-                                Icon(Icons.add, color: AppColors.primary, size: 20),
-                                SizedBox(width: 8),
-                                Text('Join Organization', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
+                    // Real Organizations from Firestore
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final orgsAsync = ref.watch(myOrganizationsProvider);
+
+                        return orgsAsync.when(
+                          data: (orgs) {
+                            final orgChildren = <Widget>[];
+
+                            if (orgs.isEmpty) {
+                              orgChildren.add(
+                                const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'No organization memberships yet.',
+                                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                                  ),
+                                ),
+                              );
+                            } else {
+                              for (var i = 0; i < orgs.length; i++) {
+                                final org = orgs[i];
+                                orgChildren.add(_OrgRow(org: org));
+                                orgChildren.add(
+                                  const Divider(
+                                    height: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFF0F0F0),
+                                  ),
+                                );
+                              }
+                            }
+
+                            // Join Organization button at bottom
+                            orgChildren.add(
+                              InkWell(
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    useRootNavigator: true,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => const JoinOrganizationSheet(),
+                                  );
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.add, color: AppColors.primary, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Join Organization',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+
+                            return ProfileInfoCard(
+                              title: 'My Organizations',
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${orgs.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              children: orgChildren,
+                            );
+                          },
+                          loading: () => ProfileInfoCard(
+                            title: 'My Organizations',
+                            children: const [
+                              Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Center(
+                                  child: SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          error: (_, __) => ProfileInfoCard(
+                            title: 'My Organizations',
+                            children: const [
+                              Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text(
+                                  'Unable to load organizations.',
+                                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     
                     // Mock Certificates
@@ -231,47 +306,81 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class _MockOrgRow extends StatelessWidget {
-  final String initials;
-  final String title;
-  final String subtitle;
-  final String role;
+class _OrgRow extends StatelessWidget {
+  final OrganizationMemberModel org;
 
-  const _MockOrgRow({
-    required this.initials,
-    required this.title,
-    required this.subtitle,
-    required this.role,
-  });
+  const _OrgRow({required this.org});
 
   @override
   Widget build(BuildContext context) {
+    Color badgeBgColor;
+    Color badgeTextColor;
+    String badgeText;
+
+    if (org.isPending) {
+      badgeBgColor = const Color(0xFFFFF3E0);
+      badgeTextColor = Colors.amber.shade900;
+      badgeText = 'Pending Approval';
+    } else if (org.isOfficer) {
+      badgeBgColor = AppColors.accentPurple;
+      badgeTextColor = Colors.white;
+      badgeText = 'Officer: ${org.role}';
+    } else {
+      badgeBgColor = AppColors.primaryDark;
+      badgeTextColor = AppColors.secondary;
+      badgeText = 'Member';
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: AppColors.primary,
-            child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: org.isOfficer ? AppColors.accentPurple : AppColors.primary,
+            child: Text(
+              org.initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark, fontSize: 15)),
-                Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                Text(
+                  org.organizationName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryDark,
+                    fontSize: 15,
+                  ),
+                ),
+                if (org.organizationAcronym.isNotEmpty)
+                  Text(
+                    org.organizationAcronym,
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: AppColors.primaryDark,
+              color: badgeBgColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(role, style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text(
+              badgeText,
+              style: TextStyle(
+                color: badgeTextColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+              ),
+            ),
           ),
         ],
       ),

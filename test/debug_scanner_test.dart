@@ -16,19 +16,28 @@ void main() {
     final auth = FirebaseAuth.instance;
     final user = auth.currentUser;
     print('CURRENT USER: ${user?.uid}');
-    final officerUserId = user?.uid ?? 'XNfS2SssTMT0UqX5e0dIfbL6MvM2'; // Fallback to a known user if null
+    final studentAuthUid = user?.uid ?? 'XNfS2SssTMT0UqX5e0dIfbL6MvM2'; // Fallback to a known user if null
 
-    print('Fetching events for user $officerUserId...');
+    print('Fetching organization_officers for student $studentAuthUid...');
+    final officerSnap = await FirebaseFirestore.instance
+        .collection('organization_officers')
+        .where('studentId', isEqualTo: studentAuthUid)
+        .get();
+    final officerDocIds = officerSnap.docs.map((doc) => doc.id).toList();
+    final targetIds = officerDocIds;
+    print('Target IDs for scanner assignments: $targetIds');
+
+    print('Fetching events for target IDs $targetIds...');
     final snapshot = await FirebaseFirestore.instance
         .collection('events')
-        .where('scannerUserIds', arrayContains: officerUserId)
+        .where('scannerUserIds', arrayContainsAny: targetIds.take(10).toList())
         .get();
         
     print('Found ${snapshot.docs.length} events');
     for (var doc in snapshot.docs) {
       print('EVENT ${doc.id}:');
       try {
-        final model = ScannerAssignmentModel.fromEventDoc(doc, officerUserId);
+        final model = ScannerAssignmentModel.fromEventDocForIds(doc, targetIds);
         print(' - Title: ${model.eventTitle}');
         print(' - isActive: ${model.isActive}');
         print(' - canScan: ${model.canScan}');

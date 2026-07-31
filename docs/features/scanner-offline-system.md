@@ -150,3 +150,5 @@ When a QR code is scanned via the camera, the app executes **3 mandatory validat
 | **Grace Period Threshold** | Scan 31 minutes after session start (30m grace) | System marks attendance status as `'Late'` instead of `'Present'`. |
 | **Delete from Scanner List** | Tap participant -> "Delete Record" | Deletes attendance document from Firestore cloud AND local database. Status resets to Absent. |
 | **Hold-to-Delete Unsynced** | Long press record in Attendance Logs | Opens confirmation dialog -> Deletes local SQLite record before sync occurs. |
+
+| **Student Offline Ticket Prep** | Student loads the eligible event feed online, then opens a ticket offline | The cached event configuration and payable state render an unlocked QR or locked payment card without requiring a prior visit to that individual ticket. |

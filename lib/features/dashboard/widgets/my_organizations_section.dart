@@ -1,38 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/shared/providers/providers.dart';
+import 'package:sti_sync/features/organizations/models/organization_member_model.dart';
 
-class MyOrganizationsSection extends StatelessWidget {
+class MyOrganizationsSection extends ConsumerWidget {
   const MyOrganizationsSection({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'My Organizations',
-          style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 72,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              _buildOrgCard('SG', 'Student Gov\'t', 'Rep'),
-              const SizedBox(width: 16),
-              _buildOrgCard('LA', 'Lit-Arts Club', 'Member'),
-            ],
-          ),
-        ),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final orgsAsync = ref.watch(myOrganizationsProvider);
+
+    return orgsAsync.when(
+      data: (orgs) {
+        if (orgs.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'My Organizations',
+              style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: orgs.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 16),
+                itemBuilder: (context, index) {
+                  final org = orgs[index];
+                  return _buildOrgCard(org);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 
-  Widget _buildOrgCard(String initial, String name, String role) {
+  Widget _buildOrgCard(OrganizationMemberModel org) {
+    Color badgeBgColor;
+    Color badgeTextColor;
+    String badgeText;
+
+    if (org.isPending) {
+      badgeBgColor = const Color(0xFFFFF3E0);
+      badgeTextColor = Colors.amber.shade900;
+      badgeText = 'Pending Approval';
+    } else if (org.isOfficer) {
+      badgeBgColor = AppColors.accentPurple;
+      badgeTextColor = Colors.white;
+      badgeText = org.role.isNotEmpty && org.role != 'Member'
+          ? 'Officer: ${org.role}'
+          : 'Officer';
+    } else {
+      badgeBgColor = AppColors.primaryDark;
+      badgeTextColor = AppColors.secondary;
+      badgeText = 'Member';
+    }
+
     return Container(
-      width: 180,
+      width: 160,
+      margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -43,9 +78,9 @@ class MyOrganizationsSection extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: AppColors.primary,
+            backgroundColor: org.isOfficer ? AppColors.accentPurple : AppColors.primary,
             child: Text(
-              initial,
+              org.initials,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -59,7 +94,7 @@ class MyOrganizationsSection extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  name,
+                  org.organizationName,
                   style: AppTextStyles.labelSmall.copyWith(
                     color: AppColors.primaryDark,
                     fontWeight: FontWeight.bold,
@@ -71,16 +106,18 @@ class MyOrganizationsSection extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryDark,
+                    color: badgeBgColor,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    role,
+                    badgeText,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.secondary,
+                      color: badgeTextColor,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

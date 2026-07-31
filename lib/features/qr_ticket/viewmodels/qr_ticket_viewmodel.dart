@@ -1,10 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/qr_ticket_model.dart';
 import 'package:sti_sync/features/auth/models/student_model.dart';
+
+import '../models/qr_ticket_model.dart';
 import '../repositories/qr_ticket_repository.dart';
 
-/// Sealed union for QR Ticket states.
 abstract class QrTicketState {
   const QrTicketState();
 }
@@ -26,6 +27,7 @@ class QrTicketLocked extends QrTicketState {
   final String studentId;
   final String profilePhotoUrl;
   final String courseInfo;
+
   const QrTicketLocked({
     required this.amountDue,
     required this.paymentStatus,
@@ -56,124 +58,147 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
   Future<void> loadTicket(StudentModel student, String eventId) async {
     state = const QrTicketLoading();
     final studentAuthUid = student.id;
+    final studentName = '${student.firstName} ${student.lastName}'.trim();
+    final studentIdNumber = student.studentId;
+    final profilePhotoUrl = student.profilePhotoUrl;
+    final courseCode =
+        student.courseCode.isNotEmpty ? student.courseCode : student.courseId;
+    final courseInfo = [courseCode, student.yearLevel, student.section]
+        .where((value) => value.isNotEmpty)
+        .join(' - ');
 
     try {
       final isOnline = await _repository.checkOnline();
-      
-      if (isOnline) {
-        // We already have the fully populated student data!
-        final eventTitle = await _repository.getEventTitle(eventId);
-        
-        final studentName = '${student.firstName} ${student.lastName}'.trim();
-        final studentIdNumber = student.studentId;
-        final profilePhotoUrl = student.profilePhotoUrl;
-        
-        String courseCode = student.courseCode.isNotEmpty ? student.courseCode : student.courseId;
-        String yearLevel = student.yearLevel;
-        String section = student.section;
-        String courseInfo = [courseCode, yearLevel, section].where((e) => e.isNotEmpty).join(' - ');
+      final config = isOnline
+          ? await _repository.getEventTicketConfig(eventId)
+          : await _repository.getLocalEventTicketConfig(eventId);
 
-        // Cache the status and data for offline use
+      if (config == null) {
+        state = const QrTicketError(
+          'Connect once to prepare this event ticket for offline use.',
+        );
+        return;
+      }
+      if (!config.isTicketAvailable) {
+        state = const QrTicketError(
+          'QR tickets are not enabled for this event.',
+        );
+        return;
+      }
+
+      if (!isOnline) {
+        final cached =
+            await _repository.getLocalTicketStatus(studentAuthUid, eventId);
+        if (cached == null) {
+          state = const QrTicketError(
+            'Connect once to prepare this event ticket for offline use.',
+          );
+          return;
+        }
+        _setStateFromStatus(
+          isUnlocked: cached.isUnlocked,
+          amountDue: cached.amountDue,
+          paymentStatus: cached.paymentStatus,
+          eventId: eventId,
+          eventTitle: cached.eventTitle ?? config.title,
+          student: student,
+          studentName: studentName,
+          studentIdNumber: studentIdNumber,
+          profilePhotoUrl: profilePhotoUrl,
+          courseInfo: courseInfo,
+        );
+        return;
+      }
+
+      await _repository.cacheTicketStatus(
+        studentAuthUid,
+        eventId,
+        studentName: studentName,
+        studentIdNumber: studentIdNumber,
+        profilePhotoUrl: profilePhotoUrl,
+        eventTitle: config.title,
+        courseInfo: courseInfo,
+        config: config,
+      );
+
+      _subscription?.cancel();
+      _subscription = _repository
+          .watchTicketStatus(studentAuthUid, eventId, config)
+          .listen((status) async {
         await _repository.cacheTicketStatus(
-          studentAuthUid, 
+          studentAuthUid,
           eventId,
           studentName: studentName,
           studentIdNumber: studentIdNumber,
           profilePhotoUrl: profilePhotoUrl,
-          eventTitle: eventTitle,
+          eventTitle: config.title,
+          courseInfo: courseInfo,
+          config: config,
+        );
+        _setStateFromStatus(
+          isUnlocked: status.isUnlocked,
+          amountDue: status.amountDue,
+          paymentStatus: status.paymentStatus,
+          eventId: eventId,
+          eventTitle: config.title,
+          student: student,
+          studentName: studentName,
+          studentIdNumber: studentIdNumber,
+          profilePhotoUrl: profilePhotoUrl,
           courseInfo: courseInfo,
         );
+      }, onError: (Object error) {
+        state = QrTicketError('Failed to load ticket: $error');
+      });
+    } catch (error) {
+      state = QrTicketError('Error loading ticket: $error');
+    }
+  }
 
-        // Listen to real-time updates
-        _subscription?.cancel();
-        _subscription = _repository
-            .watchTicketStatus(studentAuthUid, eventId)
-            .listen((status) {
-          if (status.isUnlocked) {
-            if (status.paymentStatus == 'free') {
-              // Free event
-              final ticket = QrTicketModel.forFreeEvent(
-                eventId: eventId,
-                eventTitle: eventTitle,
-                student: student,
-              );
-              state = QrTicketNoTicket(ticket);
-            } else {
-              // Paid and unlocked
-              final ticket = QrTicketModel(
-                eventId: eventId,
-                studentId: studentIdNumber,
-                studentAuthUid: studentAuthUid,
-                studentName: studentName,
-                eventTitle: eventTitle,
-                profilePhotoUrl: profilePhotoUrl,
-                courseInfo: courseInfo,
-                generatedAt: DateTime.now(),
-              );
-              state = QrTicketUnlocked(ticket);
-            }
-          } else {
-            state = QrTicketLocked(
-              amountDue: status.amountDue,
-              paymentStatus: status.paymentStatus,
+  void _setStateFromStatus({
+    required bool isUnlocked,
+    required double amountDue,
+    required String paymentStatus,
+    required String eventId,
+    required String eventTitle,
+    required StudentModel student,
+    required String studentName,
+    required String studentIdNumber,
+    required String profilePhotoUrl,
+    required String courseInfo,
+  }) {
+    if (isUnlocked) {
+      final ticket = paymentStatus == 'free'
+          ? QrTicketModel.forFreeEvent(
+              eventId: eventId,
               eventTitle: eventTitle,
-              studentName: studentName,
+              student: student,
+            )
+          : QrTicketModel(
+              eventId: eventId,
               studentId: studentIdNumber,
+              studentAuthUid: student.id,
+              studentName: studentName,
+              eventTitle: eventTitle,
               profilePhotoUrl: profilePhotoUrl,
               courseInfo: courseInfo,
+              generatedAt: DateTime.now(),
             );
-          }
-        }, onError: (e) {
-          state = QrTicketError('Failed to load ticket: $e');
-        });
-      } else {
-        // Offline mode — read from Drift cache
-        final cached = await _repository.getLocalTicketStatus(studentAuthUid, eventId);
-        
-        // Since we have the student object from AuthViewModel (even offline),
-        // we should just use it directly! This fixes missing offline fields!
-        final studentName = '${student.firstName} ${student.lastName}'.trim();
-        final studentIdNumber = student.studentId;
-        final profilePhotoUrl = student.profilePhotoUrl;
-        
-        String courseCode = student.courseCode.isNotEmpty ? student.courseCode : student.courseId;
-        String yearLevel = student.yearLevel;
-        String section = student.section;
-        String courseInfo = [courseCode, yearLevel, section].where((e) => e.isNotEmpty).join(' - ');
-
-        if (cached == null) {
-          state = const QrTicketError('No cached ticket data available offline.');
-          return;
-        }
-
-        // Use the memory-cached student fields and Drift-cached ticket status
-        if (cached.isUnlocked) {
-          final ticket = QrTicketModel(
-            eventId: eventId,
-            studentId: studentIdNumber,
-            studentAuthUid: studentAuthUid,
-            studentName: studentName,
-            eventTitle: cached.eventTitle ?? 'Event',
-            profilePhotoUrl: profilePhotoUrl,
-            courseInfo: courseInfo,
-            generatedAt: DateTime.now(),
-          );
-          state = QrTicketUnlocked(ticket);
-        } else {
-          state = QrTicketLocked(
-            amountDue: cached.amountDue,
-            paymentStatus: cached.paymentStatus,
-            eventTitle: cached.eventTitle ?? 'Event',
-            studentName: studentName,
-            studentId: studentIdNumber,
-            profilePhotoUrl: profilePhotoUrl,
-            courseInfo: courseInfo,
-          );
-        }
-      }
-    } catch (e) {
-      state = QrTicketError('Error loading ticket: $e');
+      state = paymentStatus == 'free'
+          ? QrTicketNoTicket(ticket)
+          : QrTicketUnlocked(ticket);
+      return;
     }
+
+    state = QrTicketLocked(
+      amountDue: amountDue,
+      paymentStatus: paymentStatus,
+      eventTitle: eventTitle,
+      studentName: studentName,
+      studentId: studentIdNumber,
+      profilePhotoUrl: profilePhotoUrl,
+      courseInfo: courseInfo,
+    );
   }
 
   @override

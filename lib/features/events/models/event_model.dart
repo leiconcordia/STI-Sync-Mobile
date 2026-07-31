@@ -38,8 +38,15 @@ class EventModel {
 
   final bool studentPayablesEnabled;
   final double? suggestedFeePerStudent;
+
+  /// The student-facing event fee. This amount is copied to a payable's
+  /// amountDue when the event requires payment.
   final double? adminFeeOverride;
   final double? totalExpectedCollection;
+
+  /// Approved event budget supplied by the web event-creation flow.
+  final List<BudgetItemModel> budgetItems;
+  final double totalApprovedBudget;
 
   final bool enableQRTickets;
   final bool mandatoryAttendance;
@@ -84,6 +91,8 @@ class EventModel {
     this.suggestedFeePerStudent,
     this.adminFeeOverride,
     this.totalExpectedCollection,
+    required this.budgetItems,
+    required this.totalApprovedBudget,
     required this.enableQRTickets,
     required this.mandatoryAttendance,
     required this.lockAfterApproval,
@@ -133,9 +142,18 @@ class EventModel {
       autoIssueCertificates: data['autoIssueCertificates'] as bool? ?? false,
       certificateSignatory: data['certificateSignatory'] as String?,
       studentPayablesEnabled: data['studentPayablesEnabled'] as bool? ?? false,
-      suggestedFeePerStudent: (data['suggestedFeePerStudent'] as num?)?.toDouble(),
+      suggestedFeePerStudent:
+          (data['suggestedFeePerStudent'] as num?)?.toDouble(),
       adminFeeOverride: (data['adminFeeOverride'] as num?)?.toDouble(),
-      totalExpectedCollection: (data['totalExpectedCollection'] as num?)?.toDouble(),
+      totalExpectedCollection:
+          (data['totalExpectedCollection'] as num?)?.toDouble(),
+      budgetItems: (data['budgetItems'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(BudgetItemModel.fromMap)
+              .toList() ??
+          const [],
+      totalApprovedBudget:
+          (data['totalApprovedBudget'] as num?)?.toDouble() ?? 0,
       enableQRTickets: data['enableQRTickets'] as bool? ?? false,
       mandatoryAttendance: data['mandatoryAttendance'] as bool? ?? false,
       lockAfterApproval: data['lockAfterApproval'] as bool? ?? false,
@@ -145,13 +163,13 @@ class EventModel {
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
-          : (data['createdAt'] is String 
-              ? DateTime.tryParse(data['createdAt']) ?? DateTime.now() 
+          : (data['createdAt'] is String
+              ? DateTime.tryParse(data['createdAt']) ?? DateTime.now()
               : DateTime.now()),
       updatedAt: data['updatedAt'] is Timestamp
           ? (data['updatedAt'] as Timestamp).toDate()
-          : (data['updatedAt'] is String 
-              ? DateTime.tryParse(data['updatedAt']) ?? DateTime.now() 
+          : (data['updatedAt'] is String
+              ? DateTime.tryParse(data['updatedAt']) ?? DateTime.now()
               : DateTime.now()),
     );
   }
@@ -188,6 +206,8 @@ class EventModel {
       'suggestedFeePerStudent': suggestedFeePerStudent,
       'adminFeeOverride': adminFeeOverride,
       'totalExpectedCollection': totalExpectedCollection,
+      'budgetItems': budgetItems.map((item) => item.toMap()).toList(),
+      'totalApprovedBudget': totalApprovedBudget,
       'enableQRTickets': enableQRTickets,
       'mandatoryAttendance': mandatoryAttendance,
       'lockAfterApproval': lockAfterApproval,
@@ -206,6 +226,48 @@ class EventModel {
     map['updatedAt'] = updatedAt.toIso8601String();
     return json.encode(map);
   }
+}
+
+class BudgetItemModel {
+  final String id;
+  final String item;
+  final String description;
+  final double quantity;
+  final double unitCost;
+  final double approvedAmount;
+  final String status;
+
+  const BudgetItemModel({
+    required this.id,
+    required this.item,
+    required this.description,
+    required this.quantity,
+    required this.unitCost,
+    required this.approvedAmount,
+    required this.status,
+  });
+
+  factory BudgetItemModel.fromMap(Map<String, dynamic> map) {
+    return BudgetItemModel(
+      id: map['id'] as String? ?? '',
+      item: map['item'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      quantity: (map['quantity'] as num?)?.toDouble() ?? 0,
+      unitCost: (map['unitCost'] as num?)?.toDouble() ?? 0,
+      approvedAmount: (map['approvedAmount'] as num?)?.toDouble() ?? 0,
+      status: map['status'] as String? ?? 'pending',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'item': item,
+        'description': description,
+        'quantity': quantity,
+        'unitCost': unitCost,
+        'approvedAmount': approvedAmount,
+        'status': status,
+      };
 }
 
 class EventSessionModel {

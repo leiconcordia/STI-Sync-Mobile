@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import '../../../shared/providers/providers.dart';
 import '../../../core/local/app_database.dart';
 import '../widgets/scan_result_overlay.dart';
-import '../viewmodels/scanner_viewmodel.dart';
 
 class ScannerCameraScreen extends ConsumerStatefulWidget {
   final String eventId;

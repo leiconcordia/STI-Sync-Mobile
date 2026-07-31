@@ -17,7 +17,21 @@ import '../../features/qr_ticket/viewmodels/qr_ticket_viewmodel.dart';
 import '../../features/scanner/repositories/scanner_repository.dart';
 import '../../features/scanner/repositories/offline_attendance_repository.dart';
 import '../../features/scanner/viewmodels/scanner_viewmodel.dart';
+import '../../features/organizations/repositories/organization_repository.dart';
+import '../../features/organizations/models/organization_member_model.dart';
 import '../../core/local/app_database.dart';
+
+/// Organization Repository & Memberships Provider
+final organizationRepositoryProvider = Provider<OrganizationRepository>((ref) {
+  return OrganizationRepository(firestore: ref.watch(firestoreProvider));
+});
+
+final myOrganizationsProvider = StreamProvider<List<OrganizationMemberModel>>((ref) {
+  final authState = ref.watch(authViewModelProvider);
+  final uid = authState.student?.id ?? '';
+  if (uid.isEmpty) return Stream.value([]);
+  return ref.watch(organizationRepositoryProvider).watchStudentOrganizations(uid);
+});
 
 /// Events feature
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
@@ -28,7 +42,8 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
   );
 });
 
-final eventViewModelProvider = StateNotifierProvider<EventViewModel, EventState>(
+final eventViewModelProvider =
+    StateNotifierProvider<EventViewModel, EventState>(
   (ref) => EventViewModel(ref.watch(eventRepositoryProvider)),
 );
 
@@ -73,67 +88,90 @@ final registrationViewModelProvider =
 );
 
 /// Name Resolvers
-final orgNameProvider = FutureProvider.family<String, String>((ref, orgId) async {
+final orgNameProvider =
+    FutureProvider.family<String, String>((ref, orgId) async {
   if (orgId.isEmpty) return 'Unknown Org';
   try {
-    final doc = await ref.read(firestoreProvider).collection(FirestorePaths.organizations).doc(orgId).get();
+    final doc = await ref
+        .read(firestoreProvider)
+        .collection(FirestorePaths.organizations)
+        .doc(orgId)
+        .get();
     if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>?;
-      return data?['name'] as String? ?? data?['acronym'] as String? ?? 'Unknown Org';
+      final data = doc.data();
+      return data?['name'] as String? ??
+          data?['acronym'] as String? ??
+          'Unknown Org';
     }
   } catch (_) {}
   return 'Unknown Org';
 });
 
-final venueNameProvider = FutureProvider.family<String, String>((ref, venueId) async {
+final venueNameProvider =
+    FutureProvider.family<String, String>((ref, venueId) async {
   if (venueId.isEmpty) return 'TBA';
   try {
-    final doc = await ref.read(firestoreProvider).collection(FirestorePaths.venues).doc(venueId).get();
+    final doc = await ref
+        .read(firestoreProvider)
+        .collection(FirestorePaths.venues)
+        .doc(venueId)
+        .get();
     if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       return data?['name'] as String? ?? 'TBA';
     }
   } catch (_) {}
   return 'TBA';
 });
 
-final categoryNameProvider = FutureProvider.family<String, String>((ref, categoryId) async {
+final categoryNameProvider =
+    FutureProvider.family<String, String>((ref, categoryId) async {
   if (categoryId.isEmpty) return 'Event';
   try {
-    final doc = await ref.read(firestoreProvider).collection(FirestorePaths.eventCategories).doc(categoryId).get();
+    final doc = await ref
+        .read(firestoreProvider)
+        .collection(FirestorePaths.eventCategories)
+        .doc(categoryId)
+        .get();
     if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       return data?['name'] as String? ?? 'Event';
     }
   } catch (_) {}
   return 'Event';
 });
 
-final orgProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, orgId) async {
+final orgProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, orgId) async {
   if (orgId.isEmpty) return null;
   try {
-    final doc = await ref.read(firestoreProvider).collection(FirestorePaths.organizations).doc(orgId).get();
+    final doc = await ref
+        .read(firestoreProvider)
+        .collection(FirestorePaths.organizations)
+        .doc(orgId)
+        .get();
     if (doc.exists) {
-      return doc.data() as Map<String, dynamic>?;
+      return doc.data();
     }
   } catch (_) {}
   return null;
 });
 
-final eventDetailProvider = StreamProvider.family<EventModel?, String>((ref, eventId) {
-  return ref.read(firestoreProvider).collection(FirestorePaths.events).doc(eventId).snapshots().map((doc) {
-    if (doc.exists) {
-      return EventModel.fromFirestore(doc);
-    }
-    return null;
-  });
+final eventDetailProvider =
+    StreamProvider.family<EventModel?, String>((ref, eventId) {
+  final studentId = ref.watch(authProvider).currentUser?.uid;
+  return ref
+      .watch(eventRepositoryProvider)
+      .watchEventDetail(eventId, studentId: studentId);
 });
 
-final actualParticipantCountProvider = FutureProvider.family<int, EventModel>((ref, event) async {
+final actualParticipantCountProvider =
+    FutureProvider.family<int, EventModel>((ref, event) async {
   final firestore = ref.read(firestoreProvider);
-  
+
   if (event.targetDepartmentIds.isEmpty && event.targetYearLevels.isEmpty) {
-    final countSnap = await firestore.collection(FirestorePaths.students).count().get();
+    final countSnap =
+        await firestore.collection(FirestorePaths.students).count().get();
     return countSnap.count ?? 0;
   }
 
@@ -141,9 +179,10 @@ final actualParticipantCountProvider = FutureProvider.family<int, EventModel>((r
     // Firestore whereIn supports up to 10 items. We assume targetDepartmentIds has <= 10 items.
     final snap = await firestore
         .collection(FirestorePaths.students)
-        .where('departmentId', whereIn: event.targetDepartmentIds.take(10).toList())
+        .where('departmentId',
+            whereIn: event.targetDepartmentIds.take(10).toList())
         .get();
-        
+
     var docs = snap.docs;
     if (event.targetYearLevels.isNotEmpty) {
       docs = docs.where((doc) {
@@ -173,6 +212,7 @@ final qrTicketRepositoryProvider = Provider<QrTicketRepository>((ref) {
   return QrTicketRepository(
     ref.watch(firestoreProvider),
     ref.watch(appDatabaseProvider).payablesDao,
+    ref.watch(appDatabaseProvider).eventsDao,
     ref.watch(connectivityServiceProvider),
   );
 });
@@ -183,7 +223,8 @@ final qrTicketViewModelProvider =
 );
 
 /// Scanner feature
-final offlineAttendanceRepositoryProvider = Provider<OfflineAttendanceRepository>((ref) {
+final offlineAttendanceRepositoryProvider =
+    Provider<OfflineAttendanceRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return OfflineAttendanceRepository(
     firestore: ref.watch(firestoreProvider),
@@ -206,7 +247,7 @@ final scannerViewModelProvider =
       ref.watch(scannerRepositoryProvider),
       ref.watch(offlineAttendanceRepositoryProvider),
     );
-    
+
     // Automatically load assignments when the user logs in
     ref.listen<String?>(
       authViewModelProvider.select((state) => state.student?.id),
@@ -219,7 +260,7 @@ final scannerViewModelProvider =
       },
       fireImmediately: true,
     );
-    
+
     return viewModel;
   },
 );
@@ -234,9 +275,7 @@ final activeScannerAssignmentsProvider = StreamProvider(
     if (uid.isEmpty) {
       return const Stream.empty();
     }
-    return ref
-        .watch(scannerRepositoryProvider)
-        .watchScannerAssignments(uid);
+    return ref.watch(scannerRepositoryProvider).watchScannerAssignments(uid);
   },
 );
 

@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/local/app_database.dart';
 import '../../../shared/providers/providers.dart';
-import '../viewmodels/scanner_viewmodel.dart';
 
 /// Screen for manually recording attendance when QR scanning is not possible.
 ///

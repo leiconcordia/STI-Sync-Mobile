@@ -77,6 +77,9 @@ If `qrTicketUnlocked == false` (e.g. event fee or required payable is unpaid):
 
 - When the officer downloads event participant data for offline scanning (`OfflineAttendanceRepository.downloadParticipantsForEvent`), the `qrTicketUnlocked` status for each student is cached locally in the Drift `cached_payables` and `cached_participants` SQLite tables.
 - Consequently, even if the student or scanner is offline, locked tickets remain locked, and unlocked tickets scan cleanly.
+- The student event feed also pre-caches each eligible event and its ticket state. A student does not need to open every ticket while online before using it offline.
+- For a paid event, a missing payable record is treated as unpaid and locked, using `adminFeeOverride` as the fallback amount due. Only events with payables disabled are treated as free.
+- Offline rendering verifies the cached event configuration (`enableQRTickets` and `attendanceEnabled`) before generating a QR payload.
 
 ---
 

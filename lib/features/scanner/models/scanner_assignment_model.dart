@@ -110,23 +110,41 @@ class ScannerAssignmentModel {
   ///
   /// Finds the matching officer entry in `scanners[]` array.
   /// Throws if the officer is not found in the scanners list.
+  /// Build from a live Firestore EventDocument snapshot.
+  ///
+  /// Finds the matching officer entry in `scanners[]` array.
   factory ScannerAssignmentModel.fromEventDoc(
     DocumentSnapshot doc,
     String officerUserId,
+  ) =>
+      ScannerAssignmentModel.fromEventDocForIds(doc, [officerUserId]);
+
+  /// Build from a live Firestore EventDocument snapshot matching any of [targetOfficerIds]
+  /// (e.g. organization_officer document IDs or student auth UID).
+  factory ScannerAssignmentModel.fromEventDocForIds(
+    DocumentSnapshot doc,
+    List<String> targetOfficerIds,
   ) {
     final data = doc.data() as Map<String, dynamic>;
 
     // Locate this officer's entry in the nested scanners array.
-    // If we can't find it (e.g. data mismatch between scannerUserIds and scanners array),
-    // we default to basic access to avoid breaking the UI for the scanner.
+    // Checks against any of the target officer IDs (organization_officers doc IDs or student auth UID).
     final List<dynamic> scanners = data['scanners'] as List<dynamic>? ?? [];
     final scannerData = scanners.firstWhere(
-      (s) => (s as Map<String, dynamic>)['officerUserId'] == officerUserId,
+      (s) {
+        final sOfficerId =
+            (s as Map<String, dynamic>)['officerUserId'] as String?;
+        return targetOfficerIds.contains(sOfficerId);
+      },
       orElse: () => null,
     ) as Map<String, dynamic>? ?? {};
 
+    final matchedOfficerId = (scannerData['officerUserId'] as String?) ??
+        (targetOfficerIds.isNotEmpty ? targetOfficerIds.first : '');
+
     if (scannerData.isEmpty) {
-      debugPrint('ScannerAssignmentModel: Warning: Officer $officerUserId found in scannerUserIds but not in scanners[] array for event ${doc.id}. Defaulting to basic access.');
+      debugPrint(
+          'ScannerAssignmentModel: Warning: Officer IDs $targetOfficerIds found in scannerUserIds but not in scanners[] array for event ${doc.id}. Defaulting to basic access.');
     }
 
     // Extract full sessions array
@@ -142,7 +160,7 @@ class ScannerAssignmentModel {
       eventTitle: data['title'] as String? ?? 'Unknown Event',
       eventFormat: data['eventFormat'] as String? ?? '',
       sessions: sessions,
-      officerUserId: officerUserId,
+      officerUserId: matchedOfficerId,
       permissions: {
         'fullAccess': scannerData['fullAccess'] as bool? ?? false,
         'canCheckIn': scannerData['canCheckIn'] as bool? ?? false,

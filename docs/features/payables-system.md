@@ -62,6 +62,8 @@ qrTicketUnlocked == true   qrTicketUnlocked == false
 
 - If `event.studentPayablesEnabled == false` (Free event): `qrTicketUnlocked` is implicitly `true` for all eligible students.
 - If `event.studentPayablesEnabled == true` (Paid event): `qrTicketUnlocked` is `false` until payment status becomes `'paid'` or `'waived'`.
+- `events.adminFeeOverride` is the Event Fee shown to students and is copied into `payables.amountDue` when the payable is created. It must never be labelled “Admin Fee” in student UI.
+- `suggestedFeePerStudent` and `totalExpectedCollection` are planning fields and are not shown to students.
 
 ---
 
