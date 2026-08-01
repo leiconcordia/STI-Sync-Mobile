@@ -13,11 +13,12 @@
 | `students` | Read own profile | `snapshots()` stream |
 | `events` | Read approved events | `snapshots()` stream |
 | `attendance` | Read own records; write on QR scan | Stream + write |
-| `payables` | Read own payment status | `snapshots()` stream |
-| `announcements` | Read all targeted at student/org | `snapshots()` stream |
-| `certificates` | Read own issued certificates | `snapshots()` stream |
-| `organizations` | Read org info (name, logo) | One-time `get()` |
+| `payables` | Read own payment status & event fees | `snapshots()` stream |
+| `announcements` | Read all targeted at student/org/department/year level | `snapshots()` stream |
+| `issued_certificates` | Read own issued certificates | `snapshots()` stream |
+| `organizations` | Read org info & departmental/cross-departmental scope | One-time `get()` / Stream |
 | `organization_officers` | Resolve current student's officer record IDs | `snapshots()` stream |
+| `organization_members` | Read & write membership join requests | Stream + write |
 
 ---
 
@@ -27,8 +28,7 @@
 
 **Document ID** = Firebase Auth UID of the student.
 
-Shared schema with the STI Sync web admin. **Do not rename fields — they must match
-the web app's `students` collection exactly.**
+Shared schema with the STI Sync web admin. **Do not rename fields — they must match the web app's `students` collection exactly.**
 
 | Field | Dart type | Firestore type | Notes |
 |---|---|---|---|
@@ -66,8 +66,8 @@ the web app's `students` collection exactly.**
 **Self-registration writes** `status: "PENDING"` and `registrationSource: "SELF_REGISTER"`.
 The web admin's Pending Verification queue filters `status == "PENDING"`.
 
-**Firestore path:** `/students/{uid}`
-**Mobile read rule:** Student can only read their own document (`uid == auth.currentUser.uid`).
+**Firestore path:** `/students/{uid}`  
+**Mobile read rule:** Student can only read their own document (`uid == auth.currentUser.uid`).  
 **Realtime:** Yes — use `.snapshots()` so admin status changes propagate live.
 
 **Indexes required (mobile queries):**
@@ -123,7 +123,7 @@ class EventModel {
   // ─── Payables ───
   final bool studentPayablesEnabled;
   final double? suggestedFeePerStudent;
-  /// Student-facing Event Fee. Copied to payables.amountDue when enabled.
+  /// Student-facing Event Fee. Copied to payables.assignedAmount & amountDue when enabled.
   final double? adminFeeOverride;
   final double? totalExpectedCollection;
 
@@ -136,12 +136,11 @@ class EventModel {
   final bool mandatoryAttendance;
   final bool lockAfterApproval;
   final String scannerActivationCode;
-  /// Organization-officer document IDs assigned as scanners. These are not
-  /// Firebase Auth UIDs.
+  /// Organization-officer document IDs assigned as scanners.
   final List<String> scannerUserIds;
 
   // ─── Lifecycle ───
-  final String proposalStatus; // draft | approved
+  final String proposalStatus; // 'draft' | 'pending_review' | 'approved' | 'rejected' | 'cancelled'
   final String createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -171,7 +170,7 @@ class BudgetItemModel {
 }
 ```
 
-**Firestore path:** `/events/{eventId}`
+**Firestore path:** `/events/{eventId}`  
 **Mobile query (student — approved events they are eligible for):**
 ```dart
 // Only show approved events the student is eligible for
@@ -185,15 +184,12 @@ _firestore
 
 **Mobile query (scanner officer — events where this user is assigned as scanner):**
 ```dart
-// Resolves current student's organization_officers doc IDs via /organization_officers
-// collection (where studentId == authUid), then queries events collection:
 _firestore
   .collection(FirestorePaths.events)
   .where('proposalStatus', isEqualTo: 'approved')
   .where('scannerUserIds', arrayContainsAny: targetOfficerIds)
   .snapshots()
 ```
-> **Schema note (scannerUserIds):** Populated by web admin `event.service.ts` on event approval with `organization_officers` document IDs. The mobile client maps logged-in student `authUid` to their `organization_officers` ID(s) first before querying.
 
 ---
 
@@ -214,7 +210,7 @@ class AttendanceModel {
   final int yearLevel;           // Denormalized
   
   final String scanMethod;       // 'qr' | 'manual'
-  final String scannedBy;        // UID of officer who scanned
+  final String scannedBy;        // UID of officer who scanned (or student UID for self check-in)
   final String scannedByName;    // Denormalized scanner name
   final String gateType;         // 'entry' | 'exit'
   
@@ -224,7 +220,7 @@ class AttendanceModel {
 }
 ```
 
-**Firestore path:** `/attendance/{attendanceId}`
+**Firestore path:** `/attendance/{attendanceId}`  
 **Mobile read query** (student's own attendance history):
 ```dart
 _firestore
@@ -234,68 +230,52 @@ _firestore
   .snapshots()
 ```
 
-**Mobile write** (QR self-check-in — only if `qrTicketUnlocked == true`):
-```dart
-await _firestore.collection(FirestorePaths.attendance).add({
-  'eventId': eventId,
-  'sessionId': sessionId,
-  'studentId': student.id,
-  'organizationId': organizationId,
-  'studentName': student.displayName,
-  'studentNumber': student.studentNumber,
-  'course': student.courseCode,
-  'yearLevel': student.yearLevel,
-  'scanMethod': 'qr',
-  'scannedBy': student.id,
-  'scannedByName': student.displayName,
-  'gateType': 'entry', // or 'exit'
-  'scannedAt': FieldValue.serverTimestamp(),
-  'createdAt': FieldValue.serverTimestamp(),
-  'serverTimestamp': FieldValue.serverTimestamp(),
-});
-```
-
 ---
 
 ### 2.4 `payables/{payableId}`
 
 ```dart
-/// Tracks a student's payment obligation and QR access status for an event.
+/// Tracks a student's payment obligation and QR ticket access control status for an event or org due.
 class PayableModel {
   final String id;
-  final String eventId;
-  final String studentId;
-  final String organizationId;
+  final String studentId;                 // Student Auth UID
+  final String studentName;               // Denormalized student full name (e.g. "Lei Concordia")
+  final String studentSchoolId;           // Official 11-digit STI Student ID (e.g. "02000123456")
+  final String? organizationId;           // FK → /organizations
+  final String? organizationName;
+  final String? eventId;                  // FK → /events (for event-specific fees)
+  final String semesterId;
 
-  // ─── Denormalized student info ───
-  final String studentName;
-  final String studentNumber;
-  final String course;
-  final int yearLevel;
+  // ─── Fee & Payment Status ───
+  final String type;                      // 'membership_due' | 'event_fee' | 'org_fine' | 'admin_fine' | 'custom'
+  final String label;                     // e.g. "Event Fee — IT Week 2026"
+  final String description;
+  final double assignedAmount;            // Total fee in PHP (₱)
+  final double paidAmount;                // Amount paid to date in PHP (₱)
+  final double amountDue;                 // Assigned fee or remaining balance
+  final String status;                    // 'pending' | 'partial' | 'paid' | 'overdue' | 'waived'
+  final String paymentStatus;             // Legacy compatibility field ('unpaid' | 'paid' | 'waived' | 'refunded')
+  final DateTime? dueDate;
 
-  // ─── Payment ───
-  final double amountDue;           // In PHP
-  final double amountPaid;          // 0.0 until paid
-  final String paymentStatus;       // 'unpaid' | 'paid' | 'waived' | 'refunded'
-  final DateTime? paidAt;
-  final String? paymentMethod;      // 'cash' | 'gcash' | 'bank_transfer'
-  final String? paymentReference;   // Receipt or transaction ID
-  final String? processedBy;
-
-  // ─── QR Gate Control (CRITICAL) ───
-  /// When false: student is BLOCKED from QR check-in.
+  // ─── QR Ticket Gate Access Control (CRITICAL) ───
+  /// Explicit gate control flag set by SAO Admin / Officers.
+  /// When false: student is BLOCKED from QR gate check-in and QR ticket overlay is locked.
   /// When true: student may scan in at the gate.
   /// Never allow attendance write when this is false.
   final bool qrTicketUnlocked;
 
-  final List<dynamic> transactions; // Embedded payment transactions
+  final DateTime? paidAt;
+  final String? recordedBy;               // Officer or SAO Admin UID who recorded payment
+  final String? paymentMethod;            // 'cash' | 'gcash' | 'bank_transfer'
+  final String? paymentReference;         // Transaction ID or receipt number
+  final List<dynamic>? transactions;      // Embedded payment transactions
 
   final DateTime createdAt;
   final DateTime updatedAt;
 }
 ```
 
-**Firestore path:** `/payables/{payableId}`
+**Firestore path:** `/payables/{payableId}`  
 **Mobile query** (student's own payables):
 ```dart
 _firestore
@@ -307,7 +287,6 @@ _firestore
 
 **QR gate check** (must run before writing attendance):
 ```dart
-// In AttendanceRepository — MANDATORY before any attendance write
 Future<bool> isStudentAllowedEntry(String eventId, String studentId) async {
   final snap = await _firestore
     .collection(FirestorePaths.payables)
@@ -326,59 +305,70 @@ Future<bool> isStudentAllowedEntry(String eventId, String studentId) async {
 ### 2.5 `announcements/{announcementId}`
 
 ```dart
-/// An announcement published by SAO to students/organizations.
+/// An announcement published by SAO or Organization Officers.
 class AnnouncementModel {
   final String id;
   final String title;
-  final String body;
-  final String authorName;       // Denormalized
-  final AnnouncementPriority priority; // normal | urgent
-  final dynamic targetAudience;  // 'all' | 'students' | List<String> (orgIds)
-  final List<String> attachmentUrls;
-  final List<String> readByUids; // List of UIDs who marked as read
-  final DateTime publishedAt;
+  final String content;                   // Plain text message content
+  final String priority;                  // 'Normal' | 'Important' | 'Urgent'
+  final String audience;                  // 'campus-wide' | 'all-organizations' | 'specific' | 'targeted'
+  final List<String> targetOrgIds;        // Specific target org IDs
+  final List<String> targetOrgNames;      // Denormalized target org names
+  final bool pinned;                      // Pinned announcements float to top of feed
+  final String semesterId;
+  final String schoolYear;
+  final String authorName;                // Author display name
+  final String authorUid;                 // FK → /sas_admins or /students
+  final String? organizationId;          // Authoring Org ID (if officer-authored)
+  final String? organizationName;        // Authoring Org Name
+  final String? authorRole;              // e.g., "SAO Admin", "IT Guild President"
+  final String? linkedEventId;           // Optional FK → /events
+  final String? linkedEventTitle;        // Optional Event Title for direct navigation
+  final List<String> targetDepartments;  // Target department names or IDs
+  final List<String> targetYearLevels;   // Target year levels e.g. ["1st Year", "2nd Year"]
   final DateTime createdAt;
+  final DateTime updatedAt;
 }
-
-enum AnnouncementPriority { normal, urgent }
 ```
 
-**Firestore path:** `/announcements/{announcementId}`
+**Firestore path:** `/announcements/{announcementId}`  
 **Mobile query** (announcements for this student):
 ```dart
-// Query 1: announcements to 'all'
-// Query 2: announcements targeting student's org IDs
-// Merge client-side (Firestore does not support OR across different fields in one query)
+// Stream announcements ordered by createdAt DESC (pinned sorting applied locally in UI)
+_firestore
+  .collection(FirestorePaths.announcements)
+  .orderBy('createdAt', descending: true)
+  .snapshots()
 ```
 
 ---
 
-### 2.6 `certificates/{certificateId}`
+### 2.6 `issued_certificates/{certificateId}`
 
 ```dart
-/// A certificate issued to a student for an event.
-class CertificateModel {
+/// A certificate issued to a student post-event.
+class IssuedCertificateModel {
   final String id;
-  final String eventId;
-  final String eventTitle;       // Denormalized
-  final String studentId;
-  final String studentName;      // Denormalized
-  final String templateId;
-  final String issuedByUid;
-  final String issuedByName;     // Denormalized
-  final String fileUrl;          // Firebase Storage URL — PDF or image
-  final DateTime issuedAt;
-  final DateTime createdAt;
+  final String certificateNumber;       // e.g. "CERT-2026-0001"
+  final String templateId;              // FK → /certificate_templates
+  final String eventId;                 // FK → /events
+  final String eventName;               // Denormalized
+  final String studentId;               // FK → /students
+  final String studentName;             // Denormalized
+  final DateTime issueDate;
+  final String? pdfUrl;                 // Exported PDF document URL
+  final String? qrCodeUrl;              // Verification QR code URL
+  final String organizationId;          // FK → /organizations
 }
 ```
 
-**Firestore path:** `/certificates/{certificateId}`
+**Firestore path:** `/issued_certificates/{certificateId}`  
 **Mobile query:**
 ```dart
 _firestore
-  .collection(FirestorePaths.certificates)
+  .collection(FirestorePaths.issuedCertificates)
   .where('studentId', isEqualTo: currentStudentId)
-  .orderBy('issuedAt', descending: true)
+  .orderBy('issueDate', descending: true)
   .snapshots()
 ```
 
@@ -386,21 +376,29 @@ _firestore
 
 ### 2.7 `organizations/{organizationId}`
 
-Mobile app reads org data for display (name, logo). Students do not write to this collection.
-
 ```dart
-/// Minimal organization model for display purposes.
+/// Organization details and departmental eligibility scope.
 class OrganizationModel {
   final String id;
   final String name;
   final String acronym;
-  final String? logoUrl;         // Firebase Storage URL
-  final String status;           // 'active' | 'inactive' | 'suspended'
+  final String description;
+  final String departmentId;           // FK → /departments or 'cross-departmental'
+  final String scope;                  // 'departmental' | 'cross-departmental'
+  final List<String>? allowedDepartmentIds; // Target department IDs if scope === 'departmental'
+  final List<String>? allowedCourseIds;     // Target course IDs if scope === 'departmental'
+  final String academicYear;
+  final String semester;
+  final String status;                 // 'active' | 'inactive' | 'suspended'
+  final int memberCount;
+  final String? logoUrl;               // Cloudinary / Storage URL
+  final DateTime createdAt;
+  final DateTime updatedAt;
 }
 ```
 
-**Firestore path:** `/organizations/{organizationId}`
-**Access:** One-time `get()` is acceptable here — org info changes rarely.
+**Firestore path:** `/organizations/{organizationId}`  
+**Access:** Read org list for Org Explorer & membership eligibility filtering based on `scope` and `departmentId`.
 
 ---
 
@@ -419,14 +417,8 @@ class OrganizationOfficerModel {
 }
 ```
 
-**Firestore path:** `/organization_officers/{officerId}`
-**Mobile read query** (resolves officer record IDs for the logged-in student):
-```dart
-_firestore
-  .collection(FirestorePaths.organizationOfficers)
-  .where('studentId', isEqualTo: currentStudentAuthUid)
-  .snapshots()
-```
+**Firestore path:** `/organization_officers/{officerId}`  
+**Mobile read query:** Resolves officer record IDs for the logged-in student.
 
 ---
 
@@ -455,36 +447,31 @@ class OrganizationMemberDocument {
 }
 ```
 
-**Firestore path:** `/organization_members/{memberId}`
-**Mobile write (Join Request):**
+**Firestore path:** `/organization_members/{memberId}`  
+**Mobile write (Join Request):**  
 `status: 'pending'`, `isOfficer: false`, `paymentStatus: 'outstanding'`, `addedBy: 'self'`, `dateJoined: serverTimestamp()`.
-**Mobile read query:**
-```dart
-_firestore
-  .collection(FirestorePaths.organizationMembers)
-  .where('studentAuthUid', isEqualTo: currentStudentAuthUid)
-  .snapshots()
-```
 
 ---
 
 ## 3. Firestore Path Constants
 
-Keep all paths in `lib/core/constants/firestore_paths.dart`. Reference below for completeness:
+Keep all paths in `lib/core/constants/firestore_paths.dart`:
 
 ```dart
 class FirestorePaths {
   // Top-level collections
-  static const String students       = 'students';
-  static const String events         = 'events';
-  static const String attendance     = 'attendance';
-  static const String payables       = 'payables';
-  static const String announcements  = 'announcements';
-  static const String certificates   = 'certificates';
-  static const String organizations  = 'organizations';
+  static const String students           = 'students';
+  static const String events             = 'events';
+  static const String attendance         = 'attendance';
+  static const String payables           = 'payables';
+  static const String announcements      = 'announcements';
+  static const String issuedCertificates = 'issued_certificates';
+  static const String organizations      = 'organizations';
+  static const String organizationOfficers = 'organization_officers';
+  static const String organizationMembers = 'organization_members';
 
-  // Admin-only (mobile reads only — no writes)
-  static const String sasAdmins      = 'sas_admins';
+  // Admin-only collections
+  static const String sasAdmins          = 'sas_admins';
 }
 ```
 
@@ -492,17 +479,16 @@ class FirestorePaths {
 
 ## 4. Security Rules (Mobile Client Perspective)
 
-The mobile app operates as an authenticated student. The Firestore rules enforced server-side are:
-
 | Collection | Mobile Read | Mobile Write |
 |---|---|---|
-| `students` | Own document only (`uid == auth.uid`) | None — admin manages |
+| `students` | Own document only (`uid == auth.uid`) | Self-registration (`status == 'PENDING'`) |
 | `events` | `proposalStatus == 'approved'` only | None |
 | `attendance` | Own records (`studentId == auth.uid`) | Only when `qrTicketUnlocked == true` |
-| `payables` | Own records (`studentId == auth.uid`) | None — admin marks paid |
-| `announcements` | Targeted at `'all'`, `'students'`, or own orgIds | `readByUids` field only (arrayUnion) |
-| `certificates` | Own records (`studentId == auth.uid`) | None |
-| `organizations` | Active orgs only | None |
+| `payables` | Own records (`studentId == auth.uid`) | None — admin/officer updates status |
+| `announcements` | Targeted at `'campus-wide'`, `'all-organizations'`, or student org/dept | None |
+| `issued_certificates` | Own records (`studentId == auth.uid`) | None |
+| `organizations` | Active orgs | None |
+| `organization_members` | Own membership docs (`studentAuthUid == auth.uid`) | Join requests (`status == 'pending'`) |
 
 ---
 
@@ -521,16 +507,17 @@ import 'package:intl/intl.dart';
 final display = DateFormat('MMM dd, yyyy hh:mm a').format(date);
 ```
 
-// AGENT-UPDATED: 2026-06-26 — Added offline_attendance, 
-// cached_participants, scanner_sessions collections
+---
 
-### 1.12 `scanner_sessions` (Firestore)
+## 6. Offline Gate Scanner & SQLite Data Models
+
+### 6.1 `scanner_sessions` (Firestore)
 
 **Path:** `/scanner_sessions/{sessionId}`
 
-> Created when a scanner activates for an event session. 
-> Tracks which device/officer is scanning which session.
+Tracks active gate scanner sessions started by officers on their mobile devices.
 
+```typescript
 interface ScannerSessionDocument {
   id: string;
   eventId: string;                    // FK → /events
@@ -538,126 +525,120 @@ interface ScannerSessionDocument {
   officerUserId: string;              // FK → Firebase Auth UID
   officerName: string;
   gateType: 'time_in' | 'time_out';
-  deviceId: string;                   // unique device identifier
+  deviceId: string;                   // Unique device identifier
   activatedAt: Timestamp;
   deactivatedAt: Timestamp | null;
   isActive: boolean;
-  scanCount: number;                  // denormalized count
+  scanCount: number;                  // Denormalized scan count
   manualCount: number;
   flaggedCount: number;
 }
+```
 
-### 1.13 `flagged_attendance` (Firestore)
+### 6.2 `flagged_attendance` (Firestore)
 
 **Path:** `/events/{eventId}/flagged_attendance/{flagId}`
 
-> Separate collection for manual/flagged entries. 
-> Only scanners with allowManualAttendance can write here.
+Stores manual or exception gate scans (e.g., student without phone, payment pending walk-ins).
 
+```typescript
 interface FlaggedAttendanceDocument {
   id: string;
   eventId: string;
   sessionId: string;
   organizationId: string;
   
-  // Student info — may be incomplete for unknown walkins
   studentId: string | null;
   studentName: string;
   studentNumber: string | null;
   course: string | null;
   yearLevel: number | null;
   
-  // Flag details
-  flagReason: 'no_phone' | 'payment_pending' | 
-              'not_registered' | 'device_error' | 'other';
+  flagReason: 'no_phone' | 'payment_pending' | 'not_registered' | 'device_error' | 'other';
   flagNote: string | null;
   gateType: 'time_in' | 'time_out';
   
-  // Scanner
-  flaggedBy: string;                  // officer userId
+  flaggedBy: string;                  // Officer userId
   flaggedByName: string;
   
-  // Timestamps
   flaggedAt: Timestamp;
   createdAt: Timestamp;
 }
+```
 
-### Local SQLite Tables (Drift)
+### 6.3 Local SQLite Tables (Drift)
 
 #### `cached_events`
 | Column | Type | Notes |
 |---|---|---|
-| id | TEXT PK | Firestore event ID |
-| title | TEXT | |
-| eventJson | TEXT | Full JSON of EventDocument |
-| cachedAt | INTEGER | Unix ms |
-| expiresAt | INTEGER | Unix ms — purge after event ends |
+| `id` | TEXT PK | Firestore event ID |
+| `title` | TEXT | Event title |
+| `eventJson` | TEXT | Full JSON of EventDocument |
+| `cachedAt` | INTEGER | Unix ms |
+| `expiresAt` | INTEGER | Unix ms — purge after event ends |
 
 #### `cached_participants`
 | Column | Type | Notes |
 |---|---|---|
-| id | TEXT PK | studentId |
-| eventId | TEXT | FK — composite with studentId |
-| studentName | TEXT | |
-| studentNumber | TEXT | |
-| course | TEXT | |
-| yearLevel | INTEGER | |
-| profilePhotoUrl | TEXT | Cloudinary URL |
-| qrTicketUnlocked | INTEGER | 0 or 1 |
-| participantJson | TEXT | Full snapshot |
-| downloadedAt | INTEGER | Unix ms |
+| `id` | TEXT PK | studentId |
+| `eventId` | TEXT | FK — composite with studentId |
+| `studentName` | TEXT | |
+| `studentNumber` | TEXT | |
+| `course` | TEXT | |
+| `yearLevel` | INTEGER | |
+| `profilePhotoUrl` | TEXT | Cloudinary URL |
+| `qrTicketUnlocked` | INTEGER | 0 or 1 |
+| `participantJson` | TEXT | Full snapshot |
+| `downloadedAt` | INTEGER | Unix ms |
 
 #### `offline_attendance`
 | Column | Type | Notes |
 |---|---|---|
-| localId | TEXT PK | UUID generated offline |
-| eventId | TEXT | |
-| sessionId | TEXT | |
-| studentId | TEXT | |
-| studentName | TEXT | |
-| gateType | TEXT | 'time_in' / 'time_out' |
-| scanMethod | TEXT | 'qr' / 'manual' |
-| scannedBy | TEXT | officer userId |
-| scannedAt | INTEGER | Unix ms |
-| synced | INTEGER | 0 = pending, 1 = uploaded |
-| syncedAt | INTEGER | Unix ms or null |
-| conflictResolved | INTEGER | 0/1 |
-| isFlagged | INTEGER | 0/1 |
-| flagReason | TEXT | 'no_phone'\|'payment_pending'\|'not_registered'\|'device_error'\|'other' |
-| flagNote | TEXT | Optional note |
-| isManual | INTEGER | 0/1 |
+| `localId` | TEXT PK | UUID generated offline |
+| `eventId` | TEXT | |
+| `sessionId` | TEXT | |
+| `studentId` | TEXT | |
+| `studentName` | TEXT | |
+| `gateType` | TEXT | 'time_in' / 'time_out' |
+| `scanMethod` | TEXT | 'qr' / 'manual' |
+| `scannedBy` | TEXT | Officer userId |
+| `scannedAt` | INTEGER | Unix ms |
+| `synced` | INTEGER | 0 = pending, 1 = uploaded |
+| `syncedAt` | INTEGER | Unix ms or null |
+| `conflictResolved` | INTEGER | 0/1 |
+| `isFlagged` | INTEGER | 0/1 |
+| `flagReason` | TEXT | 'no_phone'\|'payment_pending'\|'not_registered'\|'device_error'\|'other' |
+| `flagNote` | TEXT | Optional note |
+| `isManual` | INTEGER | 0/1 |
 
 #### `cached_payables`
 | Column | Type | Notes |
 |---|---|---|
-| id | TEXT PK | payableId |
-| eventId | TEXT | |
-| studentId | TEXT | |
-| qrTicketUnlocked | INTEGER | 0 or 1 |
-| amountDue | REAL | |
-| paymentStatus | TEXT | |
-| cachedAt | INTEGER | Unix ms |
+| `id` | TEXT PK | payableId |
+| `eventId` | TEXT | |
+| `studentId` | TEXT | |
+| `qrTicketUnlocked` | INTEGER | 0 or 1 |
+| `amountDue` | REAL | |
+| `paymentStatus` | TEXT | |
+| `cachedAt` | INTEGER | Unix ms |
 
 #### `scanner_assignments`
 | Column | Type | Notes |
 |---|---|---|
-| eventId | TEXT PK | Firestore event ID |
-| eventTitle | TEXT | Denormalized — for offline display |
-| eventFormat | TEXT | 'On-Campus' \| 'Online' \| 'Hybrid' |
-| sessionIds | TEXT | JSON array of session ID strings |
-| officerUserId | TEXT | Firebase Auth UID of the officer |
-| permissions | TEXT | JSON of EventScanner permission flags |
-| eventEndTime | INTEGER | Unix ms — last session end; drives `isActive` offline |
-| proposalStatus | TEXT | 'approved' \| 'draft' — drives `canScan` offline |
-| dataDownloaded | INTEGER | 0 or 1 |
-| downloadedAt | INTEGER | Unix ms or 0 |
+| `eventId` | TEXT PK | Firestore event ID |
+| `eventTitle` | TEXT | Denormalized — for offline display |
+| `eventFormat` | TEXT | 'On-Campus' \| 'Online' \| 'Hybrid' |
+| `sessionIds` | TEXT | JSON array of session ID strings |
+| `officerUserId` | TEXT | Firebase Auth UID of the officer |
+| `permissions` | TEXT | JSON of EventScanner permission flags |
+| `eventEndTime` | INTEGER | Unix ms — last session end |
+| `proposalStatus` | TEXT | 'approved' \| 'draft' |
+| `dataDownloaded` | INTEGER | 0 or 1 |
+| `downloadedAt` | INTEGER | Unix ms or 0 |
 
-// AGENT-UPDATED: 2026-07-31 — Added events.budgetItems and totalApprovedBudget.
-// adminFeeOverride is the student Event Fee copied to payables.amountDue;
-// suggestedFeePerStudent and totalExpectedCollection are not student-facing.
-
-// AGENT-UPDATED: 2026-07-11 — Added scannerUserIds field documentation to events
-// section; updated scanner_assignments Drift table with eventTitle, eventFormat,
-// eventEndTime, proposalStatus columns (schema v3).
+// AGENT-UPDATED: 2026-07-11 — Updated scanner_assignments Drift table with eventTitle, eventFormat, eventEndTime, proposalStatus columns (schema v3).
 
 // AGENT-UPDATED: 2026-07-19 — Added isFlagged, flagReason, flagNote, isManual to offline_attendance (schema v8).
+
+
+

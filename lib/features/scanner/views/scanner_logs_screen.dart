@@ -35,33 +35,50 @@ class ScannerLogsScreen extends ConsumerStatefulWidget {
 }
 
 class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
+  bool _isSyncing = false;
+
   Future<void> _syncNow() async {
-    final syncService = ref.read(syncServiceProvider);
-    final result = await syncService.uploadPendingAttendance();
+    if (_isSyncing) return;
 
-    if (!mounted) return;
+    setState(() {
+      _isSyncing = true;
+    });
 
-    if (result.type == SyncResultType.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Synced ${result.uploadedCount} records'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    } else if (result.type == SyncResultType.hasConflicts) {
-      context.push('/scanner/sync-conflicts', extra: result.conflicts);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.errorMessage ?? 'Sync failed'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      final result = await syncService.uploadPendingAttendance();
+
+      if (!mounted) return;
+
+      if (result.type == SyncResultType.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Synced ${result.uploadedCount} records'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      } else if (result.type == SyncResultType.hasConflicts) {
+        context.push('/scanner/sync-conflicts', extra: result.conflicts);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Sync failed'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
     }
   }
+
 
   Future<void> _confirmDeleteUnsynced(OfflineAttendanceData record) async {
     final confirm = await showDialog<bool>(
@@ -128,12 +145,26 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
                   final pendingCount = unsyncedRecords.length;
                   if (pendingCount > 0 && isOnline) {
                     return TextButton.icon(
-                      onPressed: _syncNow,
-                      icon: const Icon(Icons.cloud_upload,
-                          color: AppColors.secondary, size: 20),
+                      onPressed: _isSyncing ? null : _syncNow,
+                      icon: _isSyncing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.secondary,
+                              ),
+                            )
+                          : const Icon(Icons.cloud_upload,
+                              color: AppColors.secondary, size: 20),
                       label: Text(
-                        'Sync ($pendingCount)',
-                        style: const TextStyle(color: AppColors.secondary),
+                        _isSyncing ? 'Syncing...' : 'Sync ($pendingCount)',
+                        style: TextStyle(
+                          color: _isSyncing
+                              ? AppColors.secondary.withValues(alpha: 0.6)
+                              : AppColors.secondary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     );
                   }
@@ -142,6 +173,7 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
               ) ??
               const SizedBox.shrink(),
         ],
+
       ),
       body: attendanceAsync.when(
         loading: () => const Center(

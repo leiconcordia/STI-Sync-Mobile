@@ -89,6 +89,17 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
+      // VALIDATION 2b: Gate Lock Check (MOB-GATE-02)
+      if (participant.qrTicketUnlocked == 0) {
+        await _showOverlay(
+          ScanResultType.paymentRequired,
+          participant,
+          extraMessage: 'GATE ACCESS DENIED\nUnpaid Event Fee / QR Code Locked',
+        );
+        return;
+      }
+
+
       // VALIDATION 3: Duplicate check
       final existing = await db.attendanceDao.checkDuplicate(
         studentId: studentAuthUid,

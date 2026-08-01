@@ -49,8 +49,14 @@ class PayablesDao extends DatabaseAccessor<AppDatabase>
         .getSingleOrNull();
   }
 
+  Future<CachedPayable?> getPayableByEvent(String eventId) async {
+    return (select(cachedPayables)..where((t) => t.eventId.equals(eventId)))
+        .getSingleOrNull();
+  }
+
   Future<void> purgeEventPayables(String eventId) {
     return (delete(cachedPayables)..where((t) => t.eventId.equals(eventId)))
         .go();
   }
 }
+

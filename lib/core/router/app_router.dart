@@ -89,12 +89,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PendingStatusScreen(),
       ),
       GoRoute(
+        name: 'eventDetail',
+        path: '/events/detail/:eventId',
+        builder: (context, state) => EventDetailScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
+      ),
+      GoRoute(
         name: 'qrTicket',
         path: '/events/:eventId/ticket',
         builder: (context, state) => QrTicketScreen(
           eventId: state.pathParameters['eventId']!,
         ),
       ),
+
       GoRoute(
         name: 'scannerMode',
         path: '/scanner/mode',
@@ -150,18 +158,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 name: 'events',
                 path: '/events',
                 builder: (context, state) => const EventsScreen(),
-                routes: [
-                  GoRoute(
-                    name: 'eventDetail',
-                    path: ':eventId',
-                    builder: (context, state) => EventDetailScreen(
-                      eventId: state.pathParameters['eventId']!,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
+
           StatefulShellBranch(
             routes: [
               GoRoute(

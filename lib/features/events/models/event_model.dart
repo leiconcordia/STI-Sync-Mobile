@@ -133,7 +133,7 @@ class EventModel {
       targetYearLevels: List<String>.from(data['targetYearLevels'] ?? []),
       targetDepartmentIds: List<String>.from(data['targetDepartmentIds'] ?? []),
       expectedParticipantCount: data['expectedParticipantCount'] as int? ?? 0,
-      attendanceEnabled: data['attendanceEnabled'] as bool? ?? false,
+      attendanceEnabled: data['attendanceEnabled'] as bool? ?? true,
       minAttendancePercent: (data['minAttendancePercent'] as num?)?.toDouble(),
       lateThresholdMinutes: data['lateThresholdMinutes'] as int?,
       gracePeriodMinutes: data['gracePeriodMinutes'] as int?,
@@ -154,10 +154,11 @@ class EventModel {
           const [],
       totalApprovedBudget:
           (data['totalApprovedBudget'] as num?)?.toDouble() ?? 0,
-      enableQRTickets: data['enableQRTickets'] as bool? ?? false,
+      enableQRTickets: data['enableQRTickets'] as bool? ?? true,
       mandatoryAttendance: data['mandatoryAttendance'] as bool? ?? false,
       lockAfterApproval: data['lockAfterApproval'] as bool? ?? false,
       scannerActivationCode: data['scannerActivationCode'] as String? ?? '',
+
       scannerUserIds: List<String>.from(data['scannerUserIds'] ?? []),
       proposalStatus: data['proposalStatus'] as String? ?? '',
       createdBy: data['createdBy'] as String? ?? '',

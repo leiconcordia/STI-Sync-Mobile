@@ -293,8 +293,8 @@ class ProfileScreen extends ConsumerWidget {
                       },
                     ),
                     
-                    // Extra padding to clear the bottom navigation bar
-                    const SizedBox(height: 120),
+                    const SizedBox(height: 24),
+
                   ],
                 ),
               ),

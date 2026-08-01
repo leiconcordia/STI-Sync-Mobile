@@ -85,8 +85,13 @@ class MainShellScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Active screen from the navigation shell
-          navigationShell,
+          // Active screen from the navigation shell with bottom inset padding
+          // so content on all tabs never overlaps with the floating glass nav bar
+          Padding(
+            padding: const EdgeInsets.only(bottom: 60.0),
+            child: navigationShell,
+          ),
+
 
           // Floating glass nav bar pinned to the bottom
           Positioned(
@@ -103,5 +108,6 @@ class MainShellScreen extends ConsumerWidget {
         ],
       ),
     );
+
   }
 }

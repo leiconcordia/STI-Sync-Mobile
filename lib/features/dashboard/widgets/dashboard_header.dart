@@ -1,12 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/shared/providers/providers.dart';
 
-class DashboardHeader extends StatelessWidget {
+class DashboardHeader extends ConsumerWidget {
   const DashboardHeader({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authViewModelProvider);
+    final student = authState.student;
+
+    final hour = DateTime.now().hour;
+    final String greetingPrefix = hour < 12
+        ? 'Good morning,'
+        : (hour < 18 ? 'Good afternoon,' : 'Good evening,');
+    final String firstName = (student?.firstName.isNotEmpty == true)
+        ? student!.firstName
+        : 'Student';
+
+    final activeSemesterAsync = ref.watch(activeSemesterProvider);
+    final String semesterDisplay = activeSemesterAsync.maybeWhen(
+      data: (sem) => sem.isNotEmpty
+          ? sem
+          : '${student?.semester.isNotEmpty == true ? student!.semester : "2nd Semester"} - A.Y. ${student?.schoolYear.isNotEmpty == true ? student!.schoolYear : "2025–2026"}',
+      orElse: () =>
+          '${student?.semester.isNotEmpty == true ? student!.semester : "2nd Semester"} - A.Y. ${student?.schoolYear.isNotEmpty == true ? student!.schoolYear : "2025–2026"}',
+    );
+
+    final String photoUrl = student?.profilePhotoUrl ?? '';
+    final String initials = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'S';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17,13 +43,13 @@ class DashboardHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Good morning,',
+                  greetingPrefix,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  'Juan',
+                  firstName,
                   style: AppTextStyles.h1.copyWith(
                     color: AppColors.primaryDark,
                     fontSize: 28,
@@ -74,10 +100,21 @@ class DashboardHeader extends StatelessWidget {
                       width: 2,
                     ),
                   ),
-                  child: const CircleAvatar(
+                  child: CircleAvatar(
                     radius: 20,
-                    backgroundColor: AppColors.background,
-                    child: Icon(Icons.person, color: AppColors.primaryDark),
+                    backgroundColor: AppColors.primaryDark,
+                    backgroundImage: photoUrl.isNotEmpty
+                        ? CachedNetworkImageProvider(photoUrl)
+                        : null,
+                    child: photoUrl.isEmpty
+                        ? Text(
+                            initials,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
                   ),
                 ),
               ],
@@ -98,7 +135,7 @@ class DashboardHeader extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '2nd Semester - A.Y. 2025–2026',
+                  semesterDisplay,
                   style: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryDark),
                   overflow: TextOverflow.ellipsis,
                 ),

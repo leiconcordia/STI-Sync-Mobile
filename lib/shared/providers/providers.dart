@@ -19,7 +19,58 @@ import '../../features/scanner/repositories/offline_attendance_repository.dart';
 import '../../features/scanner/viewmodels/scanner_viewmodel.dart';
 import '../../features/organizations/repositories/organization_repository.dart';
 import '../../features/organizations/models/organization_member_model.dart';
+import '../../features/payables/models/payable_model.dart';
+import '../../features/payables/repositories/payables_repository.dart';
+import '../../features/announcements/models/announcement_model.dart';
+import '../../features/announcements/repositories/announcements_repository.dart';
 import '../../core/local/app_database.dart';
+
+/// Announcements feature
+final announcementsRepositoryProvider = Provider<AnnouncementsRepository>((ref) {
+  return AnnouncementsRepository(ref.watch(firestoreProvider));
+});
+
+final announcementsStreamProvider = StreamProvider<List<AnnouncementModel>>((ref) {
+  final student = ref.watch(authViewModelProvider).student;
+  final myOrgsAsync = ref.watch(myOrganizationsProvider);
+  final studentOrgIds = myOrgsAsync.maybeWhen(
+    data: (memberships) => memberships.map((m) => m.organizationId).toList(),
+    orElse: () => <String>[],
+  );
+
+  return ref.watch(announcementsRepositoryProvider).watchTargetedAnnouncements(
+        student: student,
+        studentOrgIds: studentOrgIds,
+      );
+});
+
+
+/// Payables feature
+final payablesRepositoryProvider = Provider<PayablesRepository>((ref) {
+  return PayablesRepository(ref.watch(firestoreProvider));
+});
+
+final payablesStreamProvider = StreamProvider<List<PayableModel>>((ref) {
+  final authState = ref.watch(authViewModelProvider);
+  final uid = authState.student?.id ?? '';
+  if (uid.isEmpty) return Stream.value([]);
+  return ref.watch(payablesRepositoryProvider).watchStudentPayables(uid);
+});
+
+final payablesSummaryProvider = Provider<PayablesSummary>((ref) {
+  final payablesAsync = ref.watch(payablesStreamProvider);
+  return payablesAsync.maybeWhen(
+    data: (payables) => PayablesSummary.fromPayables(payables),
+    orElse: () => const PayablesSummary(
+      totalAssigned: 0,
+      totalPaid: 0,
+      totalOutstanding: 0,
+      paidPercentage: 1.0,
+      nextDue: null,
+    ),
+  );
+});
+
 
 /// Organization Repository & Memberships Provider
 final organizationRepositoryProvider = Provider<OrganizationRepository>((ref) {
@@ -46,6 +97,35 @@ final eventViewModelProvider =
     StateNotifierProvider<EventViewModel, EventState>(
   (ref) => EventViewModel(ref.watch(eventRepositoryProvider)),
 );
+
+final eventsStreamProvider = StreamProvider<List<EventModel>>((ref) {
+  final student = ref.watch(authViewModelProvider).student;
+  if (student == null || student.id.isEmpty) return Stream.value([]);
+  return ref.watch(eventRepositoryProvider).watchEligibleEvents(student.id);
+});
+
+final activeSemesterProvider = StreamProvider<String>((ref) {
+  return ref.watch(firestoreProvider).collection(FirestorePaths.semesters).snapshots().map((snap) {
+    if (snap.docs.isEmpty) return '';
+    final activeDoc = snap.docs.firstWhere(
+      (doc) {
+        final data = doc.data();
+        return data['isCurrent'] == true || data['isActive'] == true || data['status'] == 'active';
+      },
+      orElse: () => snap.docs.first,
+    );
+    final data = activeDoc.data();
+    final name = (data['name'] as String?) ?? (data['semester'] as String?) ?? (data['term'] as String?) ?? '';
+    final sy = (data['academicYear'] as String?) ?? (data['schoolYear'] as String?) ?? (data['year'] as String?) ?? '';
+    if (name.isNotEmpty && sy.isNotEmpty) {
+      return '$name - A.Y. $sy';
+    } else if (name.isNotEmpty) {
+      return name;
+    }
+    return '';
+  }).handleError((_) => '');
+});
+
 
 /// Sync feature
 // connectivityServiceProvider is exported from connectivity_service.dart
@@ -166,41 +246,60 @@ final eventDetailProvider =
 });
 
 final actualParticipantCountProvider =
-    FutureProvider.family<int, EventModel>((ref, event) async {
-  final firestore = ref.read(firestoreProvider);
-
-  if (event.targetDepartmentIds.isEmpty && event.targetYearLevels.isEmpty) {
-    final countSnap =
-        await firestore.collection(FirestorePaths.students).count().get();
-    return countSnap.count ?? 0;
+    FutureProvider.family<int, String>((ref, eventId) async {
+  if (eventId.isEmpty) return 0;
+  final isOnline = ref.read(connectivityServiceProvider).isOnline;
+  if (!isOnline) {
+    try {
+      final db = ref.read(appDatabaseProvider);
+      final count = await db.participantsDao.getParticipantCount(eventId);
+      return count > 0 ? count : 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
-  if (event.targetDepartmentIds.isNotEmpty) {
-    // Firestore whereIn supports up to 10 items. We assume targetDepartmentIds has <= 10 items.
-    final snap = await firestore
-        .collection(FirestorePaths.students)
-        .where('departmentId',
-            whereIn: event.targetDepartmentIds.take(10).toList())
-        .get();
+  try {
+    final firestore = ref.read(firestoreProvider);
+    final eventDoc =
+        await firestore.collection(FirestorePaths.events).doc(eventId).get();
+    if (!eventDoc.exists) return 0;
+    final event = EventModel.fromFirestore(eventDoc);
 
-    var docs = snap.docs;
-    if (event.targetYearLevels.isNotEmpty) {
-      docs = docs.where((doc) {
-        final data = doc.data();
-        final yearLevel = data['yearLevel'] as String?;
-        return event.targetYearLevels.contains(yearLevel);
-      }).toList();
+    if (event.targetDepartmentIds.isEmpty && event.targetYearLevels.isEmpty) {
+      final countSnap =
+          await firestore.collection(FirestorePaths.students).count().get();
+      return countSnap.count ?? 0;
     }
-    return docs.length;
-  } else {
-    // Only yearLevels is provided
-    final snap = await firestore
-        .collection(FirestorePaths.students)
-        .where('yearLevel', whereIn: event.targetYearLevels.take(10).toList())
-        .get();
-    return snap.docs.length;
+
+    if (event.targetDepartmentIds.isNotEmpty) {
+      final snap = await firestore
+          .collection(FirestorePaths.students)
+          .where('departmentId',
+              whereIn: event.targetDepartmentIds.take(10).toList())
+          .get();
+
+      var docs = snap.docs;
+      if (event.targetYearLevels.isNotEmpty) {
+        docs = docs.where((doc) {
+          final data = doc.data();
+          final yearLevel = data['yearLevel'] as String?;
+          return event.targetYearLevels.contains(yearLevel);
+        }).toList();
+      }
+      return docs.length;
+    } else {
+      final snap = await firestore
+          .collection(FirestorePaths.students)
+          .where('yearLevel', whereIn: event.targetYearLevels.take(10).toList())
+          .get();
+      return snap.docs.length;
+    }
+  } catch (_) {
+    return 0;
   }
 });
+
 
 final connectivityStatusProvider = StreamProvider<bool>((ref) {
   final service = ref.watch(connectivityServiceProvider);

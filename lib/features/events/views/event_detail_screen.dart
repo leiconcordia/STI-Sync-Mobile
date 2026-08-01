@@ -63,7 +63,8 @@ class EventDetailScreen extends ConsumerWidget {
           });
 
           final actualParticipantCount =
-              ref.watch(actualParticipantCountProvider(event));
+              ref.watch(actualParticipantCountProvider(event.id));
+
 
           return Stack(
             children: [
@@ -420,7 +421,7 @@ class EventDetailScreen extends ConsumerWidget {
                 right: 0,
                 bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
@@ -432,43 +433,38 @@ class EventDetailScreen extends ConsumerWidget {
                     ],
                   ),
                   child: SafeArea(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.success, width: 2),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "You're Eligible ✓",
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          context.pushNamed(
+                            'qrTicket',
+                            pathParameters: {'eventId': eventId},
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          GestureDetector(
-                            onTap: () {
-                              context.goNamed('qrTicket',
-                                  pathParameters: {'eventId': eventId});
-                            },
-                            child: Text(
-                              'View Ticket',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: Colors.orange.shade700,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        ),
+                        icon: const Icon(Icons.qr_code_rounded, size: 20),
+                        label: const Text(
+                          'View Digital QR Ticket',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
+
             ],
           );
         },

@@ -22,7 +22,8 @@ class EventListCard extends ConsumerWidget {
     final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
 
     final categoryName = ref.watch(categoryNameProvider(event.eventCategoryId));
-    final actualParticipantCount = ref.watch(actualParticipantCountProvider(event));
+    final actualParticipantCount = ref.watch(actualParticipantCountProvider(event.id));
+
 
     return Container(
       decoration: BoxDecoration(
@@ -43,34 +44,14 @@ class EventListCard extends ConsumerWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    'Eligible ✓',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.success,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              event.title,
+              style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -143,7 +124,7 @@ class EventListCard extends ConsumerWidget {
               children: [
                 GestureDetector(
                   onTap: () {
-                    context.goNamed('eventDetail', pathParameters: {'eventId': event.id});
+                    context.pushNamed('eventDetail', pathParameters: {'eventId': event.id});
                   },
                   child: Text(
                     'View Details',
@@ -155,9 +136,10 @@ class EventListCard extends ConsumerWidget {
                 ),
                 GestureDetector(
                   onTap: () {
-                    context.goNamed('qrTicket', pathParameters: {'eventId': event.id});
+                    context.pushNamed('qrTicket', pathParameters: {'eventId': event.id});
                   },
                   child: Container(
+
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.secondary,

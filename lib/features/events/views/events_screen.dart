@@ -90,7 +90,8 @@ class EventsScreen extends ConsumerWidget {
                     );
                   },
                 ),
-              const SizedBox(height: 100), // padding for bottom nav
+              const SizedBox(height: 24),
+
             ],
           ),
         ),

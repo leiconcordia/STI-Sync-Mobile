@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/features/organizations/models/organization_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 
 class JoinOrganizationSheet extends ConsumerStatefulWidget {
@@ -15,7 +16,7 @@ class JoinOrganizationSheet extends ConsumerStatefulWidget {
 class _JoinOrganizationSheetState
     extends ConsumerState<JoinOrganizationSheet> {
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _organizations = [];
+  List<OrganizationModel> _organizations = [];
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _selectedOrgId;
@@ -42,9 +43,9 @@ class _JoinOrganizationSheetState
 
     try {
       final repo = ref.read(organizationRepositoryProvider);
-      final orgs = await repo.fetchAllOrganizations();
+      final rawOrgs = await repo.fetchAllOrganizations();
 
-      if (orgs.isEmpty) {
+      if (rawOrgs.isEmpty) {
         setState(() {
           _errorMessage =
               'You are currently offline or no organizations are available. Please check your internet connection and try again.';
@@ -53,8 +54,13 @@ class _JoinOrganizationSheetState
         return;
       }
 
+      final parsed = rawOrgs.map((data) {
+        final id = data['id'] as String? ?? '';
+        return OrganizationModel.fromFirestore(data, id);
+      }).toList();
+
       setState(() {
-        _organizations = orgs;
+        _organizations = parsed;
         _isLoading = false;
       });
     } catch (e) {
@@ -99,46 +105,41 @@ class _JoinOrganizationSheetState
       }
     } catch (e) {
       if (mounted) {
-        final cleanError = e.toString().replaceAll('Exception: ', '');
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(cleanError),
+            content: Text('Failed to send join request: $e'),
             backgroundColor: AppColors.error,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final student = ref.watch(authViewModelProvider).student;
+    final studentDeptId = student?.departmentId;
+    final studentDeptName = student?.departmentName;
+
     final filteredOrgs = _organizations.where((org) {
-      final name = (org['name'] as String).toLowerCase();
-      final acronym = (org['acronym'] as String).toLowerCase();
-      final query = _searchQuery.toLowerCase();
-      return name.contains(query) || acronym.contains(query);
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.trim().toLowerCase();
+      return org.name.toLowerCase().contains(q) ||
+          org.acronym.toLowerCase().contains(q);
     }).toList();
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
+      height: MediaQuery.of(context).size.height * 0.85,
+      padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Drag handle
@@ -215,99 +216,149 @@ class _JoinOrganizationSheetState
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final org = filteredOrgs[index];
-                              final id = org['id'] as String;
-                              final name = org['name'] as String;
-                              final acronym = org['acronym'] as String;
+                              final id = org.id;
+                              final name = org.name;
+                              final acronym = org.acronym;
                               final isSelected = _selectedOrgId == id;
+                              final isEligible = org.isStudentEligible(studentDeptId, studentDeptName);
 
                               return InkWell(
-                                onTap: () => setState(() => _selectedOrgId = id),
+                                onTap: isEligible
+                                    ? () => setState(() => _selectedOrgId = id)
+                                    : null,
                                 borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? AppColors.primary.withOpacity(0.08)
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
+                                child: Opacity(
+                                  opacity: isEligible ? 1.0 : 0.6,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
                                       color: isSelected
-                                          ? AppColors.primary
-                                          : Colors.grey.shade200,
-                                      width: isSelected ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 20,
-                                        backgroundColor: AppColors.primary,
-                                        child: Text(
-                                          acronym.isNotEmpty
-                                              ? (acronym.length > 2
-                                                  ? acronym.substring(0, 2)
-                                                  : acronym)
-                                              : 'ORG',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
+                                          ? AppColors.primary.withOpacity(0.08)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : Colors.grey.shade200,
+                                        width: isSelected ? 2 : 1,
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
                                           children: [
-                                            Text(
-                                              name,
-                                              style: AppTextStyles.bodyMedium
-                                                  .copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color: AppColors.primaryDark,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                            if (acronym.isNotEmpty)
-                                              Text(
-                                                acronym,
+                                            CircleAvatar(
+                                              radius: 20,
+                                              backgroundColor: AppColors.primary,
+                                              child: Text(
+                                                acronym.isNotEmpty
+                                                    ? (acronym.length > 2
+                                                        ? acronym.substring(0, 2)
+                                                        : acronym)
+                                                    : 'ORG',
                                                 style: const TextStyle(
-                                                  color: Colors.grey,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
                                                   fontSize: 12,
                                                 ),
                                               ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    name,
+                                                    style: AppTextStyles.bodyMedium
+                                                        .copyWith(
+                                                      fontWeight: FontWeight.bold,
+                                                      color: AppColors.primaryDark,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  Row(
+                                                    children: [
+                                                      if (acronym.isNotEmpty) ...[
+                                                        Text(
+                                                          acronym,
+                                                          style: const TextStyle(
+                                                            color: Colors.grey,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                      ],
+                                                      // Scope badge
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: org.isDepartmental
+                                                              ? AppColors.primary.withOpacity(0.1)
+                                                              : AppColors.success.withOpacity(0.1),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          org.isDepartmental ? '🏢 Departmental' : '🌐 Open to All',
+                                                          style: TextStyle(
+                                                            color: org.isDepartmental ? AppColors.primary : AppColors.success,
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Radio<String>(
+                                              value: id,
+                                              groupValue: _selectedOrgId,
+                                              onChanged: isEligible
+                                                  ? (val) => setState(() => _selectedOrgId = val)
+                                                  : null,
+                                              activeColor: AppColors.primary,
+                                            ),
                                           ],
                                         ),
-                                      ),
-                                      Radio<String>(
-                                        value: id,
-                                        groupValue: _selectedOrgId,
-                                        onChanged: (val) {
-                                          setState(() => _selectedOrgId = val);
-                                        },
-                                        activeColor: AppColors.primary,
-                                      ),
-                                    ],
+                                        if (!isEligible) ...[
+                                          const SizedBox(height: 6),
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 52.0),
+                                            child: Text(
+                                              'Departmental club reserved for matching department students.',
+                                              style: AppTextStyles.labelSmall.copyWith(
+                                                color: AppColors.error,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               );
                             },
                           ),
           ),
+
           const SizedBox(height: 16),
 
-          // Submit Button
+          // Submit button
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _selectedOrgId == null || _isSubmitting
-                  ? null
-                  : _submitJoinRequest,
+              onPressed: (_selectedOrgId != null && !_isSubmitting)
+                  ? _submitJoinRequest
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -322,12 +373,8 @@ class _JoinOrganizationSheetState
                       ),
                     )
                   : const Text(
-                      'Send Join Request',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
+                      'Request to Join',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
             ),
           ),

@@ -71,7 +71,8 @@ class _PayablesScreenState extends State<PayablesScreen> {
               if (_selectedTabIndex == 0) const DuesListView(),
               if (_selectedTabIndex == 1) const HistoryListView(),
               if (_selectedTabIndex == 2) const FinesListView(),
-              const SizedBox(height: 100), // padding for bottom nav
+              const SizedBox(height: 24),
+
             ],
           ),
         ),

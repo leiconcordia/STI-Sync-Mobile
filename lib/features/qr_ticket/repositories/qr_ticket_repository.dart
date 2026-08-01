@@ -23,7 +23,7 @@ class EventTicketConfig {
     required this.eventFee,
   });
 
-  bool get isTicketAvailable => enableQRTickets && attendanceEnabled;
+  bool get isTicketAvailable => enableQRTickets || attendanceEnabled || studentPayablesEnabled;
 
   factory EventTicketConfig.fromEvent(EventModel event) => EventTicketConfig(
         title: event.title,
@@ -95,11 +95,19 @@ class QrTicketRepository {
         );
       }
       final data = snap.docs.first.data();
+      final explicitUnlocked = data['qrTicketUnlocked'] as bool? ?? false;
+      final rawStatus = data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'unpaid');
+      final isPaid = rawStatus == 'paid' || rawStatus == 'waived';
+      final assigned = (data['assignedAmount'] as num?)?.toDouble() ?? 0.0;
+      final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+      final rawDue = (data['amountDue'] as num?)?.toDouble() ?? (assigned - paid > 0 ? assigned - paid : config.eventFee);
+
       return QrTicketStatus(
-        isUnlocked: data['qrTicketUnlocked'] as bool? ?? false,
-        amountDue: (data['amountDue'] as num?)?.toDouble() ?? 0,
-        paymentStatus: data['paymentStatus'] as String? ?? 'unpaid',
+        isUnlocked: explicitUnlocked || isPaid,
+        amountDue: isPaid ? 0.0 : (rawDue > 0 ? rawDue : config.eventFee),
+        paymentStatus: rawStatus,
       );
+
     });
   }
 
@@ -144,15 +152,19 @@ class QrTicketRepository {
     }
 
     final data = snap.docs.first.data();
+    final rawStatus = data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'unpaid');
+    final isPaid = rawStatus == 'paid' || rawStatus == 'waived';
+    final explicitUnlocked = data['qrTicketUnlocked'] as bool? ?? false;
+    final isUnlocked = explicitUnlocked || isPaid;
+
     await _payablesDao.replacePayable(
         CachedPayablesCompanion(
           id: Value('${eventId}_$studentId'),
           eventId: Value(eventId),
           studentId: Value(studentId),
-          qrTicketUnlocked:
-              Value((data['qrTicketUnlocked'] as bool? ?? false) ? 1 : 0),
-          amountDue: Value((data['amountDue'] as num?)?.toDouble() ?? 0),
-          paymentStatus: Value(data['paymentStatus'] as String? ?? 'unpaid'),
+          qrTicketUnlocked: Value(isUnlocked ? 1 : 0),
+          amountDue: Value(isPaid ? 0.0 : ((data['amountDue'] as num?)?.toDouble() ?? config.eventFee)),
+          paymentStatus: Value(rawStatus),
           cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
           studentName: Value(studentName),
           studentIdNumber: Value(studentIdNumber),
@@ -165,23 +177,52 @@ class QrTicketRepository {
   }
 
   Future<EventTicketConfig?> getEventTicketConfig(String eventId) async {
-    final doc =
-        await _firestore.collection(FirestorePaths.events).doc(eventId).get();
-    if (!doc.exists) return null;
-    return EventTicketConfig.fromEvent(EventModel.fromFirestore(doc));
+    try {
+      final doc =
+          await _firestore.collection(FirestorePaths.events).doc(eventId).get();
+      if (!doc.exists) return null;
+      final event = EventModel.fromFirestore(doc);
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final expiresMs = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch;
+      await _eventsDao.upsertEvent(
+        CachedEventsCompanion.insert(
+          id: eventId,
+          title: event.title,
+          eventJson: jsonEncode(event.toMap()),
+          cachedAt: nowMs,
+          expiresAt: expiresMs,
+        ),
+      );
+      return EventTicketConfig.fromEvent(event);
+    } catch (_) {
+      return getLocalEventTicketConfig(eventId);
+    }
   }
+
 
   Future<EventTicketConfig?> getLocalEventTicketConfig(String eventId) async {
     final cached = await _eventsDao.getEvent(eventId);
-    if (cached == null) return null;
-    try {
-      return EventTicketConfig.fromEvent(
-        EventModel.fromMap(cached.id, jsonDecode(cached.eventJson)),
-      );
-    } catch (_) {
-      return null;
+    if (cached != null) {
+      try {
+        final map = jsonDecode(cached.eventJson) as Map<String, dynamic>;
+        final event = EventModel.fromMap(cached.id, map);
+        return EventTicketConfig.fromEvent(event);
+      } catch (_) {}
     }
+
+    final payable = await _payablesDao.getPayableByEvent(eventId);
+    if (payable != null) {
+      return EventTicketConfig(
+        title: payable.eventTitle ?? 'STI Event',
+        enableQRTickets: true,
+        attendanceEnabled: true,
+        studentPayablesEnabled: payable.amountDue > 0 || payable.paymentStatus != 'free',
+        eventFee: payable.amountDue,
+      );
+    }
+    return null;
   }
+
 
   /// Reads the ticket status from the local Drift cache. Works offline.
   Future<QrTicketStatus?> getLocalTicketStatus(
