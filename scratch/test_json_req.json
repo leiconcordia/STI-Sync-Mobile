@@ -1,0 +1,14 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Return JSON: {\"status\": \"ok\", \"message\": \"testing\"}"
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "responseMimeType": "application/json"
+  }
+}

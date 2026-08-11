@@ -87,7 +87,7 @@ class StudentModel {
       email: d['email'] as String? ?? '',
       profilePhotoUrl: d['profilePhotoUrl'] as String? ?? '',
       schoolIdPhotoUrl: d['schoolIdPhotoUrl'] as String? ?? '',
-      status: d['status'] as String? ?? 'PENDING',
+      status: (d['status'] as String? ?? 'PENDING').trim().toUpperCase(),
       registrationSource: d['registrationSource'] as String? ?? '',
       addedBy: d['addedBy'] as String? ?? '',
       rejectionReason: d['rejectionReason'] as String?,
@@ -136,6 +136,8 @@ class StudentModel {
     required String uid,
     required String profilePhotoUrl,
     required String schoolIdPhotoUrl,
+    String? statusOverride,
+    String? rejectionReasonOverride,
   }) {
     return {
       'id': uid,
@@ -159,10 +161,11 @@ class StudentModel {
       'email': email,
       'profilePhotoUrl': profilePhotoUrl,
       'schoolIdPhotoUrl': schoolIdPhotoUrl,
-      'status': status,
+      'status': statusOverride ?? status,
       'registrationSource': registrationSource,
       'addedBy': addedBy,
-      if (rejectionReason != null) 'rejectionReason': rejectionReason,
+      if (rejectionReasonOverride != null || rejectionReason != null)
+        'rejectionReason': rejectionReasonOverride ?? rejectionReason,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };

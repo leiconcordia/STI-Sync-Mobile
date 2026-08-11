@@ -67,8 +67,10 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
     final dob = ref.watch(registrationViewModelProvider.select((s) => s.dateOfBirth));
     final sex = ref.watch(registrationViewModelProvider.select((s) => s.sex));
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

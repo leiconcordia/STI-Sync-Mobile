@@ -24,7 +24,7 @@ class PendingStatusScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
-    final student = authState.pendingStudent;
+    final student = authState.pendingStudent ?? authState.student;
 
     if (student == null) {
       return const Scaffold(
@@ -34,11 +34,8 @@ class PendingStatusScreen extends ConsumerWidget {
     }
 
     final isReturned = student.status == 'RETURNED';
-    
-    // Derived registration number: REG-YYYY-XXXX (where XXXX is first 4 of doc ID, uppercase)
-    final year = student.createdAt.year.toString();
-    final docIdChars = student.id.length >= 4 ? student.id.substring(0, 4).toUpperCase() : student.id.toUpperCase();
-    final regNumber = 'REG-$year-$docIdChars';
+    final isAiFlagged = student.rejectionReason != null &&
+        (student.rejectionReason!.contains('AI Flagged') || student.rejectionReason!.contains('AI'));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -90,29 +87,24 @@ class PendingStatusScreen extends ConsumerWidget {
                   
                   // Status Icon
                   Icon(
-                    isReturned ? Icons.error_outline : Icons.access_time,
-                    color: isReturned ? AppColors.error : AppColors.secondary,
+                    isReturned
+                        ? Icons.error_outline
+                        : (isAiFlagged ? Icons.warning_amber_rounded : Icons.access_time),
+                    color: isReturned
+                        ? AppColors.error
+                        : (isAiFlagged ? Colors.amber : AppColors.secondary),
                     size: 64,
                   ),
                   const SizedBox(height: 16),
                   
                   // Title
                   Text(
-                    isReturned ? 'Application Returned' : 'Account Under Review',
+                    isReturned
+                        ? 'Application Returned'
+                        : (isAiFlagged ? 'AI Flagged for Review' : 'Account Under Review'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Reg Number
-                  Text(
-                    regNumber,
-                    style: TextStyle(
-                      color: isReturned ? AppColors.error : AppColors.secondary,
-                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -144,10 +136,20 @@ class PendingStatusScreen extends ConsumerWidget {
                             isLast: false,
                           ),
                           _TimelineStep(
-                            icon: isReturned ? Icons.cancel : Icons.access_time_filled,
-                            iconColor: isReturned ? AppColors.error : AppColors.secondary,
-                            title: isReturned ? 'Application Returned' : 'SAO Review In Progress',
-                            subtitle: isReturned ? 'Action required' : 'Usually 1–3 working days',
+                            icon: isReturned
+                                ? Icons.cancel
+                                : (isAiFlagged ? Icons.warning_amber_rounded : Icons.access_time_filled),
+                            iconColor: isReturned
+                                ? AppColors.error
+                                : (isAiFlagged ? Colors.amber.shade700 : AppColors.secondary),
+                            title: isReturned
+                                ? 'Application Returned'
+                                : (isAiFlagged ? 'AI Verification Flagged' : 'SAO Review In Progress'),
+                            subtitle: isReturned
+                                ? 'Action required — see details below'
+                                : (isAiFlagged
+                                    ? 'Unclear text/photo. SAO Admin review required.'
+                                    : 'Usually 1–3 working days'),
                             isLast: false,
                           ),
                           _TimelineStep(
@@ -162,26 +164,32 @@ class PendingStatusScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Info Banner or Rejection Card
-                    if (isReturned && student.rejectionReason != null)
+                    // Rejection or Flagged Reason Card
+                    if (student.rejectionReason != null && student.rejectionReason!.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
+                          color: (isReturned ? AppColors.error : Colors.amber.shade800).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: (isReturned ? AppColors.error : Colors.amber.shade800).withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
-                                Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
-                                SizedBox(width: 8),
+                                Icon(
+                                  isReturned ? Icons.warning_amber_rounded : Icons.info_outline,
+                                  color: isReturned ? AppColors.error : Colors.amber.shade900,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Reason for Return',
+                                  isReturned ? 'Reason for Return' : 'Verification Note',
                                   style: TextStyle(
-                                    color: AppColors.error,
+                                    color: isReturned ? AppColors.error : Colors.amber.shade900,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -191,27 +199,6 @@ class PendingStatusScreen extends ConsumerWidget {
                             Text(
                               student.rejectionReason!,
                               style: const TextStyle(color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentPurple.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.3)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.notifications_active, color: AppColors.accentPurple, size: 20),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                "You'll receive a notification at your email the moment a decision is made.",
-                                style: TextStyle(color: AppColors.accentPurple),
-                              ),
                             ),
                           ],
                         ),

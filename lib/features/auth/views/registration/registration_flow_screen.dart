@@ -47,7 +47,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
   }
 
   /// Validates the current step and advances on success, or shows an error.
-  void _handleContinue(BuildContext context, WidgetRef ref) {
+  Future<void> _handleContinue(BuildContext context, WidgetRef ref) async {
     final vm = ref.read(registrationViewModelProvider.notifier);
     final s = ref.read(registrationViewModelProvider);
 
@@ -56,12 +56,24 @@ class RegistrationFlowScreen extends ConsumerWidget {
       return;
     }
 
-    final error = vm.validateStep(s.currentStep);
-    if (error != null) {
+    final syncError = vm.validateStep(s.currentStep);
+    if (syncError != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          content: Text(error),
+          content: Text(syncError),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      return;
+    }
+
+    final asyncError = await vm.validateStepAsync(s.currentStep);
+    if (asyncError != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(asyncError),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ));
@@ -94,15 +106,18 @@ class RegistrationFlowScreen extends ConsumerWidget {
        return;
     }
     
-    authVm.setRegistrationInProgress(true);
-    await vm.submit();
-    authVm.setRegistrationInProgress(false);
+    try {
+      authVm.setRegistrationInProgress(true);
+      await vm.submit();
+    } finally {
+      authVm.setRegistrationInProgress(false);
+    }
     
     // Check result — if still mounted and no error, navigate away.
     if (!context.mounted) return;
     final state = ref.read(registrationViewModelProvider);
     if (state.submitSuccess) {
-      _showSuccessAndExit(context);
+      _showSuccessAndExit(context, state.finalStatus);
     } else if (state.submitError != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -114,30 +129,46 @@ class RegistrationFlowScreen extends ConsumerWidget {
     }
   }
 
-  void _showSuccessAndExit(BuildContext context) {
+  void _showSuccessAndExit(BuildContext context, String finalStatus) {
+    final isAutoApproved = finalStatus == 'ACTIVE';
+    final isReturned = finalStatus == 'RETURNED';
+
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, color: AppColors.success, size: 64),
-            SizedBox(height: 16),
+            Icon(
+              isAutoApproved
+                  ? Icons.verified_user
+                  : (isReturned ? Icons.warning_amber_rounded : Icons.check_circle),
+              color: isAutoApproved
+                  ? AppColors.success
+                  : (isReturned ? Colors.amber.shade800 : AppColors.success),
+              size: 64,
+            ),
+            const SizedBox(height: 16),
             Text(
-              'Registration Submitted!',
-              style: TextStyle(
+              isAutoApproved
+                  ? 'AI Verification Successful!'
+                  : (isReturned ? 'Registration Returned' : 'Registration Submitted!'),
+              style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primaryDark),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Text(
-              'Your registration is under review by the SAO office. '
-              'You will be notified once it is approved (1–3 working days).',
+              isAutoApproved
+                  ? 'Your STI ID and selfie were automatically verified by AI. Your account is now active!'
+                  : (isReturned
+                      ? 'AI detected an issue with your document or photo. Your application was returned so you can upload clear photos.'
+                      : 'Your registration is under review by the SAO office. You will be notified once it is approved (1–3 working days).'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
+              style: const TextStyle(color: Colors.grey),
             ),
           ],
         ),
@@ -147,7 +178,11 @@ class RegistrationFlowScreen extends ConsumerWidget {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.goNamed('pendingStatus');
+                if (isAutoApproved) {
+                  context.go('/');
+                } else {
+                  context.goNamed('pendingStatus');
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryDark,
@@ -155,7 +190,9 @@ class RegistrationFlowScreen extends ConsumerWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('View Status'),
+              child: Text(isAutoApproved
+                  ? 'Continue to App'
+                  : (isReturned ? 'Review & Fix Photos' : 'View Status')),
             ),
           ),
         ],
@@ -176,6 +213,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
         _handleBack(context, ref);
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: Colors.white,
         body: SafeArea(
           child: Column(

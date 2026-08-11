@@ -60,6 +60,7 @@ class RegistrationState {
   final String submitProgressLabel;
   final String? submitError;
   final bool submitSuccess;
+  final String finalStatus; // 'ACTIVE' (AI Auto-Approve) | 'PENDING' (Admin Review)
   final List<String> debugLog;
 
   const RegistrationState({
@@ -96,6 +97,7 @@ class RegistrationState {
     this.submitProgressLabel = '',
     this.submitError,
     this.submitSuccess = false,
+    this.finalStatus = 'PENDING',
     this.debugLog = const [],
   });
 
@@ -216,6 +218,7 @@ class RegistrationState {
     String? submitError,
     bool clearSubmitError = false,
     bool? submitSuccess,
+    String? finalStatus,
     List<String>? debugLog,
   }) {
     return RegistrationState(
@@ -254,6 +257,7 @@ class RegistrationState {
       submitProgressLabel: submitProgressLabel ?? this.submitProgressLabel,
       submitError: clearSubmitError ? null : (submitError ?? this.submitError),
       submitSuccess: submitSuccess ?? this.submitSuccess,
+      finalStatus: finalStatus ?? this.finalStatus,
       debugLog: debugLog ?? this.debugLog,
     );
   }
@@ -351,6 +355,42 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
       case 5:
         if (!s.confirmedAccuracy) {
           return 'Please confirm that your information is accurate before submitting.';
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  /// Async duplicate checks against Firestore before advancing to the next step.
+  Future<String?> validateStepAsync(int stepIndex) async {
+    final s = state;
+    final excludeUid = s.existingUid; // If non-null, this is a resubmit for a RETURNED application
+
+    switch (stepIndex) {
+      case 0:
+        // Check student ID uniqueness ignoring self
+        if (await _repo.isStudentIdTaken(s.studentId.trim(), excludeUid: excludeUid)) {
+          return 'A student with this Student ID already exists.';
+        }
+        // Check duplicate First Name + Last Name + Date of Birth ignoring self
+        if (s.dateOfBirth != null) {
+          final dob = s.dateOfBirth!;
+          final dobStr =
+              '${dob.year}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
+          if (await _repo.isNameAndDobTaken(
+            firstName: s.firstName.trim(),
+            lastName: s.lastName.trim(),
+            dob: dobStr,
+            excludeUid: excludeUid,
+          )) {
+            return 'A student record with the same name and date of birth already exists.';
+          }
+        }
+        return null;
+      case 2:
+        if (await _repo.isEmailTaken(s.email.trim(), excludeUid: excludeUid)) {
+          return 'This email address is already registered to another account.';
         }
         return null;
       default:
@@ -565,8 +605,9 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
     );
 
     try {
+      String finalStatus = 'PENDING';
       if (s.isResubmit) {
-        await _repo.resubmit(
+        finalStatus = await _repo.resubmit(
           uid: s.existingUid!,
           data: model,
           profilePhotoFile: s.profilePhotoFile,
@@ -581,7 +622,7 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
           },
         );
       } else {
-        await _repo.register(
+        finalStatus = await _repo.register(
           data: model,
           password: s.password,
           profilePhotoFile: s.profilePhotoFile!,
@@ -594,7 +635,11 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
           },
         );
       }
-      state = state.copyWith(isSubmitting: false, submitSuccess: true);
+      state = state.copyWith(
+        isSubmitting: false,
+        submitSuccess: true,
+        finalStatus: finalStatus,
+      );
       return true;
     } catch (e) {
       state = state.copyWith(

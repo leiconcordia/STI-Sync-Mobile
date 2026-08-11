@@ -28,8 +28,10 @@ class ProfilePhotoStep extends ConsumerWidget {
     final photoFile = state.profilePhotoFile;
     final hasPhoto = state.hasProfilePhoto;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

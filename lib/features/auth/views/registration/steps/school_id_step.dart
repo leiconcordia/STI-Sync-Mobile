@@ -30,8 +30,10 @@ class SchoolIdStep extends ConsumerWidget {
     final idFile = state.schoolIdFile;
     final hasId = state.hasSchoolId;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -41,44 +43,48 @@ class SchoolIdStep extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
-          // Capture target.
-          GestureDetector(
-            onTap: () => _pick(ref, ImageSource.camera),
-            child: Container(
-              width: double.infinity,
-              height: 180,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3E9FA),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppColors.accentPurple.withValues(alpha: 0.5),
-                  width: 1.5,
+          // Capture target (Portrait Orientation).
+          Center(
+            child: GestureDetector(
+              onTap: () => _pick(ref, ImageSource.camera),
+              child: Container(
+                width: 240,
+                height: 330,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E9FA),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.accentPurple.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
                 ),
+                clipBehavior: Clip.antiAlias,
+                child: hasId
+                    ? (idFile != null
+                        ? Image.file(idFile, fit: BoxFit.cover)
+                        : Image.network(
+                            ref.read(registrationViewModelProvider).existingSchoolIdUrl!,
+                            fit: BoxFit.cover,
+                          ))
+                    : const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.badge_outlined, size: 54, color: AppColors.accentPurple),
+                          SizedBox(height: 12),
+                          Text(
+                            'Tap to photograph Portrait ID',
+                            style: TextStyle(
+                                color: AppColors.accentPurple,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15),
+                          ),
+                          SizedBox(height: 4),
+                          Text('or upload vertical STI ID photo',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: hasId
-                  ? (idFile != null
-                      ? Image.file(idFile, fit: BoxFit.cover)
-                      : Image.network(
-                          ref.read(registrationViewModelProvider).existingSchoolIdUrl!,
-                          fit: BoxFit.cover,
-                        ))
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.credit_card, size: 42, color: AppColors.accentPurple),
-                        SizedBox(height: 10),
-                        Text(
-                          'Tap to photograph your ID',
-                          style: TextStyle(
-                              color: AppColors.accentPurple,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 4),
-                        Text('or upload from gallery',
-                            style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      ],
-                    ),
             ),
           ),
           const SizedBox(height: 20),
@@ -150,7 +156,7 @@ class SchoolIdStep extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                ...['Full card visible, no cropping', 'All text readable'].map(
+                ...['Full vertical portrait card visible', 'STI logo and name readable'].map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
@@ -181,16 +187,6 @@ class _IdPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget bar(double width, {double height = 8}) => Container(
-          height: height,
-          width: width,
-          margin: const EdgeInsets.only(bottom: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFD9D9D9),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -201,67 +197,70 @@ class _IdPreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('What your ID should show',
+          const Text('What your Portrait ID should show',
               style: TextStyle(
                   fontWeight: FontWeight.bold, color: AppColors.accentPurple)),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
-                  children: [
-                    Container(
-                      height: 28,
-                      width: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFC9D4E5),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('STI',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryDark)),
+          Center(
+            child: Container(
+              width: 140,
+              height: 180,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 22,
+                    width: double.infinity,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark,
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 44,
-                      width: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE7E7E7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('Photo',
-                          style: TextStyle(fontSize: 9, color: Colors.grey)),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      bar(double.infinity),
-                      bar(140),
-                      bar(110),
-                      const SizedBox(height: 10),
-                      bar(double.infinity, height: 12),
-                    ],
+                    child: const Text('STI',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 50,
+                    width: 50,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE7E7E7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person, size: 34, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 6,
+                    width: 90,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD9D9D9),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    height: 6,
+                    width: 70,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD9D9D9),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

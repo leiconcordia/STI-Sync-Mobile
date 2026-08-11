@@ -177,3 +177,49 @@ Organizations in Web v2 carry `scope: 'departmental' | 'cross-departmental'`.
 - [x] Officer scanner app rejects gate check-in attempts for locked QR codes with clear error messages.
 - [x] Mobile announcement stream parses `linkedEventId` and navigates to the target event.
 - [x] Departmental organization badges render in Student Organization Explorer.
+
+---
+
+## 2. Student Self-Registration Validation Rules & Duplicate Checks
+
+### 2.1 Overview & Real-Time Step Validation
+When a student completes self-registration on the Mobile App, field validation occurs **in real-time as they tap "Continue"** on each step, as well as during final pipeline submission.
+
+---
+
+### 2.2 Complete Validation Matrix by Step
+
+| Step | Field / Rule | Validation Criteria | Error Message / Reason |
+| :--- | :--- | :--- | :--- |
+| **Step 0** | **Last Name** | Non-empty string | `Last name is required.` |
+| **Step 0** | **First Name** | Non-empty string | `First name is required.` |
+| **Step 0** | **Student ID Format** | Exactly 11 numeric digits (`^\d{11}$`) | `Student ID must be exactly 11 digits.` |
+| **Step 0** | **Duplicate Student ID** | Firestore check: `/students` where `studentId == input` | `A student with this Student ID already exists.` |
+| **Step 0** | **Duplicate Person Check** | Firestore check: Same `firstName` + `lastName` (case-insensitive) + `dateOfBirth` | `A student record with the same name and date of birth already exists.` |
+| **Step 0** | **Date of Birth** | Non-null `DateTime` (`YYYY-MM-DD`) | `Date of birth is required.` |
+| **Step 0** | **Sex** | Selected ('Male' or 'Female') | `Please select your sex.` |
+| **Step 0** | **Contact Number** | 10 numeric digits starting with 9 (`^9\d{9}$`) | `Contact number must be 10 digits starting with 9.` |
+| **Step 1** | **Course Code** | Selected from active Firestore courses | `Please select a course.` |
+| **Step 1** | **Year Level** | Selected ('1st Year', '2nd Year', '3rd Year', '4th Year') | `Please select your year level.` |
+| **Step 1** | **Section** | Non-empty string | `Section is required.` |
+| **Step 1** | **Semester** | Auto-fetched active semester name | `Please select a semester.` |
+| **Step 2** | **Email Format** | Valid email regex pattern | `Enter a valid email address.` |
+| **Step 2** | **Duplicate Email Check** | Firestore `/students` & Firebase Auth email check | `The email address is already in use by another account. Try logging in or use a different email.` |
+| **Step 2** | **Password Length** | Minimum 8 characters | `Password must be at least 8 characters.` |
+| **Step 2** | **Password Uppercase** | At least 1 uppercase letter (`[A-Z]`) | `Password must contain at least one uppercase letter.` |
+| **Step 2** | **Password Number** | At least 1 numeric digit (`[0-9]`) | `Password must contain at least one number.` |
+| **Step 2** | **Password Special Char** | At least 1 special character (`[!@#$%^&*...]`) | `Password must contain at least one special character.` |
+| **Step 2** | **Confirm Password** | Must match `password` exactly | `Passwords do not match.` |
+| **Step 3** | **Profile Photo** | Valid image file taken or uploaded | `Please take or upload your profile photo.` |
+| **Step 4** | **School ID Photo** | Valid STI ID image taken or uploaded | `Please take or upload your school ID.` |
+| **Step 5** | **Accuracy Checkbox** | `confirmedAccuracy == true` | `Please confirm that your information is accurate before submitting.` |
+
+---
+
+### 2.3 Gemini Multimodal AI Verification Pipeline
+1. **Document Validity (`isActualStiId`)**: Strictly checks for STI headers, emblem logo, and blue/yellow branding. Non-STI IDs trigger `RETURNED` status.
+2. **Blur / Glare Check (`isBlurry`)**: Ensures text and printed face are legible.
+3. **Selfie Face Validation (`isSelfieValidFace`)**: Ensures a clear human face is present in the selfie.
+4. **Name & Face Comparison**: Extracted name must match registered name, and face confidence must be $\ge 0.75$.
+5. **AI Auto-Reject / Return**: Sets status to `RETURNED` with the exact AI comment so the student can re-edit their information and upload new photos on `PendingStatusScreen`.
+

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/student_model.dart';
 import '../repositories/auth_repository.dart';
@@ -88,20 +89,18 @@ class AuthViewModel extends StateNotifier<AuthState> {
           // Listen to the stream instead of a one-time get so that status changes
           // reflect immediately in the AuthState.
           _repository.watchStudentProfile(user.uid).listen((student) {
-            // Ignore updates if registration is still writing the document
+            debugPrint('=== AUTH PROFILE STREAM: uid=${user.uid}, email=${user.email}, student=${student?.firstName} ${student?.lastName}, status=${student?.status} ===');
             if (_registrationInProgress) return;
             if (student != null) {
-              if (student.status == 'ACTIVE') {
+              final statusUpper = student.status.trim().toUpperCase();
+              if (statusUpper == 'ACTIVE') {
                 state = state.copyWith(
                   isAuthenticated: true,
                   student: student,
                   clearPendingStudent: true,
                   isLoading: false,
                 );
-              } else if (student.status == 'PENDING' || student.status == 'RETURNED') {
-                // Account exists but status is PENDING or RETURNED.
-                // We keep them "authenticated" internally but track them via pendingStudent
-                // so the router can send them to the pending screen.
+              } else if (statusUpper == 'PENDING' || statusUpper == 'RETURNED') {
                 state = state.copyWith(
                   isAuthenticated: true,
                   pendingStudent: student,
@@ -109,24 +108,26 @@ class AuthViewModel extends StateNotifier<AuthState> {
                   isLoading: false,
                 );
               } else {
-                 // Other states like SUSPENDED, INACTIVE
                  state = state.copyWith(
                   isAuthenticated: false,
+                  errorMessage: 'Account status is ${student.status}. Please contact SAO.',
                   clearStudent: true,
                   clearPendingStudent: true,
                   isLoading: false,
                 );
               }
             } else {
-               // Null doc edge cases
+               debugPrint('=== AUTH PROFILE STREAM: No student doc found for UID ${user.uid} ===');
                state = state.copyWith(
                  isAuthenticated: false,
+                 errorMessage: 'No student record found for this account. Please register.',
                  clearStudent: true,
                  clearPendingStudent: true,
                  isLoading: false,
                );
             }
           }, onError: (e) {
+            debugPrint('=== AUTH PROFILE STREAM ERROR: $e ===');
             state = state.copyWith(
               isAuthenticated: false,
               errorMessage: 'Failed to load profile: $e',
@@ -154,6 +155,10 @@ class AuthViewModel extends StateNotifier<AuthState> {
     });
   }
 
+  void clearError() {
+    state = state.copyWith(clearError: true);
+  }
+
   Future<void> login(String email, String password) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -170,6 +175,4 @@ class AuthViewModel extends StateNotifier<AuthState> {
     await _repository.logout();
     await _appDatabase.clearAllData();
   }
-
-
 }

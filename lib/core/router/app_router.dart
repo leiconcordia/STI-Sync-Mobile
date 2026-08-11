@@ -22,22 +22,45 @@ import 'package:sti_sync/features/profile/views/profile_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/sync/models/sync_status_model.dart';
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authViewModelProvider, (previous, next) {
+      notifyListeners();
+    });
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authViewModelProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: notifier,
     redirect: (context, state) {
+      final authState = ref.read(authViewModelProvider);
       final isAuth = authState.isAuthenticated;
-      final isPending = authState.pendingStudent != null;
-      
+      final currentStudent = authState.pendingStudent ?? authState.student;
+      final statusUpper = currentStudent?.status.trim().toUpperCase() ?? '';
+      final isPending = authState.pendingStudent != null ||
+          (currentStudent != null &&
+              (statusUpper == 'PENDING' || statusUpper == 'RETURNED'));
+
       // Paths that don't require authentication
       final isAuthPath = state.matchedLocation == '/login' ||
                          state.matchedLocation == '/register' ||
                          state.matchedLocation == '/welcome';
       
-      // If at splash screen, don't redirect yet; let splash handle navigation
+      // If at splash screen:
       if (state.matchedLocation == '/') {
+        if (isAuth) {
+          return isPending ? '/pending-status' : '/dashboard';
+        }
         return null;
       }
 

@@ -32,16 +32,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     const Color navyColor = Color(0xFF001D4A);
     const Color purpleAccent = Color(0xFF6A1B9A);
 
-    // Listen for error messages and show SnackBar
+    // Listen for auth state changes and redirect upon successful login
     ref.listen(authViewModelProvider, (previous, next) {
-      if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (next.isAuthenticated) {
+        final currentStudent = next.pendingStudent ?? next.student;
+        if (currentStudent != null) {
+          final statusUpper = currentStudent.status.trim().toUpperCase();
+          if (statusUpper == 'PENDING' || statusUpper == 'RETURNED') {
+            context.goNamed('pendingStatus');
+          } else if (statusUpper == 'ACTIVE') {
+            context.goNamed('dashboard');
+          }
+        }
+      }
+
+      if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(next.errorMessage!),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        ref.read(authViewModelProvider.notifier).clearError();
       }
     });
 
@@ -195,10 +211,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   onPressed: authState.isLoading
                       ? null
                       : () {
-                          authViewModel.login(
-                            _emailController.text.trim(),
-                            _passwordController.text.trim(),
-                          );
+                          final email = _emailController.text.trim();
+                          final password = _passwordController.text.trim();
+
+                          if (email.isEmpty) {
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter your Student ID or Email.'),
+                                  backgroundColor: AppColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            return;
+                          }
+
+                          if (password.isEmpty) {
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter your password.'),
+                                  backgroundColor: AppColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            return;
+                          }
+
+                          authViewModel.login(email, password);
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: navyColor,

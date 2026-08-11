@@ -27,8 +27,10 @@ class ReviewStep extends ConsumerWidget {
 
     String orDash(String v) => v.trim().isEmpty ? '—' : v;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -208,32 +210,32 @@ class ReviewStep extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFBEB),
+              color: const Color(0xFFF4F6FF),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFE08A)),
+              border: Border.all(color: AppColors.accentPurple.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: const [
-                    Icon(Icons.info_outline, size: 18, color: Color(0xFFE0A100)),
+                    Icon(Icons.auto_awesome, size: 18, color: AppColors.accentPurple),
                     SizedBox(width: 8),
                     Text(
-                      'After You Submit',
+                      'AI Automated Verification Process',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFE0A100),
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 ...[
-                  'Registration enters SAO review queue',
-                  'SAO Adviser verifies your identity (1–3 working days)',
-                  "You'll be notified: Approved / Correction Needed / Rejected",
-                  'Once approved — log in and access all features',
+                  'AI Verification evaluates your uploaded STI ID and selfie photo instantly.',
+                  'If AI conditions are met (valid STI ID & clear face match), your account is Auto-Approved immediately!',
+                  'If photos are blurry or text is unclear, your registration will be reviewed manually by SAO staff (1–3 working days).',
+                  'Once approved, you can log in and access all STI Sync features right away.',
                 ].asMap().entries.map(
                       (e) => Padding(
                         padding: const EdgeInsets.only(bottom: 6),
@@ -243,7 +245,7 @@ class ReviewStep extends ConsumerWidget {
                             Text(
                               '${e.key + 1}. ',
                               style: const TextStyle(
-                                color: AppColors.primaryDark,
+                                color: AppColors.accentPurple,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
