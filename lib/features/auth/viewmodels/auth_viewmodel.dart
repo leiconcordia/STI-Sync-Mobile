@@ -172,7 +172,11 @@ class AuthViewModel extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    try {
+      await _appDatabase.clearAllData();
+    } catch (e) {
+      debugPrint('Error purging local database on logout: $e');
+    }
     await _repository.logout();
-    await _appDatabase.clearAllData();
   }
 }

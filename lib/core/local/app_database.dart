@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -134,11 +135,22 @@ class AppDatabase extends _$AppDatabase {
   Future<void> clearAllData() async {
     await customStatement('PRAGMA foreign_keys = OFF');
     try {
-      await transaction(() async {
-        for (final table in allTables) {
-          await delete(table).go();
+      for (final table in allTables) {
+        int retries = 0;
+        while (retries < 3) {
+          try {
+            await delete(table).go();
+            break;
+          } catch (e) {
+            retries++;
+            if (retries >= 3) {
+              debugPrint('⚠️ Warning: Failed to purge table ${table.actualTableName} on logout: $e');
+              break;
+            }
+            await Future.delayed(const Duration(milliseconds: 150));
+          }
         }
-      });
+      }
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
     }
