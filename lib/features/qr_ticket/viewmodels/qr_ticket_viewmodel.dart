@@ -27,6 +27,7 @@ class QrTicketLocked extends QrTicketState {
   final String studentId;
   final String profilePhotoUrl;
   final String courseInfo;
+  final String? lockReason;
 
   const QrTicketLocked({
     required this.amountDue,
@@ -36,7 +37,11 @@ class QrTicketLocked extends QrTicketState {
     required this.studentId,
     required this.profilePhotoUrl,
     required this.courseInfo,
+    this.lockReason,
   });
+
+  bool get isReEnrollmentRequired =>
+      paymentStatus.toUpperCase() == 'RE_ENROLLMENT_REQUIRED';
 }
 
 class QrTicketNoTicket extends QrTicketState {
@@ -55,7 +60,11 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
 
   QrTicketViewModel(this._repository) : super(const QrTicketLoading());
 
-  Future<void> loadTicket(StudentModel student, String eventId) async {
+  Future<void> loadTicket(
+    StudentModel student,
+    String eventId, {
+    dynamic activeSemester,
+  }) async {
     state = const QrTicketLoading();
     final studentAuthUid = student.id;
     final studentName = '${student.firstName} ${student.lastName}'.trim();
@@ -66,6 +75,23 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
     final courseInfo = [courseCode, student.yearLevel, student.section]
         .where((value) => value.isNotEmpty)
         .join(' - ');
+
+    // Gate Lock Rule: Semester Rollover / Pending Re-enrollment
+    if (activeSemester != null && student.isPendingReEnrollment(activeSemester)) {
+      state = QrTicketLocked(
+        amountDue: 0.0,
+        paymentStatus: 'RE_ENROLLMENT_REQUIRED',
+        eventTitle: 'Re-enrollment Required',
+        studentName: studentName,
+        studentId: studentIdNumber,
+        profilePhotoUrl: profilePhotoUrl,
+        courseInfo: courseInfo,
+        lockReason:
+            'Please complete your semester re-enrollment confirmation to unlock your event QR tickets.',
+      );
+      return;
+    }
+
 
     try {
       final isOnline = await _repository.checkOnline();

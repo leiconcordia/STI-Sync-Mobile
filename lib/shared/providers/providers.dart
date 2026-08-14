@@ -23,12 +23,20 @@ import '../../features/payables/models/payable_model.dart';
 import '../../features/payables/repositories/payables_repository.dart';
 import '../../features/announcements/models/announcement_model.dart';
 import '../../features/announcements/repositories/announcements_repository.dart';
+import '../../features/semester/models/semester_model.dart';
+import '../../features/semester/repositories/semester_repository.dart';
 import '../../core/local/app_database.dart';
+
+/// Semester feature
+final semesterRepositoryProvider = Provider<SemesterRepository>((ref) {
+  return SemesterRepository(ref.watch(firestoreProvider));
+});
 
 /// Announcements feature
 final announcementsRepositoryProvider = Provider<AnnouncementsRepository>((ref) {
   return AnnouncementsRepository(ref.watch(firestoreProvider));
 });
+
 
 final announcementsStreamProvider = StreamProvider<List<AnnouncementModel>>((ref) {
   final student = ref.watch(authViewModelProvider).student;
@@ -47,18 +55,57 @@ final announcementsStreamProvider = StreamProvider<List<AnnouncementModel>>((ref
 
 /// Payables feature
 final payablesRepositoryProvider = Provider<PayablesRepository>((ref) {
-  return PayablesRepository(ref.watch(firestoreProvider));
+  return PayablesRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(appDatabaseProvider),
+  );
 });
 
-final payablesStreamProvider = StreamProvider<List<PayableModel>>((ref) {
+final studentPayablesStreamProvider = StreamProvider<List<PayableModel>>((ref) {
   final authState = ref.watch(authViewModelProvider);
   final uid = authState.student?.id ?? '';
   if (uid.isEmpty) return Stream.value([]);
   return ref.watch(payablesRepositoryProvider).watchStudentPayables(uid);
 });
 
+// Alias for backward compatibility across existing views
+final payablesStreamProvider = studentPayablesStreamProvider;
+
+final eventPayableFamilyProvider = StreamProvider.family<PayableModel?, String>((ref, eventId) {
+  final authState = ref.watch(authViewModelProvider);
+  final uid = authState.student?.id ?? '';
+  if (uid.isEmpty || eventId.isEmpty) return Stream.value(null);
+  return ref.watch(payablesRepositoryProvider).watchEventPayable(uid, eventId);
+});
+
+/// Filter selection state: 'all' | 'event_fee' | 'membership_due' | 'fine'
+final payablesFilterProvider = StateProvider<String>((ref) => 'all');
+
+/// Filtered payables list
+final filteredPayablesProvider = Provider<List<PayableModel>>((ref) {
+  final payablesAsync = ref.watch(studentPayablesStreamProvider);
+  final filter = ref.watch(payablesFilterProvider);
+
+  return payablesAsync.maybeWhen(
+    data: (payables) {
+      if (filter == 'all') return payables;
+      if (filter == 'event_fee') {
+        return payables.where((p) => p.type == 'event_fee' || p.payableType == PayableType.eventFee).toList();
+      }
+      if (filter == 'membership_due') {
+        return payables.where((p) => p.type == 'membership_due' || p.payableType == PayableType.membershipDue).toList();
+      }
+      if (filter == 'fine') {
+        return payables.where((p) => p.type == 'org_fine' || p.type == 'admin_fine' || p.payableType == PayableType.orgFine || p.payableType == PayableType.adminFine).toList();
+      }
+      return payables;
+    },
+    orElse: () => [],
+  );
+});
+
 final payablesSummaryProvider = Provider<PayablesSummary>((ref) {
-  final payablesAsync = ref.watch(payablesStreamProvider);
+  final payablesAsync = ref.watch(studentPayablesStreamProvider);
   return payablesAsync.maybeWhen(
     data: (payables) => PayablesSummary.fromPayables(payables),
     orElse: () => const PayablesSummary(
@@ -66,10 +113,19 @@ final payablesSummaryProvider = Provider<PayablesSummary>((ref) {
       totalPaid: 0,
       totalOutstanding: 0,
       paidPercentage: 1.0,
+      pendingCount: 0,
+      overdueCount: 0,
       nextDue: null,
     ),
   );
 });
+
+/// Unsettled payables count for Navigation Bar Badge
+final unreadPayablesBadgeProvider = Provider<int>((ref) {
+  final summary = ref.watch(payablesSummaryProvider);
+  return summary.pendingCount;
+});
+
 
 
 /// Organization Repository & Memberships Provider
@@ -104,27 +160,26 @@ final eventsStreamProvider = StreamProvider<List<EventModel>>((ref) {
   return ref.watch(eventRepositoryProvider).watchEligibleEvents(student.id);
 });
 
-final activeSemesterProvider = StreamProvider<String>((ref) {
-  return ref.watch(firestoreProvider).collection(FirestorePaths.semesters).snapshots().map((snap) {
-    if (snap.docs.isEmpty) return '';
-    final activeDoc = snap.docs.firstWhere(
-      (doc) {
-        final data = doc.data();
-        return data['isCurrent'] == true || data['isActive'] == true || data['status'] == 'active';
-      },
-      orElse: () => snap.docs.first,
-    );
-    final data = activeDoc.data();
-    final name = (data['name'] as String?) ?? (data['semester'] as String?) ?? (data['term'] as String?) ?? '';
-    final sy = (data['academicYear'] as String?) ?? (data['schoolYear'] as String?) ?? (data['year'] as String?) ?? '';
-    if (name.isNotEmpty && sy.isNotEmpty) {
-      return '$name - A.Y. $sy';
-    } else if (name.isNotEmpty) {
-      return name;
-    }
-    return '';
-  }).handleError((_) => '');
+final activeSemesterModelProvider = StreamProvider<SemesterModel?>((ref) {
+  return ref.watch(semesterRepositoryProvider).watchActiveSemester();
 });
+
+final activeSemesterProvider = StreamProvider<String>((ref) {
+  final semAsync = ref.watch(activeSemesterModelProvider);
+  return semAsync.when(
+    data: (sem) => Stream.value(sem?.displayName ?? ''),
+    loading: () => Stream.value(''),
+    error: (_, __) => Stream.value(''),
+  );
+});
+
+final isPendingReEnrollmentProvider = Provider<bool>((ref) {
+  final student = ref.watch(authViewModelProvider).student;
+  if (student == null) return false;
+  final activeSemester = ref.watch(activeSemesterModelProvider).valueOrNull;
+  return student.isPendingReEnrollment(activeSemester);
+});
+
 
 
 /// Sync feature

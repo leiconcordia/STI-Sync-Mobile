@@ -166,15 +166,34 @@ class OfflineAttendanceRepository {
       if (payablesEnabled) {
         final payable = payablesMap[student.id];
         if (payable != null) {
+          final assigned = (payable['assignedAmount'] as num?)?.toDouble() ?? (payable['amount'] as num?)?.toDouble() ?? 0.0;
+          final paid = (payable['paidAmount'] as num?)?.toDouble() ?? 0.0;
+          final rawDue = (payable['amountDue'] as num?)?.toDouble() ?? (assigned - paid > 0 ? assigned - paid : 0.0);
+          final rawStatus = payable['status'] as String? ?? (payable['paymentStatus'] as String? ?? 'pending');
+          final isPaid = rawStatus == 'paid' || rawStatus == 'waived' || (assigned > 0 && paid >= assigned);
+          final isUnlocked = (payable['qrTicketUnlocked'] == true) || isPaid;
+
           payableCompanions.add(CachedPayablesCompanion(
             id: Value(payable['id'] as String),
             eventId: Value(eventId),
             studentId: Value(student.id),
-            qrTicketUnlocked: Value(payable['qrTicketUnlocked'] == true ? 1 : 0),
-            amountDue: Value((payable['amountDue'] as num?)?.toDouble() ?? 0.0),
-            paymentStatus: Value(payable['paymentStatus'] as String? ?? 'UNPAID'),
-            cachedAt: Value(nowMs),
             studentName: Value('${student.firstName} ${student.lastName}'),
+            studentSchoolId: Value(student.studentId),
+            type: Value(payable['type'] as String? ?? 'event_fee'),
+            label: Value(payable['label'] as String? ?? (eventData['title'] as String? ?? 'Event Fee')),
+            description: Value(payable['description'] as String?),
+            organizationId: Value(payable['organizationId'] as String?),
+            organizationName: Value(payable['organizationName'] as String?),
+            semesterId: Value(payable['semesterId'] as String? ?? ''),
+            assignedAmount: Value(assigned),
+            paidAmount: Value(paid),
+            amountDue: Value(isPaid ? 0.0 : rawDue),
+            status: Value(rawStatus),
+            paymentStatus: Value(payable['paymentStatus'] as String? ?? rawStatus),
+            qrTicketUnlocked: Value(isUnlocked ? 1 : 0),
+            dueDate: Value((payable['dueDate'] as Timestamp?)?.millisecondsSinceEpoch),
+            paidAt: Value((payable['paidAt'] as Timestamp?)?.millisecondsSinceEpoch),
+            cachedAt: Value(nowMs),
             studentIdNumber: Value(student.studentId),
             profilePhotoUrl: Value(student.profilePhotoUrl),
             eventTitle: Value(eventData['title'] as String? ?? ''),
@@ -183,6 +202,7 @@ class OfflineAttendanceRepository {
         }
       }
     }
+
 
     await _finalizeDownload(eventId, participantCompanions, payableCompanions);
     onProgress?.call(1.0);

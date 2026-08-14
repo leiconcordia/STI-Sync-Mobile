@@ -23,12 +23,12 @@ class HistoryListView extends ConsumerWidget {
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade200),
             ),
             child: Column(
               children: [
-                const Icon(Icons.history, size: 48, color: Colors.grey),
+                const Icon(Icons.history_rounded, size: 48, color: Colors.grey),
                 const SizedBox(height: 12),
                 Text(
                   'No Payment History',
@@ -36,7 +36,7 @@ class HistoryListView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Your payment transactions and receipts will appear here.',
+                  'Your payment transactions and receipts will appear here once settled.',
                   style: AppTextStyles.labelSmall.copyWith(color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
@@ -48,7 +48,19 @@ class HistoryListView extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Completed Payments & Receipts', style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark, fontSize: 16)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Completed Payments & Receipts',
+                  style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark, fontSize: 16),
+                ),
+                Text(
+                  '${paidHistory.length} record(s)',
+                  style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             ...paidHistory.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
@@ -82,6 +94,10 @@ class HistoryListView extends ConsumerWidget {
         ? DateFormat('MMM dd, yyyy').format(item.paidAt!) 
         : (item.createdAt != null ? DateFormat('MMM dd, yyyy').format(item.createdAt!) : 'Recorded');
 
+    final bool isCampus = item.isCampusWide;
+    final String orgName = item.organizationName?.isNotEmpty == true ? item.organizationName! : (isCampus ? 'SAO Campus' : 'Club');
+    final Color orgBadgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
+
     final String methodStr = item.paymentMethod != null && item.paymentMethod!.isNotEmpty
         ? ' • ${item.paymentMethod!.toUpperCase()}'
         : '';
@@ -94,15 +110,25 @@ class HistoryListView extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: AppColors.success,
-            child: const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -117,13 +143,27 @@ class HistoryListView extends ConsumerWidget {
                     fontSize: 15,
                   ),
                 ),
-                Text(
-                  '${item.organizationName ?? "SAO Campus"}$methodStr$refStr',
-                  style: AppTextStyles.labelSmall.copyWith(color: Colors.grey, fontSize: 11),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      orgName,
+                      style: TextStyle(
+                        color: orgBadgeColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                    Text(
+                      '$methodStr$refStr',
+                      style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 11),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -131,13 +171,14 @@ class HistoryListView extends ConsumerWidget {
                 '₱${item.paidAmount > 0 ? item.paidAmount.toStringAsFixed(0) : item.assignedAmount.toStringAsFixed(0)}',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: AppColors.success,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w800,
                   fontSize: 16,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 dateStr,
-                style: AppTextStyles.labelSmall.copyWith(color: Colors.grey, fontSize: 11),
+                style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade500, fontSize: 10.5),
               ),
             ],
           ),
@@ -146,3 +187,4 @@ class HistoryListView extends ConsumerWidget {
     );
   }
 }
+

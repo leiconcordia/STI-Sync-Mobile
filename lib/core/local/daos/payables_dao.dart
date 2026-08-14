@@ -13,6 +13,14 @@ class PayablesDao extends DatabaseAccessor<AppDatabase>
     return into(cachedPayables).insertOnConflictUpdate(payable);
   }
 
+  Future<void> batchUpsertPayables(List<CachedPayablesCompanion> payables) {
+    return batch((b) {
+      for (final p in payables) {
+        b.insert(cachedPayables, p, mode: InsertMode.insertOrReplace);
+      }
+    });
+  }
+
   /// Stores one canonical local ticket state per student/event pair. Firestore
   /// payable IDs can change between a missing-payable fallback and a later
   /// created payable, so the local cache must not retain duplicate rows.
@@ -49,6 +57,10 @@ class PayablesDao extends DatabaseAccessor<AppDatabase>
         .getSingleOrNull();
   }
 
+  Future<List<CachedPayable>> getPayablesForStudent(String studentId) {
+    return (select(cachedPayables)..where((t) => t.studentId.equals(studentId))).get();
+  }
+
   Future<CachedPayable?> getPayableByEvent(String eventId) async {
     return (select(cachedPayables)..where((t) => t.eventId.equals(eventId)))
         .getSingleOrNull();
@@ -59,4 +71,5 @@ class PayablesDao extends DatabaseAccessor<AppDatabase>
         .go();
   }
 }
+
 

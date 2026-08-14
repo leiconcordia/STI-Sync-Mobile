@@ -9,12 +9,14 @@ class NavItem {
   final IconData icon;
   final String label;
   final bool hasDot;
+  final int badgeCount;
 
   const NavItem({
     required this.tab,
     required this.icon,
     required this.label,
     this.hasDot = false,
+    this.badgeCount = 0,
   });
 }
 
@@ -36,21 +38,25 @@ class GlassBottomNav extends StatelessWidget {
   /// Whether the scanner assignment indicator dot should be shown.
   final bool hasActiveScannerAssignment;
 
+  /// Real-time pending/unsettled obligations badge count for Finance tab
+  final int financeBadgeCount;
+
   const GlassBottomNav({
     super.key,
     required this.selectedTab,
     required this.onTabSelected,
     this.showScannerTab = false,
     this.hasActiveScannerAssignment = false,
+    this.financeBadgeCount = 0,
   });
 
   List<NavItem> get _items {
-    const allItems = [
-      NavItem(tab: NavTab.home, icon: Icons.home_outlined, label: 'Home'),
-      NavItem(tab: NavTab.events, icon: Icons.calendar_month_outlined, label: 'Events'),
-      NavItem(tab: NavTab.scanner, icon: Icons.qr_code_scanner, label: 'Scanner'),
-      NavItem(tab: NavTab.finance, icon: Icons.account_balance_wallet_outlined, label: 'Finance'),
-      NavItem(tab: NavTab.profile, icon: Icons.person_outline, label: 'Profile'),
+    final allItems = [
+      const NavItem(tab: NavTab.home, icon: Icons.home_outlined, label: 'Home'),
+      const NavItem(tab: NavTab.events, icon: Icons.calendar_month_outlined, label: 'Events'),
+      NavItem(tab: NavTab.scanner, icon: Icons.qr_code_scanner, label: 'Scanner', hasDot: hasActiveScannerAssignment),
+      NavItem(tab: NavTab.finance, icon: Icons.account_balance_wallet_outlined, label: 'Finance', badgeCount: financeBadgeCount),
+      const NavItem(tab: NavTab.profile, icon: Icons.person_outline, label: 'Profile'),
     ];
 
     if (!showScannerTab) {
@@ -59,18 +65,7 @@ class GlassBottomNav extends StatelessWidget {
           .toList();
     }
 
-    // When scanner is visible, add the dot indicator
-    return allItems.map((item) {
-      if (item.tab == NavTab.scanner) {
-        return NavItem(
-          tab: item.tab,
-          icon: item.icon,
-          label: item.label,
-          hasDot: hasActiveScannerAssignment,
-        );
-      }
-      return item;
-    }).toList();
+    return allItems;
   }
 
   @override
@@ -181,6 +176,41 @@ class GlassBottomNav extends StatelessWidget {
                             ),
                           ),
                         ),
+                      // Real-time unread/unsettled obligations badge count for Finance tab
+                      if (item.badgeCount > 0)
+                        Positioned(
+                          right: -8,
+                          top: -6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white, width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                height: 1.0,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -192,3 +222,4 @@ class GlassBottomNav extends StatelessWidget {
     );
   }
 }
+

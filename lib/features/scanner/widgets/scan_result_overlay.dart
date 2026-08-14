@@ -90,7 +90,7 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
         bgColor = Colors.deepOrange.shade600;
         icon = Icons.person_off_outlined;
         title = 'Not Registered';
-        subtitle = 'Student is not registered for this event.';
+        subtitle = widget.extraMessage ?? 'Student is not registered for this event.';
         break;
       case ScanResultType.invalidFormat:
         bgColor = Colors.red;
@@ -107,7 +107,7 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
         child: Container(
           width: double.infinity,
           height: double.infinity,
-          color: bgColor.withOpacity(0.95),
+          color: bgColor.withValues(alpha: 0.95),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -138,12 +138,13 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
                     ],
                   ),
+
                   child: Column(
                     children: [
                       CircleAvatar(

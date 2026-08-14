@@ -66,18 +66,18 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
       }
 
       // VALIDATION 1: Event ID check
-      if (qrEventId?.trim() != widget.eventId.trim()) {
+      if (qrEventId.trim() != widget.eventId.trim()) {
         await _showOverlay(
           ScanResultType.wrongEvent, 
           null, 
-          extraMessage: 'QR Event ID: "${qrEventId?.trim()}"\nExpected: "${widget.eventId.trim()}"',
+          extraMessage: 'QR Event ID: "${qrEventId.trim()}"\nExpected: "${widget.eventId.trim()}"',
         );
         return;
       }
 
       final db = ref.read(appDatabaseProvider);
 
-      // VALIDATION 2: Participant check (Drift)
+      // VALIDATION 2: Participant check (Drift local database)
       // Note: `id` in cached_participants is the studentAuthUid
       final participant = await db.participantsDao.getParticipantByStudentId(
         studentAuthUid,
@@ -85,11 +85,16 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
       );
 
       if (participant == null) {
-        await _showOverlay(ScanResultType.notRegistered, null);
+        // Strict Option A: Missing from offline cache => Reject with online verification warning
+        await _showOverlay(
+          ScanResultType.notRegistered,
+          null,
+          extraMessage: 'PAYMENT VERIFICATION REQUIRED ONLINE\nRecord Not Found in Offline Cache',
+        );
         return;
       }
 
-      // VALIDATION 2b: Gate Lock Check (MOB-GATE-02)
+      // VALIDATION 2b: Gate Lock Check (MOB-GATE-02 / Option A)
       if (participant.qrTicketUnlocked == 0) {
         await _showOverlay(
           ScanResultType.paymentRequired,
@@ -98,7 +103,6 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         );
         return;
       }
-
 
       // VALIDATION 3: Duplicate check
       final existing = await db.attendanceDao.checkDuplicate(
@@ -110,7 +114,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
       );
 
       if (existing != null) {
-        // Find the friendly time string for the error message
+        if (!mounted) return;
         final timeStr = TimeOfDay.fromDateTime(
           DateTime.fromMillisecondsSinceEpoch(existing.scannedAt),
         ).format(context);
@@ -122,6 +126,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         );
         return;
       }
+
 
       // SUCCESS: Write to local database
       final currentUserId = ref.read(authViewModelProvider).student?.id ?? 'Unknown';

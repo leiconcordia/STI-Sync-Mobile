@@ -79,6 +79,9 @@ class MainShellScreen extends ConsumerWidget {
     final scannerState = ref.watch(scannerViewModelProvider);
     final showScanner = scannerState.hasActiveAssignments;
 
+    // Read unsettled obligations badge count
+    final financeBadgeCount = ref.watch(unreadPayablesBadgeProvider);
+
     final selectedTab = _branchToTab(navigationShell.currentIndex);
 
     return Scaffold(
@@ -92,7 +95,6 @@ class MainShellScreen extends ConsumerWidget {
             child: navigationShell,
           ),
 
-
           // Floating glass nav bar pinned to the bottom
           Positioned(
             left: 0,
@@ -103,11 +105,12 @@ class MainShellScreen extends ConsumerWidget {
               onTabSelected: _onTabSelected,
               showScannerTab: showScanner,
               hasActiveScannerAssignment: showScanner,
+              financeBadgeCount: financeBadgeCount,
             ),
           ),
         ],
       ),
     );
-
   }
+
 }

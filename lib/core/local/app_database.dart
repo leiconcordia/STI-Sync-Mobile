@@ -43,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -122,15 +122,39 @@ class AppDatabase extends _$AppDatabase {
             // Ignore if column already exists
           }
         }
+        if (from < 9) {
+          try {
+            await m.addColumn(cachedPayables, cachedPayables.studentSchoolId);
+            await m.addColumn(cachedPayables, cachedPayables.type);
+            await m.addColumn(cachedPayables, cachedPayables.label);
+            await m.addColumn(cachedPayables, cachedPayables.description);
+            await m.addColumn(cachedPayables, cachedPayables.organizationId);
+            await m.addColumn(cachedPayables, cachedPayables.organizationName);
+            await m.addColumn(cachedPayables, cachedPayables.semesterId);
+            await m.addColumn(cachedPayables, cachedPayables.assignedAmount);
+            await m.addColumn(cachedPayables, cachedPayables.paidAmount);
+            await m.addColumn(cachedPayables, cachedPayables.status);
+            await m.addColumn(cachedPayables, cachedPayables.dueDate);
+            await m.addColumn(cachedPayables, cachedPayables.paidAt);
+          } catch (e) {
+            // Ignore if column already exists
+          }
+        }
       },
     );
   }
 
+  @override
   EventsDao get eventsDao => EventsDao(this);
+  @override
   ParticipantsDao get participantsDao => ParticipantsDao(this);
+  @override
   AttendanceDao get attendanceDao => AttendanceDao(this);
+  @override
   PayablesDao get payablesDao => PayablesDao(this);
+  @override
   ScannerDao get scannerDao => ScannerDao(this);
+
 
   Future<void> clearAllData() async {
     await customStatement('PRAGMA foreign_keys = OFF');

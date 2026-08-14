@@ -97,17 +97,19 @@ class QrTicketRepository {
       final data = snap.docs.first.data();
       final explicitUnlocked = data['qrTicketUnlocked'] as bool? ?? false;
       final rawStatus = data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'unpaid');
-      final isPaid = rawStatus == 'paid' || rawStatus == 'waived';
-      final assigned = (data['assignedAmount'] as num?)?.toDouble() ?? 0.0;
+      final assigned = (data['assignedAmount'] as num?)?.toDouble() ?? (data['amount'] as num?)?.toDouble() ?? config.eventFee;
       final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
-      final rawDue = (data['amountDue'] as num?)?.toDouble() ?? (assigned - paid > 0 ? assigned - paid : config.eventFee);
+      final rawDue = (data['amountDue'] as num?)?.toDouble() ?? (assigned - paid > 0 ? assigned - paid : 0.0);
+      
+      // Strict 100% full settlement policy (Option A)
+      final isPaid = rawStatus == 'paid' || rawStatus == 'waived' || (assigned > 0 && paid >= assigned);
+      final isUnlocked = explicitUnlocked || isPaid;
 
       return QrTicketStatus(
-        isUnlocked: explicitUnlocked || isPaid,
+        isUnlocked: isUnlocked,
         amountDue: isPaid ? 0.0 : (rawDue > 0 ? rawDue : config.eventFee),
         paymentStatus: rawStatus,
       );
-
     });
   }
 
@@ -152,18 +154,32 @@ class QrTicketRepository {
     }
 
     final data = snap.docs.first.data();
-    final rawStatus = data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'unpaid');
-    final isPaid = rawStatus == 'paid' || rawStatus == 'waived';
     final explicitUnlocked = data['qrTicketUnlocked'] as bool? ?? false;
+    final rawStatus = data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'unpaid');
+    final assigned = (data['assignedAmount'] as num?)?.toDouble() ?? (data['amount'] as num?)?.toDouble() ?? config.eventFee;
+    final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+    final rawDue = (data['amountDue'] as num?)?.toDouble() ?? (assigned - paid > 0 ? assigned - paid : 0.0);
+    
+    // Strict Option A: Partial payment does not unlock QR code
+    final isPaid = rawStatus == 'paid' || rawStatus == 'waived' || (assigned > 0 && paid >= assigned);
     final isUnlocked = explicitUnlocked || isPaid;
 
     await _payablesDao.replacePayable(
         CachedPayablesCompanion(
-          id: Value('${eventId}_$studentId'),
+          id: Value(snap.docs.first.id),
           eventId: Value(eventId),
           studentId: Value(studentId),
+          type: Value(data['type'] as String? ?? 'event_fee'),
+          label: Value(data['label'] as String? ?? (data['title'] as String? ?? 'Event Fee')),
+          description: Value(data['description'] as String?),
+          organizationId: Value(data['organizationId'] as String?),
+          organizationName: Value(data['organizationName'] as String?),
+          semesterId: Value(data['semesterId'] as String? ?? ''),
+          assignedAmount: Value(assigned),
+          paidAmount: Value(paid),
+          status: Value(data['status'] as String? ?? 'pending'),
           qrTicketUnlocked: Value(isUnlocked ? 1 : 0),
-          amountDue: Value(isPaid ? 0.0 : ((data['amountDue'] as num?)?.toDouble() ?? config.eventFee)),
+          amountDue: Value(isPaid ? 0.0 : (rawDue > 0 ? rawDue : config.eventFee)),
           paymentStatus: Value(rawStatus),
           cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
           studentName: Value(studentName),
@@ -175,6 +191,7 @@ class QrTicketRepository {
         studentId: studentId,
         eventId: eventId);
   }
+
 
   Future<EventTicketConfig?> getEventTicketConfig(String eventId) async {
     try {

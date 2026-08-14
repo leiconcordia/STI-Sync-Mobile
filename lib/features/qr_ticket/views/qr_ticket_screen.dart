@@ -26,13 +26,15 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authState = ref.read(authViewModelProvider);
       final student = authState.student;
+      final activeSemester = ref.read(activeSemesterModelProvider).valueOrNull;
       if (student != null) {
         ref
             .read(qrTicketViewModelProvider(widget.eventId).notifier)
-            .loadTicket(student, widget.eventId);
+            .loadTicket(student, widget.eventId, activeSemester: activeSemester);
       }
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +100,10 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
         studentName: state.studentName,
         studentId: state.studentId,
         profilePhotoUrl: state.profilePhotoUrl,
+        lockReason: state.lockReason,
       );
     }
+
 
     if (state is QrTicketError) {
       return Center(

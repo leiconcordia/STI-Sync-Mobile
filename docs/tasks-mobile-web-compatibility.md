@@ -3,13 +3,14 @@
 > **Path:** `docs/tasks-mobile-web-compatibility.md`  
 > **Target App:** STI Sync Android (Flutter / Dart)  
 > **Shared Backend:** Firebase Firestore & Cloud Storage (shared with STI Sync Web v2)  
-> **Status:** Pending Mobile Implementation  
+> **Related Architecture Guides:** `docs/financial-sync-implementation-plan.md`, `docs/features/financial-mobile-sync-guide.md`  
+> **Status:** Web Backend Implemented — Mobile Implementation Ready  
 
 ---
 
 ## Executive Summary & Context
 
-The STI Sync Web application has undergone major updates to support **Event Payables, Gate Access Control (QR Ticket Locks), Denormalized Student Payables, Targeted Announcements with Event Linking, and Organization Departmental Scopes**.
+The STI Sync Web application has undergone major updates to support **Event Payables, Independent Admin/Club Ledgers, Gate Access Control (QR Ticket Locks), Denormalized Student Payables, and Dynamic Late-Registration Sync**.
 
 Because both Web and Mobile apps share the same Firebase Firestore backend, the mobile app (Student & Officer views) must be updated to align with these schema additions and business logic rules.
 
@@ -17,209 +18,195 @@ Because both Web and Mobile apps share the same Firebase Firestore backend, the 
 
 ## Detailed Task Matrix
 
-| Task ID | Component / Feature | Impact Level | Summary of Required Changes |
-| :--- | :--- | :--- | :--- |
-| **MOB-PAY-01** | `PayableModel` & Firestore Parsing | **CRITICAL** | Parse `qrTicketUnlocked` (bool), `studentName`, `studentSchoolId`, `assignedAmount`, `paidAmount`, `status` in Dart. |
-| **MOB-GATE-01** | Student Event Ticket & QR Overlay | **CRITICAL** | Lock QR code display on student event ticket screen if `qrTicketUnlocked == false` or payment is pending. |
-| **MOB-GATE-02** | Officer Gate Scanner Permission Check | **CRITICAL** | Enforce `qrTicketUnlocked == true` during officer QR code attendance scan; block gate entry if locked. |
-| **MOB-ANN-01** | `AnnouncementModel` & Feed Scoping | **HIGH** | Support `organizationId`, `linkedEventId`, `linkedEventTitle`, `targetDepartments`, `targetYearLevels`, `authorRole`. |
-| **MOB-ANN-02** | Announcement Linked Event Navigation | **MEDIUM** | Render clickable linked event button in announcement cards navigating to `EventDetailScreen`. |
-| **MOB-ORG-01** | Organization Scope & Eligibility | **MEDIUM** | Filter departmental vs. cross-departmental clubs in student Org Explorer based on student's `departmentId`. |
-| **MOB-ATT-01** | Defensive Attendance Event Title Guard | **LOW** | Prevent null pointer crashes on attendance event title matching using safe String fallbacks. |
+| Task ID | Component / Feature | Impact Level | Summary of Required Changes | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **MOB-PAY-01** | `PayableModel` & Enums | **CRITICAL** | Parse `qrTicketUnlocked` (bool), `PayableType`, `PayableStatus`, `assignedAmount`, `paidAmount`. | **Specified** |
+| **MOB-PAY-02** | Drift Local Database Cache | **CRITICAL** | Create `CachedPayables` table in Drift for offline gate access control. | **Specified** |
+| **MOB-PAY-03** | Riverpod State Providers | **HIGH** | `studentPayablesStreamProvider`, `eventPayableFamilyProvider`, `unreadPayablesBadgeProvider`. | **Specified** |
+| **MOB-PAY-04** | Payables Center UI | **HIGH** | Build `PayablesScreen` with SAO vs. Club badges and payment bottom sheet. | **Specified** |
+| **MOB-GATE-01** | Student Event Ticket & QR Overlay | **CRITICAL** | Enforce strict Option A 100% full payment lock on `QrTicketScreen`. | **Specified** |
+| **MOB-GATE-02** | Officer Gate Scanner Guard | **CRITICAL** | Enforce Option A strict online/offline cache verification before recording attendance. | **Specified** |
+| **MOB-ANN-01** | `AnnouncementModel` & Feed Scoping | **HIGH** | Support `organizationId`, `linkedEventId`, `linkedEventTitle`, `targetDepartments`, `targetYearLevels`. | **Specified** |
+| **MOB-ANN-02** | Announcement Linked Event Navigation | **MEDIUM** | Render clickable linked event button in announcement cards navigating to `EventDetailScreen`. | **Specified** |
+| **MOB-ORG-01** | Organization Scope & Eligibility | **MEDIUM** | Filter departmental vs. cross-departmental clubs in student Org Explorer. | **Specified** |
 
 ---
 
-## 1. Feature Breakdown & Implementation Tasks
+## 1. Feature Breakdown & Implementation Code Specifications
 
-### 1.1 Task MOB-PAY-01: Update `PayableModel` & Firestore Deserializer
+### 1.1 Task MOB-PAY-01: `PayableModel` & Domain Enums
 
-#### Context
-Web v2 denormalizes student identity directly into `/payables/{payableId}` and adds an explicit gate control flag: `qrTicketUnlocked`.
-
-#### Schema Updates (`/payables/{payableId}`)
+#### File: `lib/features/payables/domain/models/payable_model.dart`
 ```dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum PayableType {
+  eventFee('event_fee', 'Event Fee'),
+  membershipDue('membership_due', 'Membership Due'),
+  orgFine('org_fine', 'Club Fine'),
+  adminFine('admin_fine', 'SAO Violation Fine'),
+  custom('custom', 'Custom Fee');
+
+  final String value;
+  final String label;
+  const PayableType(this.value, this.label);
+
+  static PayableType fromString(String? val) {
+    return PayableType.values.firstWhere(
+      (e) => e.value == val,
+      orElse: () => PayableType.eventFee,
+    );
+  }
+}
+
+enum PayableStatus {
+  pending('pending', 'Pending Payment'),
+  partial('partial', 'Partially Paid'),
+  paid('paid', 'Fully Paid'),
+  overdue('overdue', 'Overdue'),
+  waived('waived', 'Waived');
+
+  final String value;
+  final String label;
+  const PayableStatus(this.value, this.label);
+
+  static PayableStatus fromString(String? val) {
+    return PayableStatus.values.firstWhere(
+      (e) => e.value == val,
+      orElse: () => PayableStatus.pending,
+    );
+  }
+}
+
 class PayableModel {
   final String id;
   final String studentId;
-  final String studentName;        // e.g. "Lei Concordia"
-  final String studentSchoolId;    // Official 11-digit STI ID e.g. "02000123456"
+  final String studentName;
+  final String studentSchoolId;
+  final PayableType type;
+  final String label;
+  final String description;
   final String? organizationId;
+  final String? organizationName;
+  final String semesterId;
   final String? eventId;
-  final String type;               // 'event_fee', 'membership_due', 'org_fine', etc.
-  final String label;              // e.g. "Event Fee — IT Week 2026"
   final double assignedAmount;
   final double paidAmount;
-  final String status;             // 'pending', 'partial', 'paid', 'waived'
-  final bool qrTicketUnlocked;     // TRUE = Gate QR Code unlocked for scanning
+  final PayableStatus status;
   final DateTime? dueDate;
   final DateTime? paidAt;
+  final String? recordedBy;
   final String? paymentMethod;
+  final bool qrTicketUnlocked;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-  PayableModel.fromFirestore(Map<String, dynamic> data, String id)
-    : id = id,
-      studentId = data['studentId'] ?? '',
-      studentName = data['studentName'] ?? data['name'] ?? 'Student',
-      studentSchoolId = data['studentSchoolId'] ?? data['schoolId'] ?? '',
-      organizationId = data['organizationId'],
-      eventId = data['eventId'],
-      type = data['type'] ?? 'event_fee',
-      label = data['label'] ?? data['title'] ?? '',
-      assignedAmount = (data['assignedAmount'] ?? data['amount'] ?? 0).toDouble(),
-      paidAmount = (data['paidAmount'] ?? data['amountPaid'] ?? 0).toDouble(),
-      status = data['status'] ?? 'pending',
-      qrTicketUnlocked = data['qrTicketUnlocked'] ?? false,
-      dueDate = (data['dueDate'] as Timestamp?)?.toDate(),
-      paidAt = (data['paidAt'] as Timestamp?)?.toDate(),
-      paymentMethod = data['paymentMethod'];
+  const PayableModel({
+    required this.id,
+    required this.studentId,
+    required this.studentName,
+    required this.studentSchoolId,
+    required this.type,
+    required this.label,
+    required this.description,
+    this.organizationId,
+    this.organizationName,
+    required this.semesterId,
+    this.eventId,
+    required this.assignedAmount,
+    required this.paidAmount,
+    required this.status,
+    this.dueDate,
+    this.paidAt,
+    this.recordedBy,
+    this.paymentMethod,
+    required this.qrTicketUnlocked,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  double get remainingBalance => (assignedAmount - paidAmount).clamp(0.0, double.infinity);
+  bool get isPaid => status == PayableStatus.paid || remainingBalance <= 0;
+  bool get isOverdue => dueDate != null && DateTime.now().isAfter(dueDate!) && !isPaid;
+  bool get isCampusWide => organizationId == null || organizationId!.isEmpty;
+
+  factory PayableModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return PayableModel(
+      id: doc.id,
+      studentId: data['studentId'] ?? '',
+      studentName: data['studentName'] ?? 'Student',
+      studentSchoolId: data['studentSchoolId'] ?? data['studentId'] ?? '',
+      type: PayableType.fromString(data['type']),
+      label: data['label'] ?? 'Payable',
+      description: data['description'] ?? '',
+      organizationId: data['organizationId'],
+      organizationName: data['organizationName'],
+      semesterId: data['semesterId'] ?? '',
+      eventId: data['eventId'],
+      assignedAmount: (data['assignedAmount'] ?? data['amount'] ?? 0).toDouble(),
+      paidAmount: (data['paidAmount'] ?? 0).toDouble(),
+      status: PayableStatus.fromString(data['status']),
+      dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
+      paidAt: (data['paidAt'] as Timestamp?)?.toDate(),
+      recordedBy: data['recordedBy'],
+      paymentMethod: data['paymentMethod'],
+      qrTicketUnlocked: data['qrTicketUnlocked'] ?? false,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
 }
 ```
 
 ---
 
-### 1.2 Task MOB-GATE-01: Student Event Ticket Screen & QR Code Lock Overlay
-
-#### Context
-When an event requires payment (`studentPayablesEnabled == true` & fee > 0), the student's QR code ticket must remain **LOCKED** until `qrTicketUnlocked == true` (updated by SAO Admin / Officer upon payment or override).
+### 1.2 Task MOB-GATE-01: Strict QR Gate Lock Overlay on `QrTicketScreen`
 
 #### Requirements
-1. Query `/payables` where `studentId == currentStudentUid` and `eventId == currentEventId`.
-2. Check `payable.qrTicketUnlocked`:
-   - **If `qrTicketUnlocked == true` OR event is free**: Render student's QR code for gate entry.
-   - **If `qrTicketUnlocked == false`**: Display a locked overlay on top of the QR code canvas:
-     - Icon: `Icons.lock_rounded` (Amber / Red badge)
-     - Message: *"🔒 QR Ticket Locked — Payment Pending"*
-     - Subtitle: *"Please pay your event fee at the SAO office or Cashier to unlock your gate scan ticket."*
+1. If event has `studentPayablesEnabled == true` and `fee > 0`:
+   - Watch `eventPayableFamilyProvider(eventId)`.
+   - If `payable == null` or `payable.qrTicketUnlocked == false`:
+     - Render `LockedQrCard` with payment instructions.
+     - **Security:** Do NOT render or generate the QR code payload on the widget tree.
+2. When cashier records 100% full payment on the Web portal:
+   - Live Firestore stream automatically sets `qrTicketUnlocked = true`.
+   - `QrTicketScreen` unlocks immediately in real-time.
 
 ---
 
-### 1.3 Task MOB-GATE-02: Officer Gate Scanner Access Control Verification
+### 1.3 Task MOB-GATE-02: Officer Gate Scanner Access Verification
 
-#### Context
-When an officer scans a student's event QR code at gate check-in, the mobile scanner must verify payment / QR access status before recording attendance.
-
-#### Scan Verification Workflow
+#### Scan Verification Rule (Option A — Strict):
 ```dart
-Future<ScanResult> processGateScan(String scannedStudentUid, String eventId) async {
-  // 1. Fetch event payables for scanned student
-  final payablesQuery = await FirebaseFirestore.instance
-      .collection('payables')
-      .where('eventId', isEqualTo: eventId)
-      .where('studentId', isEqualTo: scannedStudentUid)
-      .get();
+Future<ScanResult> processGateScan({
+  required String eventId,
+  required String studentAuthUid,
+  required bool isOnline,
+}) async {
+  final event = await _eventRepo.getEventById(eventId);
+  if (event.studentPayablesEnabled && (event.feeAmount ?? 0) > 0) {
+    try {
+      final isAllowed = await _payablesRepo.verifyQrTicketAccess(
+        studentId: studentAuthUid,
+        eventId: eventId,
+        isOnline: isOnline,
+      );
 
-  if (payablesQuery.docs.isNotEmpty) {
-    final payableData = payablesQuery.docs.first.data();
-    final bool qrTicketUnlocked = payableData['qrTicketUnlocked'] ?? false;
-    final String status = payableData['status'] ?? 'pending';
-
-    // 2. Gate Lock Enforcement
-    if (!qrTicketUnlocked && status != 'paid' && status != 'waived') {
-      return ScanResult.denied(
-        reason: "GATE ACCESS DENIED\nUnpaid Event Fee / QR Code Locked",
-        studentName: payableData['studentName'] ?? 'Student',
+      if (!isAllowed) {
+        return ScanResult.rejected(
+          reason: 'Payment Required: Student has unpaid event balance.',
+          showPaymentPrompt: true,
+        );
+      }
+    } on OfflinePayableNotFoundException catch (_) {
+      return ScanResult.rejected(
+        reason: 'Payment Verification Required Online: Record not found in offline cache.',
+        showPaymentPrompt: false,
       );
     }
   }
 
-  // 3. Proceed with standard attendance logging...
-  return recordAttendance(scannedStudentUid, eventId);
+  return _attendanceRepo.recordCheckIn(eventId: eventId, studentId: studentAuthUid);
 }
 ```
-
----
-
-### 1.4 Task MOB-ANN-01 & MOB-ANN-02: Targeted Announcements & Linked Event Navigation
-
-#### Context
-Web v2 supports org-authored announcements, department/year level targeting, and direct linking to approved events.
-
-#### Schema Additions (`/announcements/{announcementId}`)
-```dart
-class AnnouncementModel {
-  final String id;
-  final String title;
-  final String content;
-  final String priority;              // 'Normal', 'Important', 'Urgent'
-  final String audience;              // 'campus-wide', 'all-organizations', 'targeted'
-  final String? organizationId;       // Authoring Org ID
-  final String? organizationName;     // Authoring Org Name
-  final String? authorRole;           // e.g. "SAO Admin", "IT Guild President"
-  final String? linkedEventId;        // Optional FK → /events
-  final String? linkedEventTitle;     // Optional Event Title
-  final List<String> targetDepartments; // e.g. ["IT Department"]
-  final List<String> targetYearLevels;  // e.g. ["3rd Year", "4th Year"]
-}
-```
-
-#### UI Enhancements in Mobile Announcement Feed
-1. **Targeting Filter**: Stream announcements where `audience == 'campus-wide'` OR `targetDepartments.contains(student.departmentId)` OR `targetYearLevels.contains(student.yearLevel)`.
-2. **Linked Event Button**: If `linkedEventId != null`, display a card action button:
-   - Button: `📅 View Linked Event: ${linkedEventTitle}`
-   - Action: Navigates directly to `EventDetailScreen(eventId: linkedEventId)`.
-
----
-
-### 1.5 Task MOB-ORG-01: Departmental vs. Cross-Departmental Organization Scopes
-
-#### Context
-Organizations in Web v2 carry `scope: 'departmental' | 'cross-departmental'`.
-
-#### Mobile Behavior
-1. **Departmental Clubs (e.g. IT GUILD)**: Display badge: `🏢 IT Department Only`. Only allow join requests if student's `departmentId` matches `allowedDepartmentIds` or org's `departmentId`.
-2. **Cross-Departmental Clubs (e.g. Red Cross Youth - RCY)**: Display badge: `🌐 Open to All Departments`. Allow join requests from any student regardless of course/department.
-
----
-
-## Verification & Alignment Checklist
-
-- [x] `PayableModel` parses `qrTicketUnlocked` correctly from Firestore.
-- [x] Student event details screen blocks QR code rendering when `qrTicketUnlocked == false`.
-- [x] Officer scanner app rejects gate check-in attempts for locked QR codes with clear error messages.
-- [x] Mobile announcement stream parses `linkedEventId` and navigates to the target event.
-- [x] Departmental organization badges render in Student Organization Explorer.
-
----
-
-## 2. Student Self-Registration Validation Rules & Duplicate Checks
-
-### 2.1 Overview & Real-Time Step Validation
-When a student completes self-registration on the Mobile App, field validation occurs **in real-time as they tap "Continue"** on each step, as well as during final pipeline submission.
-
----
-
-### 2.2 Complete Validation Matrix by Step
-
-| Step | Field / Rule | Validation Criteria | Error Message / Reason |
-| :--- | :--- | :--- | :--- |
-| **Step 0** | **Last Name** | Non-empty string | `Last name is required.` |
-| **Step 0** | **First Name** | Non-empty string | `First name is required.` |
-| **Step 0** | **Student ID Format** | Exactly 11 numeric digits (`^\d{11}$`) | `Student ID must be exactly 11 digits.` |
-| **Step 0** | **Duplicate Student ID** | Firestore check: `/students` where `studentId == input` | `A student with this Student ID already exists.` |
-| **Step 0** | **Duplicate Person Check** | Firestore check: Same `firstName` + `lastName` (case-insensitive) + `dateOfBirth` | `A student record with the same name and date of birth already exists.` |
-| **Step 0** | **Date of Birth** | Non-null `DateTime` (`YYYY-MM-DD`) | `Date of birth is required.` |
-| **Step 0** | **Sex** | Selected ('Male' or 'Female') | `Please select your sex.` |
-| **Step 0** | **Contact Number** | 10 numeric digits starting with 9 (`^9\d{9}$`) | `Contact number must be 10 digits starting with 9.` |
-| **Step 1** | **Course Code** | Selected from active Firestore courses | `Please select a course.` |
-| **Step 1** | **Year Level** | Selected ('1st Year', '2nd Year', '3rd Year', '4th Year') | `Please select your year level.` |
-| **Step 1** | **Section** | Non-empty string | `Section is required.` |
-| **Step 1** | **Semester** | Auto-fetched active semester name | `Please select a semester.` |
-| **Step 2** | **Email Format** | Valid email regex pattern | `Enter a valid email address.` |
-| **Step 2** | **Duplicate Email Check** | Firestore `/students` & Firebase Auth email check | `The email address is already in use by another account. Try logging in or use a different email.` |
-| **Step 2** | **Password Length** | Minimum 8 characters | `Password must be at least 8 characters.` |
-| **Step 2** | **Password Uppercase** | At least 1 uppercase letter (`[A-Z]`) | `Password must contain at least one uppercase letter.` |
-| **Step 2** | **Password Number** | At least 1 numeric digit (`[0-9]`) | `Password must contain at least one number.` |
-| **Step 2** | **Password Special Char** | At least 1 special character (`[!@#$%^&*...]`) | `Password must contain at least one special character.` |
-| **Step 2** | **Confirm Password** | Must match `password` exactly | `Passwords do not match.` |
-| **Step 3** | **Profile Photo** | Valid image file taken or uploaded | `Please take or upload your profile photo.` |
-| **Step 4** | **School ID Photo** | Valid STI ID image taken or uploaded | `Please take or upload your school ID.` |
-| **Step 5** | **Accuracy Checkbox** | `confirmedAccuracy == true` | `Please confirm that your information is accurate before submitting.` |
-
----
-
-### 2.3 Gemini Multimodal AI Verification Pipeline
-1. **Document Validity (`isActualStiId`)**: Strictly checks for STI headers, emblem logo, and blue/yellow branding. Non-STI IDs trigger `RETURNED` status.
-2. **Blur / Glare Check (`isBlurry`)**: Ensures text and printed face are legible.
-3. **Selfie Face Validation (`isSelfieValidFace`)**: Ensures a clear human face is present in the selfie.
-4. **Name & Face Comparison**: Extracted name must match registered name, and face confidence must be $\ge 0.75$.
-5. **AI Auto-Reject / Return**: Sets status to `RETURNED` with the exact AI comment so the student can re-edit their information and upload new photos on `PendingStatusScreen`.
-

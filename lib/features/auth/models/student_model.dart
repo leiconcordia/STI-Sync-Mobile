@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../semester/models/semester_model.dart';
 
 /// Represents a student document from Firestore `students/{uid}`.
 ///
@@ -26,7 +27,7 @@ class StudentModel {
   final String email;
   final String profilePhotoUrl;  // Cloudinary secure_url, "" if none
   final String schoolIdPhotoUrl; // Cloudinary secure_url, "" if none
-  final String status;           // ACTIVE | PENDING | RETURNED | INACTIVE | SUSPENDED | ARCHIVED
+  final String status;           // ACTIVE | PENDING | RETURNED | INACTIVE | SUSPENDED | ARCHIVED | PENDING_REENROLLMENT
   final String registrationSource; // "SELF_REGISTER" | "MANUAL"
   final String addedBy;          // "self" for self-registration
   final String? rejectionReason; // Set by admin on RETURNED status only
@@ -62,6 +63,87 @@ class StudentModel {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// Evaluates whether the student must complete in-app semester re-enrollment.
+  bool isPendingReEnrollment(SemesterModel? activeSemester) {
+    final statusUpper = status.trim().toUpperCase();
+    if (statusUpper == 'PENDING_REENROLLMENT') return true;
+    if (statusUpper != 'ACTIVE') return false;
+    if (activeSemester == null) return false;
+    if (!activeSemester.isActive) return false;
+
+    final syMismatch = activeSemester.academicYear.isNotEmpty &&
+        schoolYear.trim().toLowerCase() != activeSemester.academicYear.trim().toLowerCase();
+    final semMismatch = activeSemester.semester.isNotEmpty &&
+        semester.trim().toLowerCase() != activeSemester.semester.trim().toLowerCase();
+
+    return syMismatch || semMismatch;
+  }
+
+  /// Whether the student is fully re-enrolled and active for the current active semester.
+  bool isReEnrolled(SemesterModel? activeSemester) =>
+      !isPendingReEnrollment(activeSemester);
+
+  StudentModel copyWith({
+    String? id,
+    String? authUid,
+    String? lastName,
+    String? firstName,
+    String? middleName,
+    String? studentId,
+    String? dateOfBirth,
+    String? sex,
+    String? contactNumber,
+    String? courseId,
+    String? courseName,
+    String? courseCode,
+    String? departmentId,
+    String? departmentName,
+    String? yearLevel,
+    String? section,
+    String? schoolYear,
+    String? semester,
+    String? email,
+    String? profilePhotoUrl,
+    String? schoolIdPhotoUrl,
+    String? status,
+    String? registrationSource,
+    String? addedBy,
+    String? rejectionReason,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return StudentModel(
+      id: id ?? this.id,
+      authUid: authUid ?? this.authUid,
+      lastName: lastName ?? this.lastName,
+      firstName: firstName ?? this.firstName,
+      middleName: middleName ?? this.middleName,
+      studentId: studentId ?? this.studentId,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      sex: sex ?? this.sex,
+      contactNumber: contactNumber ?? this.contactNumber,
+      courseId: courseId ?? this.courseId,
+      courseName: courseName ?? this.courseName,
+      courseCode: courseCode ?? this.courseCode,
+      departmentId: departmentId ?? this.departmentId,
+      departmentName: departmentName ?? this.departmentName,
+      yearLevel: yearLevel ?? this.yearLevel,
+      section: section ?? this.section,
+      schoolYear: schoolYear ?? this.schoolYear,
+      semester: semester ?? this.semester,
+      email: email ?? this.email,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      schoolIdPhotoUrl: schoolIdPhotoUrl ?? this.schoolIdPhotoUrl,
+      status: status ?? this.status,
+      registrationSource: registrationSource ?? this.registrationSource,
+      addedBy: addedBy ?? this.addedBy,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
 
   factory StudentModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;

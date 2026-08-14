@@ -5,6 +5,7 @@ import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/features/payables/models/payable_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
+import 'payment_instructions_bottom_sheet.dart';
 
 class FinesListView extends ConsumerWidget {
   const FinesListView({super.key});
@@ -29,7 +30,7 @@ class FinesListView extends ConsumerWidget {
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade200),
             ),
             child: Column(
@@ -42,7 +43,7 @@ class FinesListView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Great job! You have zero org or administrative fines.',
+                  'Great job! You have zero organization or SAO administrative fines.',
                   style: AppTextStyles.labelSmall.copyWith(color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
@@ -57,28 +58,54 @@ class FinesListView extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.secondary),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.8)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.error_outline, color: AppColors.secondary),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Outstanding Fines',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.secondary,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: const Icon(Icons.error_outline, color: AppColors.secondary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Outstanding Fines',
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '${unpaidFines.length} unpaid violation fine(s)',
+                            style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                   Text(
                     '₱${totalOutstandingFines.toStringAsFixed(0)}',
-                    style: AppTextStyles.h2.copyWith(color: AppColors.error),
+                    style: AppTextStyles.h2.copyWith(
+                      color: totalOutstandingFines > 0 ? AppColors.error : AppColors.success,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -86,7 +113,7 @@ class FinesListView extends ConsumerWidget {
             const SizedBox(height: 16),
             ...fines.map((fine) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
-              child: _buildFineCard(fine),
+              child: _buildFineCard(context, fine),
             )),
           ],
         );
@@ -111,86 +138,146 @@ class FinesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildFineCard(PayableModel fine) {
-    final dueStr = fine.dueDate != null ? DateFormat('MMM dd').format(fine.dueDate!) : 'TBA';
+  Widget _buildFineCard(BuildContext context, PayableModel fine) {
+    final bool isCampus = fine.isCampusWide;
+    final String orgName = fine.organizationName?.isNotEmpty == true ? fine.organizationName! : (isCampus ? 'SAO Administrative' : 'Club Fine');
+    final Color badgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
+    final dueStr = fine.dueDate != null ? DateFormat('MMM dd, yyyy').format(fine.dueDate!) : 'TBA';
     final isUnpaid = fine.isPending;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fine.label,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: AppColors.primaryDark,
-                        fontWeight: FontWeight.bold,
-                      ),
+    return InkWell(
+      onTap: () => PaymentInstructionsBottomSheet.show(context),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isUnpaid ? AppColors.error.withValues(alpha: 0.25) : Colors.grey.shade200,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    orgName,
+                    style: TextStyle(
+                      color: badgeColor,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isUnpaid ? AppColors.error.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isUnpaid ? 'Unpaid Fine' : 'Settled',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: isUnpaid ? AppColors.error : AppColors.success,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fine.label,
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      if (fine.description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          fine.description,
+                          style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '₱${fine.remainingBalance.toStringAsFixed(0)}',
+                  style: AppTextStyles.h2.copyWith(
+                    color: isUnpaid ? AppColors.error : AppColors.success,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(color: Colors.grey.shade200, height: 1),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 12, color: isUnpaid ? AppColors.error : Colors.grey),
+                    const SizedBox(width: 5),
                     Text(
-                      fine.organizationName ?? 'SAO Office',
-                      style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary),
+                      'Due: $dueStr',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: isUnpaid ? AppColors.error : Colors.grey.shade600,
+                        fontSize: 11,
+                        fontWeight: isUnpaid ? FontWeight.bold : FontWeight.normal,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              Text(
-                '₱${fine.remainingBalance.toStringAsFixed(0)}',
-                style: AppTextStyles.h1.copyWith(color: isUnpaid ? AppColors.error : AppColors.success),
-              ),
-            ],
-          ),
-          if (fine.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              fine.description,
-              style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade700),
+                if (isUnpaid)
+                  Row(
+                    children: [
+                      Text(
+                        'Pay Fine',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.arrow_forward_ios, size: 10, color: AppColors.primary),
+                    ],
+                  ),
+              ],
             ),
           ],
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Due: $dueStr',
-                    style: AppTextStyles.labelSmall.copyWith(color: Colors.grey),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isUnpaid ? AppColors.error.withOpacity(0.1) : AppColors.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  isUnpaid ? 'Unpaid' : 'Settled',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: isUnpaid ? AppColors.error : AppColors.success,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+

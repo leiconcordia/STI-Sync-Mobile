@@ -26,70 +26,146 @@ class PaymentOverviewCard extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryDark,
+            AppColors.primary,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(22.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'PAYMENT OVERVIEW',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.account_balance_wallet_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'FINANCIAL OVERVIEW',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ],
                     ),
-                    const Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 18),
+                    if (summary.pendingCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${summary.pendingCount} Pending',
+                          style: const TextStyle(
+                            color: AppColors.primaryDark,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'All Settled ✓',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildColumn('Total Dues', '₱${summary.totalAssigned.toStringAsFixed(0)}', Colors.white),
-                    Container(width: 1, height: 40, color: Colors.white24),
-                    _buildColumn('Paid', '₱${summary.totalPaid.toStringAsFixed(0)}', AppColors.success),
-                    Container(width: 1, height: 40, color: Colors.white24),
+                    Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.2)),
+                    _buildColumn('Total Paid', '₱${summary.totalPaid.toStringAsFixed(0)}', const Color(0xFF4ADE80)),
+                    Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.2)),
                     _buildColumn('Outstanding', '₱${summary.totalOutstanding.toStringAsFixed(0)}', AppColors.secondary),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Stack(
                   children: [
                     Container(
-                      height: 12,
+                      height: 10,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(5),
                       ),
                     ),
                     FractionallySizedBox(
                       widthFactor: widthFactor > 0 ? widthFactor : 0.0,
                       child: Container(
-                        height: 12,
+                        height: 10,
                         decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: BorderRadius.circular(6),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF34D399), Color(0xFF10B981)],
+                          ),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '$percentInt% paid this semester',
-                    style: AppTextStyles.labelSmall.copyWith(color: Colors.white70),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      summary.overdueCount > 0 ? '${summary.overdueCount} overdue obligation' : 'Semester Progress',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: summary.overdueCount > 0 ? Colors.red.shade300 : Colors.white.withValues(alpha: 0.7),
+                        fontWeight: summary.overdueCount > 0 ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    Text(
+                      '$percentInt% Settled',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -97,20 +173,26 @@ class PaymentOverviewCard extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.15),
               borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.calendar_today, color: Colors.white70, size: 16),
+                const Icon(Icons.schedule_outlined, color: Colors.white70, size: 15),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     nextDueText,
-                    style: AppTextStyles.labelSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -123,17 +205,26 @@ class PaymentOverviewCard extends ConsumerWidget {
 
   Widget _buildColumn(String label, String amount, Color amountColor) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: AppTextStyles.labelSmall.copyWith(color: Colors.white70),
+          style: AppTextStyles.labelSmall.copyWith(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 11,
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
           amount,
-          style: AppTextStyles.h1.copyWith(color: amountColor, fontSize: 22),
+          style: AppTextStyles.h2.copyWith(
+            color: amountColor,
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ],
     );
   }
 }
+

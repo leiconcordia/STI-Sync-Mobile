@@ -1676,48 +1676,136 @@ class $CachedPayablesTable extends CachedPayables
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
       'id', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _eventIdMeta =
-      const VerificationMeta('eventId');
-  @override
-  late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
-      'event_id', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _studentIdMeta =
       const VerificationMeta('studentId');
   @override
   late final GeneratedColumn<String> studentId = GeneratedColumn<String>(
       'student_id', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _qrTicketUnlockedMeta =
-      const VerificationMeta('qrTicketUnlocked');
-  @override
-  late final GeneratedColumn<int> qrTicketUnlocked = GeneratedColumn<int>(
-      'qr_ticket_unlocked', aliasedName, false,
-      type: DriftSqlType.int, requiredDuringInsert: true);
-  static const VerificationMeta _amountDueMeta =
-      const VerificationMeta('amountDue');
-  @override
-  late final GeneratedColumn<double> amountDue = GeneratedColumn<double>(
-      'amount_due', aliasedName, false,
-      type: DriftSqlType.double, requiredDuringInsert: true);
-  static const VerificationMeta _paymentStatusMeta =
-      const VerificationMeta('paymentStatus');
-  @override
-  late final GeneratedColumn<String> paymentStatus = GeneratedColumn<String>(
-      'payment_status', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _cachedAtMeta =
-      const VerificationMeta('cachedAt');
-  @override
-  late final GeneratedColumn<int> cachedAt = GeneratedColumn<int>(
-      'cached_at', aliasedName, false,
-      type: DriftSqlType.int, requiredDuringInsert: true);
   static const VerificationMeta _studentNameMeta =
       const VerificationMeta('studentName');
   @override
   late final GeneratedColumn<String> studentName = GeneratedColumn<String>(
       'student_name', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _studentSchoolIdMeta =
+      const VerificationMeta('studentSchoolId');
+  @override
+  late final GeneratedColumn<String> studentSchoolId = GeneratedColumn<String>(
+      'student_school_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+      'type', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('event_fee'));
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+      'label', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('Payable Fee'));
+  static const VerificationMeta _descriptionMeta =
+      const VerificationMeta('description');
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+      'description', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _organizationIdMeta =
+      const VerificationMeta('organizationId');
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+      'organization_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _organizationNameMeta =
+      const VerificationMeta('organizationName');
+  @override
+  late final GeneratedColumn<String> organizationName = GeneratedColumn<String>(
+      'organization_name', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _eventIdMeta =
+      const VerificationMeta('eventId');
+  @override
+  late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
+      'event_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _semesterIdMeta =
+      const VerificationMeta('semesterId');
+  @override
+  late final GeneratedColumn<String> semesterId = GeneratedColumn<String>(
+      'semester_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
+  static const VerificationMeta _assignedAmountMeta =
+      const VerificationMeta('assignedAmount');
+  @override
+  late final GeneratedColumn<double> assignedAmount = GeneratedColumn<double>(
+      'assigned_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0.0));
+  static const VerificationMeta _paidAmountMeta =
+      const VerificationMeta('paidAmount');
+  @override
+  late final GeneratedColumn<double> paidAmount = GeneratedColumn<double>(
+      'paid_amount', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0.0));
+  static const VerificationMeta _amountDueMeta =
+      const VerificationMeta('amountDue');
+  @override
+  late final GeneratedColumn<double> amountDue = GeneratedColumn<double>(
+      'amount_due', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0.0));
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('pending'));
+  static const VerificationMeta _paymentStatusMeta =
+      const VerificationMeta('paymentStatus');
+  @override
+  late final GeneratedColumn<String> paymentStatus = GeneratedColumn<String>(
+      'payment_status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('unpaid'));
+  static const VerificationMeta _qrTicketUnlockedMeta =
+      const VerificationMeta('qrTicketUnlocked');
+  @override
+  late final GeneratedColumn<int> qrTicketUnlocked = GeneratedColumn<int>(
+      'qr_ticket_unlocked', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _dueDateMeta =
+      const VerificationMeta('dueDate');
+  @override
+  late final GeneratedColumn<int> dueDate = GeneratedColumn<int>(
+      'due_date', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _paidAtMeta = const VerificationMeta('paidAt');
+  @override
+  late final GeneratedColumn<int> paidAt = GeneratedColumn<int>(
+      'paid_at', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _cachedAtMeta =
+      const VerificationMeta('cachedAt');
+  @override
+  late final GeneratedColumn<int> cachedAt = GeneratedColumn<int>(
+      'cached_at', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _studentIdNumberMeta =
       const VerificationMeta('studentIdNumber');
   @override
@@ -1745,13 +1833,25 @@ class $CachedPayablesTable extends CachedPayables
   @override
   List<GeneratedColumn> get $columns => [
         id,
-        eventId,
         studentId,
-        qrTicketUnlocked,
-        amountDue,
-        paymentStatus,
-        cachedAt,
         studentName,
+        studentSchoolId,
+        type,
+        label,
+        description,
+        organizationId,
+        organizationName,
+        eventId,
+        semesterId,
+        assignedAmount,
+        paidAmount,
+        amountDue,
+        status,
+        paymentStatus,
+        qrTicketUnlocked,
+        dueDate,
+        paidAt,
+        cachedAt,
         studentIdNumber,
         profilePhotoUrl,
         eventTitle,
@@ -1772,51 +1872,103 @@ class $CachedPayablesTable extends CachedPayables
     } else if (isInserting) {
       context.missing(_idMeta);
     }
-    if (data.containsKey('event_id')) {
-      context.handle(_eventIdMeta,
-          eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta));
-    } else if (isInserting) {
-      context.missing(_eventIdMeta);
-    }
     if (data.containsKey('student_id')) {
       context.handle(_studentIdMeta,
           studentId.isAcceptableOrUnknown(data['student_id']!, _studentIdMeta));
     } else if (isInserting) {
       context.missing(_studentIdMeta);
     }
-    if (data.containsKey('qr_ticket_unlocked')) {
+    if (data.containsKey('student_name')) {
       context.handle(
-          _qrTicketUnlockedMeta,
-          qrTicketUnlocked.isAcceptableOrUnknown(
-              data['qr_ticket_unlocked']!, _qrTicketUnlockedMeta));
-    } else if (isInserting) {
-      context.missing(_qrTicketUnlockedMeta);
+          _studentNameMeta,
+          studentName.isAcceptableOrUnknown(
+              data['student_name']!, _studentNameMeta));
+    }
+    if (data.containsKey('student_school_id')) {
+      context.handle(
+          _studentSchoolIdMeta,
+          studentSchoolId.isAcceptableOrUnknown(
+              data['student_school_id']!, _studentSchoolIdMeta));
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+          _typeMeta, type.isAcceptableOrUnknown(data['type']!, _typeMeta));
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+          _labelMeta, label.isAcceptableOrUnknown(data['label']!, _labelMeta));
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+          _descriptionMeta,
+          description.isAcceptableOrUnknown(
+              data['description']!, _descriptionMeta));
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+          _organizationIdMeta,
+          organizationId.isAcceptableOrUnknown(
+              data['organization_id']!, _organizationIdMeta));
+    }
+    if (data.containsKey('organization_name')) {
+      context.handle(
+          _organizationNameMeta,
+          organizationName.isAcceptableOrUnknown(
+              data['organization_name']!, _organizationNameMeta));
+    }
+    if (data.containsKey('event_id')) {
+      context.handle(_eventIdMeta,
+          eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta));
+    }
+    if (data.containsKey('semester_id')) {
+      context.handle(
+          _semesterIdMeta,
+          semesterId.isAcceptableOrUnknown(
+              data['semester_id']!, _semesterIdMeta));
+    }
+    if (data.containsKey('assigned_amount')) {
+      context.handle(
+          _assignedAmountMeta,
+          assignedAmount.isAcceptableOrUnknown(
+              data['assigned_amount']!, _assignedAmountMeta));
+    }
+    if (data.containsKey('paid_amount')) {
+      context.handle(
+          _paidAmountMeta,
+          paidAmount.isAcceptableOrUnknown(
+              data['paid_amount']!, _paidAmountMeta));
     }
     if (data.containsKey('amount_due')) {
       context.handle(_amountDueMeta,
           amountDue.isAcceptableOrUnknown(data['amount_due']!, _amountDueMeta));
-    } else if (isInserting) {
-      context.missing(_amountDueMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
     }
     if (data.containsKey('payment_status')) {
       context.handle(
           _paymentStatusMeta,
           paymentStatus.isAcceptableOrUnknown(
               data['payment_status']!, _paymentStatusMeta));
-    } else if (isInserting) {
-      context.missing(_paymentStatusMeta);
+    }
+    if (data.containsKey('qr_ticket_unlocked')) {
+      context.handle(
+          _qrTicketUnlockedMeta,
+          qrTicketUnlocked.isAcceptableOrUnknown(
+              data['qr_ticket_unlocked']!, _qrTicketUnlockedMeta));
+    }
+    if (data.containsKey('due_date')) {
+      context.handle(_dueDateMeta,
+          dueDate.isAcceptableOrUnknown(data['due_date']!, _dueDateMeta));
+    }
+    if (data.containsKey('paid_at')) {
+      context.handle(_paidAtMeta,
+          paidAt.isAcceptableOrUnknown(data['paid_at']!, _paidAtMeta));
     }
     if (data.containsKey('cached_at')) {
       context.handle(_cachedAtMeta,
           cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
-    } else if (isInserting) {
-      context.missing(_cachedAtMeta);
-    }
-    if (data.containsKey('student_name')) {
-      context.handle(
-          _studentNameMeta,
-          studentName.isAcceptableOrUnknown(
-              data['student_name']!, _studentNameMeta));
     }
     if (data.containsKey('student_id_number')) {
       context.handle(
@@ -1853,20 +2005,44 @@ class $CachedPayablesTable extends CachedPayables
     return CachedPayable(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
-      eventId: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}event_id'])!,
       studentId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}student_id'])!,
-      qrTicketUnlocked: attachedDatabase.typeMapping.read(
-          DriftSqlType.int, data['${effectivePrefix}qr_ticket_unlocked'])!,
-      amountDue: attachedDatabase.typeMapping
-          .read(DriftSqlType.double, data['${effectivePrefix}amount_due'])!,
-      paymentStatus: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}payment_status'])!,
-      cachedAt: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}cached_at'])!,
       studentName: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}student_name']),
+      studentSchoolId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}student_school_id']),
+      type: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}type'])!,
+      label: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}label'])!,
+      description: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}description']),
+      organizationId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}organization_id']),
+      organizationName: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}organization_name']),
+      eventId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}event_id']),
+      semesterId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}semester_id'])!,
+      assignedAmount: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}assigned_amount'])!,
+      paidAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}paid_amount'])!,
+      amountDue: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}amount_due'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      paymentStatus: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}payment_status'])!,
+      qrTicketUnlocked: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}qr_ticket_unlocked'])!,
+      dueDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}due_date']),
+      paidAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}paid_at']),
+      cachedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}cached_at'])!,
       studentIdNumber: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}student_id_number']),
       profilePhotoUrl: attachedDatabase.typeMapping.read(
@@ -1886,26 +2062,50 @@ class $CachedPayablesTable extends CachedPayables
 
 class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   final String id;
-  final String eventId;
   final String studentId;
-  final int qrTicketUnlocked;
-  final double amountDue;
-  final String paymentStatus;
-  final int cachedAt;
   final String? studentName;
+  final String? studentSchoolId;
+  final String type;
+  final String label;
+  final String? description;
+  final String? organizationId;
+  final String? organizationName;
+  final String? eventId;
+  final String semesterId;
+  final double assignedAmount;
+  final double paidAmount;
+  final double amountDue;
+  final String status;
+  final String paymentStatus;
+  final int qrTicketUnlocked;
+  final int? dueDate;
+  final int? paidAt;
+  final int cachedAt;
   final String? studentIdNumber;
   final String? profilePhotoUrl;
   final String? eventTitle;
   final String? courseInfo;
   const CachedPayable(
       {required this.id,
-      required this.eventId,
       required this.studentId,
-      required this.qrTicketUnlocked,
-      required this.amountDue,
-      required this.paymentStatus,
-      required this.cachedAt,
       this.studentName,
+      this.studentSchoolId,
+      required this.type,
+      required this.label,
+      this.description,
+      this.organizationId,
+      this.organizationName,
+      this.eventId,
+      required this.semesterId,
+      required this.assignedAmount,
+      required this.paidAmount,
+      required this.amountDue,
+      required this.status,
+      required this.paymentStatus,
+      required this.qrTicketUnlocked,
+      this.dueDate,
+      this.paidAt,
+      required this.cachedAt,
       this.studentIdNumber,
       this.profilePhotoUrl,
       this.eventTitle,
@@ -1914,15 +2114,41 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['event_id'] = Variable<String>(eventId);
     map['student_id'] = Variable<String>(studentId);
-    map['qr_ticket_unlocked'] = Variable<int>(qrTicketUnlocked);
-    map['amount_due'] = Variable<double>(amountDue);
-    map['payment_status'] = Variable<String>(paymentStatus);
-    map['cached_at'] = Variable<int>(cachedAt);
     if (!nullToAbsent || studentName != null) {
       map['student_name'] = Variable<String>(studentName);
     }
+    if (!nullToAbsent || studentSchoolId != null) {
+      map['student_school_id'] = Variable<String>(studentSchoolId);
+    }
+    map['type'] = Variable<String>(type);
+    map['label'] = Variable<String>(label);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || organizationId != null) {
+      map['organization_id'] = Variable<String>(organizationId);
+    }
+    if (!nullToAbsent || organizationName != null) {
+      map['organization_name'] = Variable<String>(organizationName);
+    }
+    if (!nullToAbsent || eventId != null) {
+      map['event_id'] = Variable<String>(eventId);
+    }
+    map['semester_id'] = Variable<String>(semesterId);
+    map['assigned_amount'] = Variable<double>(assignedAmount);
+    map['paid_amount'] = Variable<double>(paidAmount);
+    map['amount_due'] = Variable<double>(amountDue);
+    map['status'] = Variable<String>(status);
+    map['payment_status'] = Variable<String>(paymentStatus);
+    map['qr_ticket_unlocked'] = Variable<int>(qrTicketUnlocked);
+    if (!nullToAbsent || dueDate != null) {
+      map['due_date'] = Variable<int>(dueDate);
+    }
+    if (!nullToAbsent || paidAt != null) {
+      map['paid_at'] = Variable<int>(paidAt);
+    }
+    map['cached_at'] = Variable<int>(cachedAt);
     if (!nullToAbsent || studentIdNumber != null) {
       map['student_id_number'] = Variable<String>(studentIdNumber);
     }
@@ -1941,15 +2167,40 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   CachedPayablesCompanion toCompanion(bool nullToAbsent) {
     return CachedPayablesCompanion(
       id: Value(id),
-      eventId: Value(eventId),
       studentId: Value(studentId),
-      qrTicketUnlocked: Value(qrTicketUnlocked),
-      amountDue: Value(amountDue),
-      paymentStatus: Value(paymentStatus),
-      cachedAt: Value(cachedAt),
       studentName: studentName == null && nullToAbsent
           ? const Value.absent()
           : Value(studentName),
+      studentSchoolId: studentSchoolId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(studentSchoolId),
+      type: Value(type),
+      label: Value(label),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      organizationId: organizationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(organizationId),
+      organizationName: organizationName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(organizationName),
+      eventId: eventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(eventId),
+      semesterId: Value(semesterId),
+      assignedAmount: Value(assignedAmount),
+      paidAmount: Value(paidAmount),
+      amountDue: Value(amountDue),
+      status: Value(status),
+      paymentStatus: Value(paymentStatus),
+      qrTicketUnlocked: Value(qrTicketUnlocked),
+      dueDate: dueDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueDate),
+      paidAt:
+          paidAt == null && nullToAbsent ? const Value.absent() : Value(paidAt),
+      cachedAt: Value(cachedAt),
       studentIdNumber: studentIdNumber == null && nullToAbsent
           ? const Value.absent()
           : Value(studentIdNumber),
@@ -1970,13 +2221,25 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedPayable(
       id: serializer.fromJson<String>(json['id']),
-      eventId: serializer.fromJson<String>(json['eventId']),
       studentId: serializer.fromJson<String>(json['studentId']),
-      qrTicketUnlocked: serializer.fromJson<int>(json['qrTicketUnlocked']),
-      amountDue: serializer.fromJson<double>(json['amountDue']),
-      paymentStatus: serializer.fromJson<String>(json['paymentStatus']),
-      cachedAt: serializer.fromJson<int>(json['cachedAt']),
       studentName: serializer.fromJson<String?>(json['studentName']),
+      studentSchoolId: serializer.fromJson<String?>(json['studentSchoolId']),
+      type: serializer.fromJson<String>(json['type']),
+      label: serializer.fromJson<String>(json['label']),
+      description: serializer.fromJson<String?>(json['description']),
+      organizationId: serializer.fromJson<String?>(json['organizationId']),
+      organizationName: serializer.fromJson<String?>(json['organizationName']),
+      eventId: serializer.fromJson<String?>(json['eventId']),
+      semesterId: serializer.fromJson<String>(json['semesterId']),
+      assignedAmount: serializer.fromJson<double>(json['assignedAmount']),
+      paidAmount: serializer.fromJson<double>(json['paidAmount']),
+      amountDue: serializer.fromJson<double>(json['amountDue']),
+      status: serializer.fromJson<String>(json['status']),
+      paymentStatus: serializer.fromJson<String>(json['paymentStatus']),
+      qrTicketUnlocked: serializer.fromJson<int>(json['qrTicketUnlocked']),
+      dueDate: serializer.fromJson<int?>(json['dueDate']),
+      paidAt: serializer.fromJson<int?>(json['paidAt']),
+      cachedAt: serializer.fromJson<int>(json['cachedAt']),
       studentIdNumber: serializer.fromJson<String?>(json['studentIdNumber']),
       profilePhotoUrl: serializer.fromJson<String?>(json['profilePhotoUrl']),
       eventTitle: serializer.fromJson<String?>(json['eventTitle']),
@@ -1988,13 +2251,25 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'eventId': serializer.toJson<String>(eventId),
       'studentId': serializer.toJson<String>(studentId),
-      'qrTicketUnlocked': serializer.toJson<int>(qrTicketUnlocked),
-      'amountDue': serializer.toJson<double>(amountDue),
-      'paymentStatus': serializer.toJson<String>(paymentStatus),
-      'cachedAt': serializer.toJson<int>(cachedAt),
       'studentName': serializer.toJson<String?>(studentName),
+      'studentSchoolId': serializer.toJson<String?>(studentSchoolId),
+      'type': serializer.toJson<String>(type),
+      'label': serializer.toJson<String>(label),
+      'description': serializer.toJson<String?>(description),
+      'organizationId': serializer.toJson<String?>(organizationId),
+      'organizationName': serializer.toJson<String?>(organizationName),
+      'eventId': serializer.toJson<String?>(eventId),
+      'semesterId': serializer.toJson<String>(semesterId),
+      'assignedAmount': serializer.toJson<double>(assignedAmount),
+      'paidAmount': serializer.toJson<double>(paidAmount),
+      'amountDue': serializer.toJson<double>(amountDue),
+      'status': serializer.toJson<String>(status),
+      'paymentStatus': serializer.toJson<String>(paymentStatus),
+      'qrTicketUnlocked': serializer.toJson<int>(qrTicketUnlocked),
+      'dueDate': serializer.toJson<int?>(dueDate),
+      'paidAt': serializer.toJson<int?>(paidAt),
+      'cachedAt': serializer.toJson<int>(cachedAt),
       'studentIdNumber': serializer.toJson<String?>(studentIdNumber),
       'profilePhotoUrl': serializer.toJson<String?>(profilePhotoUrl),
       'eventTitle': serializer.toJson<String?>(eventTitle),
@@ -2004,26 +2279,55 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
 
   CachedPayable copyWith(
           {String? id,
-          String? eventId,
           String? studentId,
-          int? qrTicketUnlocked,
-          double? amountDue,
-          String? paymentStatus,
-          int? cachedAt,
           Value<String?> studentName = const Value.absent(),
+          Value<String?> studentSchoolId = const Value.absent(),
+          String? type,
+          String? label,
+          Value<String?> description = const Value.absent(),
+          Value<String?> organizationId = const Value.absent(),
+          Value<String?> organizationName = const Value.absent(),
+          Value<String?> eventId = const Value.absent(),
+          String? semesterId,
+          double? assignedAmount,
+          double? paidAmount,
+          double? amountDue,
+          String? status,
+          String? paymentStatus,
+          int? qrTicketUnlocked,
+          Value<int?> dueDate = const Value.absent(),
+          Value<int?> paidAt = const Value.absent(),
+          int? cachedAt,
           Value<String?> studentIdNumber = const Value.absent(),
           Value<String?> profilePhotoUrl = const Value.absent(),
           Value<String?> eventTitle = const Value.absent(),
           Value<String?> courseInfo = const Value.absent()}) =>
       CachedPayable(
         id: id ?? this.id,
-        eventId: eventId ?? this.eventId,
         studentId: studentId ?? this.studentId,
-        qrTicketUnlocked: qrTicketUnlocked ?? this.qrTicketUnlocked,
-        amountDue: amountDue ?? this.amountDue,
-        paymentStatus: paymentStatus ?? this.paymentStatus,
-        cachedAt: cachedAt ?? this.cachedAt,
         studentName: studentName.present ? studentName.value : this.studentName,
+        studentSchoolId: studentSchoolId.present
+            ? studentSchoolId.value
+            : this.studentSchoolId,
+        type: type ?? this.type,
+        label: label ?? this.label,
+        description: description.present ? description.value : this.description,
+        organizationId:
+            organizationId.present ? organizationId.value : this.organizationId,
+        organizationName: organizationName.present
+            ? organizationName.value
+            : this.organizationName,
+        eventId: eventId.present ? eventId.value : this.eventId,
+        semesterId: semesterId ?? this.semesterId,
+        assignedAmount: assignedAmount ?? this.assignedAmount,
+        paidAmount: paidAmount ?? this.paidAmount,
+        amountDue: amountDue ?? this.amountDue,
+        status: status ?? this.status,
+        paymentStatus: paymentStatus ?? this.paymentStatus,
+        qrTicketUnlocked: qrTicketUnlocked ?? this.qrTicketUnlocked,
+        dueDate: dueDate.present ? dueDate.value : this.dueDate,
+        paidAt: paidAt.present ? paidAt.value : this.paidAt,
+        cachedAt: cachedAt ?? this.cachedAt,
         studentIdNumber: studentIdNumber.present
             ? studentIdNumber.value
             : this.studentIdNumber,
@@ -2036,18 +2340,41 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   CachedPayable copyWithCompanion(CachedPayablesCompanion data) {
     return CachedPayable(
       id: data.id.present ? data.id.value : this.id,
-      eventId: data.eventId.present ? data.eventId.value : this.eventId,
       studentId: data.studentId.present ? data.studentId.value : this.studentId,
-      qrTicketUnlocked: data.qrTicketUnlocked.present
-          ? data.qrTicketUnlocked.value
-          : this.qrTicketUnlocked,
+      studentName:
+          data.studentName.present ? data.studentName.value : this.studentName,
+      studentSchoolId: data.studentSchoolId.present
+          ? data.studentSchoolId.value
+          : this.studentSchoolId,
+      type: data.type.present ? data.type.value : this.type,
+      label: data.label.present ? data.label.value : this.label,
+      description:
+          data.description.present ? data.description.value : this.description,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      organizationName: data.organizationName.present
+          ? data.organizationName.value
+          : this.organizationName,
+      eventId: data.eventId.present ? data.eventId.value : this.eventId,
+      semesterId:
+          data.semesterId.present ? data.semesterId.value : this.semesterId,
+      assignedAmount: data.assignedAmount.present
+          ? data.assignedAmount.value
+          : this.assignedAmount,
+      paidAmount:
+          data.paidAmount.present ? data.paidAmount.value : this.paidAmount,
       amountDue: data.amountDue.present ? data.amountDue.value : this.amountDue,
+      status: data.status.present ? data.status.value : this.status,
       paymentStatus: data.paymentStatus.present
           ? data.paymentStatus.value
           : this.paymentStatus,
+      qrTicketUnlocked: data.qrTicketUnlocked.present
+          ? data.qrTicketUnlocked.value
+          : this.qrTicketUnlocked,
+      dueDate: data.dueDate.present ? data.dueDate.value : this.dueDate,
+      paidAt: data.paidAt.present ? data.paidAt.value : this.paidAt,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
-      studentName:
-          data.studentName.present ? data.studentName.value : this.studentName,
       studentIdNumber: data.studentIdNumber.present
           ? data.studentIdNumber.value
           : this.studentIdNumber,
@@ -2065,13 +2392,25 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   String toString() {
     return (StringBuffer('CachedPayable(')
           ..write('id: $id, ')
-          ..write('eventId: $eventId, ')
           ..write('studentId: $studentId, ')
-          ..write('qrTicketUnlocked: $qrTicketUnlocked, ')
-          ..write('amountDue: $amountDue, ')
-          ..write('paymentStatus: $paymentStatus, ')
-          ..write('cachedAt: $cachedAt, ')
           ..write('studentName: $studentName, ')
+          ..write('studentSchoolId: $studentSchoolId, ')
+          ..write('type: $type, ')
+          ..write('label: $label, ')
+          ..write('description: $description, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('organizationName: $organizationName, ')
+          ..write('eventId: $eventId, ')
+          ..write('semesterId: $semesterId, ')
+          ..write('assignedAmount: $assignedAmount, ')
+          ..write('paidAmount: $paidAmount, ')
+          ..write('amountDue: $amountDue, ')
+          ..write('status: $status, ')
+          ..write('paymentStatus: $paymentStatus, ')
+          ..write('qrTicketUnlocked: $qrTicketUnlocked, ')
+          ..write('dueDate: $dueDate, ')
+          ..write('paidAt: $paidAt, ')
+          ..write('cachedAt: $cachedAt, ')
           ..write('studentIdNumber: $studentIdNumber, ')
           ..write('profilePhotoUrl: $profilePhotoUrl, ')
           ..write('eventTitle: $eventTitle, ')
@@ -2081,31 +2420,56 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      eventId,
-      studentId,
-      qrTicketUnlocked,
-      amountDue,
-      paymentStatus,
-      cachedAt,
-      studentName,
-      studentIdNumber,
-      profilePhotoUrl,
-      eventTitle,
-      courseInfo);
+  int get hashCode => Object.hashAll([
+        id,
+        studentId,
+        studentName,
+        studentSchoolId,
+        type,
+        label,
+        description,
+        organizationId,
+        organizationName,
+        eventId,
+        semesterId,
+        assignedAmount,
+        paidAmount,
+        amountDue,
+        status,
+        paymentStatus,
+        qrTicketUnlocked,
+        dueDate,
+        paidAt,
+        cachedAt,
+        studentIdNumber,
+        profilePhotoUrl,
+        eventTitle,
+        courseInfo
+      ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedPayable &&
           other.id == this.id &&
-          other.eventId == this.eventId &&
           other.studentId == this.studentId &&
-          other.qrTicketUnlocked == this.qrTicketUnlocked &&
-          other.amountDue == this.amountDue &&
-          other.paymentStatus == this.paymentStatus &&
-          other.cachedAt == this.cachedAt &&
           other.studentName == this.studentName &&
+          other.studentSchoolId == this.studentSchoolId &&
+          other.type == this.type &&
+          other.label == this.label &&
+          other.description == this.description &&
+          other.organizationId == this.organizationId &&
+          other.organizationName == this.organizationName &&
+          other.eventId == this.eventId &&
+          other.semesterId == this.semesterId &&
+          other.assignedAmount == this.assignedAmount &&
+          other.paidAmount == this.paidAmount &&
+          other.amountDue == this.amountDue &&
+          other.status == this.status &&
+          other.paymentStatus == this.paymentStatus &&
+          other.qrTicketUnlocked == this.qrTicketUnlocked &&
+          other.dueDate == this.dueDate &&
+          other.paidAt == this.paidAt &&
+          other.cachedAt == this.cachedAt &&
           other.studentIdNumber == this.studentIdNumber &&
           other.profilePhotoUrl == this.profilePhotoUrl &&
           other.eventTitle == this.eventTitle &&
@@ -2114,13 +2478,25 @@ class CachedPayable extends DataClass implements Insertable<CachedPayable> {
 
 class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   final Value<String> id;
-  final Value<String> eventId;
   final Value<String> studentId;
-  final Value<int> qrTicketUnlocked;
-  final Value<double> amountDue;
-  final Value<String> paymentStatus;
-  final Value<int> cachedAt;
   final Value<String?> studentName;
+  final Value<String?> studentSchoolId;
+  final Value<String> type;
+  final Value<String> label;
+  final Value<String?> description;
+  final Value<String?> organizationId;
+  final Value<String?> organizationName;
+  final Value<String?> eventId;
+  final Value<String> semesterId;
+  final Value<double> assignedAmount;
+  final Value<double> paidAmount;
+  final Value<double> amountDue;
+  final Value<String> status;
+  final Value<String> paymentStatus;
+  final Value<int> qrTicketUnlocked;
+  final Value<int?> dueDate;
+  final Value<int?> paidAt;
+  final Value<int> cachedAt;
   final Value<String?> studentIdNumber;
   final Value<String?> profilePhotoUrl;
   final Value<String?> eventTitle;
@@ -2128,13 +2504,25 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   final Value<int> rowid;
   const CachedPayablesCompanion({
     this.id = const Value.absent(),
-    this.eventId = const Value.absent(),
     this.studentId = const Value.absent(),
-    this.qrTicketUnlocked = const Value.absent(),
-    this.amountDue = const Value.absent(),
-    this.paymentStatus = const Value.absent(),
-    this.cachedAt = const Value.absent(),
     this.studentName = const Value.absent(),
+    this.studentSchoolId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.label = const Value.absent(),
+    this.description = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.organizationName = const Value.absent(),
+    this.eventId = const Value.absent(),
+    this.semesterId = const Value.absent(),
+    this.assignedAmount = const Value.absent(),
+    this.paidAmount = const Value.absent(),
+    this.amountDue = const Value.absent(),
+    this.status = const Value.absent(),
+    this.paymentStatus = const Value.absent(),
+    this.qrTicketUnlocked = const Value.absent(),
+    this.dueDate = const Value.absent(),
+    this.paidAt = const Value.absent(),
+    this.cachedAt = const Value.absent(),
     this.studentIdNumber = const Value.absent(),
     this.profilePhotoUrl = const Value.absent(),
     this.eventTitle = const Value.absent(),
@@ -2143,34 +2531,53 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   });
   CachedPayablesCompanion.insert({
     required String id,
-    required String eventId,
     required String studentId,
-    required int qrTicketUnlocked,
-    required double amountDue,
-    required String paymentStatus,
-    required int cachedAt,
     this.studentName = const Value.absent(),
+    this.studentSchoolId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.label = const Value.absent(),
+    this.description = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.organizationName = const Value.absent(),
+    this.eventId = const Value.absent(),
+    this.semesterId = const Value.absent(),
+    this.assignedAmount = const Value.absent(),
+    this.paidAmount = const Value.absent(),
+    this.amountDue = const Value.absent(),
+    this.status = const Value.absent(),
+    this.paymentStatus = const Value.absent(),
+    this.qrTicketUnlocked = const Value.absent(),
+    this.dueDate = const Value.absent(),
+    this.paidAt = const Value.absent(),
+    this.cachedAt = const Value.absent(),
     this.studentIdNumber = const Value.absent(),
     this.profilePhotoUrl = const Value.absent(),
     this.eventTitle = const Value.absent(),
     this.courseInfo = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
-        eventId = Value(eventId),
-        studentId = Value(studentId),
-        qrTicketUnlocked = Value(qrTicketUnlocked),
-        amountDue = Value(amountDue),
-        paymentStatus = Value(paymentStatus),
-        cachedAt = Value(cachedAt);
+        studentId = Value(studentId);
   static Insertable<CachedPayable> custom({
     Expression<String>? id,
-    Expression<String>? eventId,
     Expression<String>? studentId,
-    Expression<int>? qrTicketUnlocked,
-    Expression<double>? amountDue,
-    Expression<String>? paymentStatus,
-    Expression<int>? cachedAt,
     Expression<String>? studentName,
+    Expression<String>? studentSchoolId,
+    Expression<String>? type,
+    Expression<String>? label,
+    Expression<String>? description,
+    Expression<String>? organizationId,
+    Expression<String>? organizationName,
+    Expression<String>? eventId,
+    Expression<String>? semesterId,
+    Expression<double>? assignedAmount,
+    Expression<double>? paidAmount,
+    Expression<double>? amountDue,
+    Expression<String>? status,
+    Expression<String>? paymentStatus,
+    Expression<int>? qrTicketUnlocked,
+    Expression<int>? dueDate,
+    Expression<int>? paidAt,
+    Expression<int>? cachedAt,
     Expression<String>? studentIdNumber,
     Expression<String>? profilePhotoUrl,
     Expression<String>? eventTitle,
@@ -2179,13 +2586,25 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (eventId != null) 'event_id': eventId,
       if (studentId != null) 'student_id': studentId,
-      if (qrTicketUnlocked != null) 'qr_ticket_unlocked': qrTicketUnlocked,
-      if (amountDue != null) 'amount_due': amountDue,
-      if (paymentStatus != null) 'payment_status': paymentStatus,
-      if (cachedAt != null) 'cached_at': cachedAt,
       if (studentName != null) 'student_name': studentName,
+      if (studentSchoolId != null) 'student_school_id': studentSchoolId,
+      if (type != null) 'type': type,
+      if (label != null) 'label': label,
+      if (description != null) 'description': description,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (organizationName != null) 'organization_name': organizationName,
+      if (eventId != null) 'event_id': eventId,
+      if (semesterId != null) 'semester_id': semesterId,
+      if (assignedAmount != null) 'assigned_amount': assignedAmount,
+      if (paidAmount != null) 'paid_amount': paidAmount,
+      if (amountDue != null) 'amount_due': amountDue,
+      if (status != null) 'status': status,
+      if (paymentStatus != null) 'payment_status': paymentStatus,
+      if (qrTicketUnlocked != null) 'qr_ticket_unlocked': qrTicketUnlocked,
+      if (dueDate != null) 'due_date': dueDate,
+      if (paidAt != null) 'paid_at': paidAt,
+      if (cachedAt != null) 'cached_at': cachedAt,
       if (studentIdNumber != null) 'student_id_number': studentIdNumber,
       if (profilePhotoUrl != null) 'profile_photo_url': profilePhotoUrl,
       if (eventTitle != null) 'event_title': eventTitle,
@@ -2196,13 +2615,25 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
 
   CachedPayablesCompanion copyWith(
       {Value<String>? id,
-      Value<String>? eventId,
       Value<String>? studentId,
-      Value<int>? qrTicketUnlocked,
-      Value<double>? amountDue,
-      Value<String>? paymentStatus,
-      Value<int>? cachedAt,
       Value<String?>? studentName,
+      Value<String?>? studentSchoolId,
+      Value<String>? type,
+      Value<String>? label,
+      Value<String?>? description,
+      Value<String?>? organizationId,
+      Value<String?>? organizationName,
+      Value<String?>? eventId,
+      Value<String>? semesterId,
+      Value<double>? assignedAmount,
+      Value<double>? paidAmount,
+      Value<double>? amountDue,
+      Value<String>? status,
+      Value<String>? paymentStatus,
+      Value<int>? qrTicketUnlocked,
+      Value<int?>? dueDate,
+      Value<int?>? paidAt,
+      Value<int>? cachedAt,
       Value<String?>? studentIdNumber,
       Value<String?>? profilePhotoUrl,
       Value<String?>? eventTitle,
@@ -2210,13 +2641,25 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
       Value<int>? rowid}) {
     return CachedPayablesCompanion(
       id: id ?? this.id,
-      eventId: eventId ?? this.eventId,
       studentId: studentId ?? this.studentId,
-      qrTicketUnlocked: qrTicketUnlocked ?? this.qrTicketUnlocked,
-      amountDue: amountDue ?? this.amountDue,
-      paymentStatus: paymentStatus ?? this.paymentStatus,
-      cachedAt: cachedAt ?? this.cachedAt,
       studentName: studentName ?? this.studentName,
+      studentSchoolId: studentSchoolId ?? this.studentSchoolId,
+      type: type ?? this.type,
+      label: label ?? this.label,
+      description: description ?? this.description,
+      organizationId: organizationId ?? this.organizationId,
+      organizationName: organizationName ?? this.organizationName,
+      eventId: eventId ?? this.eventId,
+      semesterId: semesterId ?? this.semesterId,
+      assignedAmount: assignedAmount ?? this.assignedAmount,
+      paidAmount: paidAmount ?? this.paidAmount,
+      amountDue: amountDue ?? this.amountDue,
+      status: status ?? this.status,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      qrTicketUnlocked: qrTicketUnlocked ?? this.qrTicketUnlocked,
+      dueDate: dueDate ?? this.dueDate,
+      paidAt: paidAt ?? this.paidAt,
+      cachedAt: cachedAt ?? this.cachedAt,
       studentIdNumber: studentIdNumber ?? this.studentIdNumber,
       profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
       eventTitle: eventTitle ?? this.eventTitle,
@@ -2231,26 +2674,62 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
-    if (eventId.present) {
-      map['event_id'] = Variable<String>(eventId.value);
-    }
     if (studentId.present) {
       map['student_id'] = Variable<String>(studentId.value);
     }
-    if (qrTicketUnlocked.present) {
-      map['qr_ticket_unlocked'] = Variable<int>(qrTicketUnlocked.value);
+    if (studentName.present) {
+      map['student_name'] = Variable<String>(studentName.value);
+    }
+    if (studentSchoolId.present) {
+      map['student_school_id'] = Variable<String>(studentSchoolId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (organizationName.present) {
+      map['organization_name'] = Variable<String>(organizationName.value);
+    }
+    if (eventId.present) {
+      map['event_id'] = Variable<String>(eventId.value);
+    }
+    if (semesterId.present) {
+      map['semester_id'] = Variable<String>(semesterId.value);
+    }
+    if (assignedAmount.present) {
+      map['assigned_amount'] = Variable<double>(assignedAmount.value);
+    }
+    if (paidAmount.present) {
+      map['paid_amount'] = Variable<double>(paidAmount.value);
     }
     if (amountDue.present) {
       map['amount_due'] = Variable<double>(amountDue.value);
     }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
     if (paymentStatus.present) {
       map['payment_status'] = Variable<String>(paymentStatus.value);
     }
+    if (qrTicketUnlocked.present) {
+      map['qr_ticket_unlocked'] = Variable<int>(qrTicketUnlocked.value);
+    }
+    if (dueDate.present) {
+      map['due_date'] = Variable<int>(dueDate.value);
+    }
+    if (paidAt.present) {
+      map['paid_at'] = Variable<int>(paidAt.value);
+    }
     if (cachedAt.present) {
       map['cached_at'] = Variable<int>(cachedAt.value);
-    }
-    if (studentName.present) {
-      map['student_name'] = Variable<String>(studentName.value);
     }
     if (studentIdNumber.present) {
       map['student_id_number'] = Variable<String>(studentIdNumber.value);
@@ -2274,13 +2753,25 @@ class CachedPayablesCompanion extends UpdateCompanion<CachedPayable> {
   String toString() {
     return (StringBuffer('CachedPayablesCompanion(')
           ..write('id: $id, ')
-          ..write('eventId: $eventId, ')
           ..write('studentId: $studentId, ')
-          ..write('qrTicketUnlocked: $qrTicketUnlocked, ')
-          ..write('amountDue: $amountDue, ')
-          ..write('paymentStatus: $paymentStatus, ')
-          ..write('cachedAt: $cachedAt, ')
           ..write('studentName: $studentName, ')
+          ..write('studentSchoolId: $studentSchoolId, ')
+          ..write('type: $type, ')
+          ..write('label: $label, ')
+          ..write('description: $description, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('organizationName: $organizationName, ')
+          ..write('eventId: $eventId, ')
+          ..write('semesterId: $semesterId, ')
+          ..write('assignedAmount: $assignedAmount, ')
+          ..write('paidAmount: $paidAmount, ')
+          ..write('amountDue: $amountDue, ')
+          ..write('status: $status, ')
+          ..write('paymentStatus: $paymentStatus, ')
+          ..write('qrTicketUnlocked: $qrTicketUnlocked, ')
+          ..write('dueDate: $dueDate, ')
+          ..write('paidAt: $paidAt, ')
+          ..write('cachedAt: $cachedAt, ')
           ..write('studentIdNumber: $studentIdNumber, ')
           ..write('profilePhotoUrl: $profilePhotoUrl, ')
           ..write('eventTitle: $eventTitle, ')
@@ -3722,13 +4213,25 @@ typedef $$OfflineAttendanceTableProcessedTableManager = ProcessedTableManager<
 typedef $$CachedPayablesTableCreateCompanionBuilder = CachedPayablesCompanion
     Function({
   required String id,
-  required String eventId,
   required String studentId,
-  required int qrTicketUnlocked,
-  required double amountDue,
-  required String paymentStatus,
-  required int cachedAt,
   Value<String?> studentName,
+  Value<String?> studentSchoolId,
+  Value<String> type,
+  Value<String> label,
+  Value<String?> description,
+  Value<String?> organizationId,
+  Value<String?> organizationName,
+  Value<String?> eventId,
+  Value<String> semesterId,
+  Value<double> assignedAmount,
+  Value<double> paidAmount,
+  Value<double> amountDue,
+  Value<String> status,
+  Value<String> paymentStatus,
+  Value<int> qrTicketUnlocked,
+  Value<int?> dueDate,
+  Value<int?> paidAt,
+  Value<int> cachedAt,
   Value<String?> studentIdNumber,
   Value<String?> profilePhotoUrl,
   Value<String?> eventTitle,
@@ -3738,13 +4241,25 @@ typedef $$CachedPayablesTableCreateCompanionBuilder = CachedPayablesCompanion
 typedef $$CachedPayablesTableUpdateCompanionBuilder = CachedPayablesCompanion
     Function({
   Value<String> id,
-  Value<String> eventId,
   Value<String> studentId,
-  Value<int> qrTicketUnlocked,
-  Value<double> amountDue,
-  Value<String> paymentStatus,
-  Value<int> cachedAt,
   Value<String?> studentName,
+  Value<String?> studentSchoolId,
+  Value<String> type,
+  Value<String> label,
+  Value<String?> description,
+  Value<String?> organizationId,
+  Value<String?> organizationName,
+  Value<String?> eventId,
+  Value<String> semesterId,
+  Value<double> assignedAmount,
+  Value<double> paidAmount,
+  Value<double> amountDue,
+  Value<String> status,
+  Value<String> paymentStatus,
+  Value<int> qrTicketUnlocked,
+  Value<int?> dueDate,
+  Value<int?> paidAt,
+  Value<int> cachedAt,
   Value<String?> studentIdNumber,
   Value<String?> profilePhotoUrl,
   Value<String?> eventTitle,
@@ -3764,27 +4279,67 @@ class $$CachedPayablesTableFilterComposer
   ColumnFilters<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get studentId => $composableBuilder(
+      column: $table.studentId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get studentSchoolId => $composableBuilder(
+      column: $table.studentSchoolId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+      column: $table.organizationId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get organizationName => $composableBuilder(
+      column: $table.organizationName,
+      builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get eventId => $composableBuilder(
       column: $table.eventId, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get studentId => $composableBuilder(
-      column: $table.studentId, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get semesterId => $composableBuilder(
+      column: $table.semesterId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get assignedAmount => $composableBuilder(
+      column: $table.assignedAmount,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get paidAmount => $composableBuilder(
+      column: $table.paidAmount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get amountDue => $composableBuilder(
+      column: $table.amountDue, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get paymentStatus => $composableBuilder(
+      column: $table.paymentStatus, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get qrTicketUnlocked => $composableBuilder(
       column: $table.qrTicketUnlocked,
       builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<double> get amountDue => $composableBuilder(
-      column: $table.amountDue, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get dueDate => $composableBuilder(
+      column: $table.dueDate, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get paymentStatus => $composableBuilder(
-      column: $table.paymentStatus, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get paidAt => $composableBuilder(
+      column: $table.paidAt, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get cachedAt => $composableBuilder(
       column: $table.cachedAt, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get studentName => $composableBuilder(
-      column: $table.studentName, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get studentIdNumber => $composableBuilder(
       column: $table.studentIdNumber,
@@ -3813,28 +4368,68 @@ class $$CachedPayablesTableOrderingComposer
   ColumnOrderings<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get eventId => $composableBuilder(
-      column: $table.eventId, builder: (column) => ColumnOrderings(column));
-
   ColumnOrderings<String> get studentId => $composableBuilder(
       column: $table.studentId, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<int> get qrTicketUnlocked => $composableBuilder(
-      column: $table.qrTicketUnlocked,
+  ColumnOrderings<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get studentSchoolId => $composableBuilder(
+      column: $table.studentSchoolId,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get type => $composableBuilder(
+      column: $table.type, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+      column: $table.organizationId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get organizationName => $composableBuilder(
+      column: $table.organizationName,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get eventId => $composableBuilder(
+      column: $table.eventId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get semesterId => $composableBuilder(
+      column: $table.semesterId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get assignedAmount => $composableBuilder(
+      column: $table.assignedAmount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get paidAmount => $composableBuilder(
+      column: $table.paidAmount, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<double> get amountDue => $composableBuilder(
       column: $table.amountDue, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get paymentStatus => $composableBuilder(
       column: $table.paymentStatus,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get qrTicketUnlocked => $composableBuilder(
+      column: $table.qrTicketUnlocked,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get dueDate => $composableBuilder(
+      column: $table.dueDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get paidAt => $composableBuilder(
+      column: $table.paidAt, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get cachedAt => $composableBuilder(
       column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get studentName => $composableBuilder(
-      column: $table.studentName, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get studentIdNumber => $composableBuilder(
       column: $table.studentIdNumber,
@@ -3863,26 +4458,62 @@ class $$CachedPayablesTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get eventId =>
-      $composableBuilder(column: $table.eventId, builder: (column) => column);
-
   GeneratedColumn<String> get studentId =>
       $composableBuilder(column: $table.studentId, builder: (column) => column);
 
-  GeneratedColumn<int> get qrTicketUnlocked => $composableBuilder(
-      column: $table.qrTicketUnlocked, builder: (column) => column);
+  GeneratedColumn<String> get studentName => $composableBuilder(
+      column: $table.studentName, builder: (column) => column);
+
+  GeneratedColumn<String> get studentSchoolId => $composableBuilder(
+      column: $table.studentSchoolId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+      column: $table.organizationId, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationName => $composableBuilder(
+      column: $table.organizationName, builder: (column) => column);
+
+  GeneratedColumn<String> get eventId =>
+      $composableBuilder(column: $table.eventId, builder: (column) => column);
+
+  GeneratedColumn<String> get semesterId => $composableBuilder(
+      column: $table.semesterId, builder: (column) => column);
+
+  GeneratedColumn<double> get assignedAmount => $composableBuilder(
+      column: $table.assignedAmount, builder: (column) => column);
+
+  GeneratedColumn<double> get paidAmount => $composableBuilder(
+      column: $table.paidAmount, builder: (column) => column);
 
   GeneratedColumn<double> get amountDue =>
       $composableBuilder(column: $table.amountDue, builder: (column) => column);
 
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
   GeneratedColumn<String> get paymentStatus => $composableBuilder(
       column: $table.paymentStatus, builder: (column) => column);
 
+  GeneratedColumn<int> get qrTicketUnlocked => $composableBuilder(
+      column: $table.qrTicketUnlocked, builder: (column) => column);
+
+  GeneratedColumn<int> get dueDate =>
+      $composableBuilder(column: $table.dueDate, builder: (column) => column);
+
+  GeneratedColumn<int> get paidAt =>
+      $composableBuilder(column: $table.paidAt, builder: (column) => column);
+
   GeneratedColumn<int> get cachedAt =>
       $composableBuilder(column: $table.cachedAt, builder: (column) => column);
-
-  GeneratedColumn<String> get studentName => $composableBuilder(
-      column: $table.studentName, builder: (column) => column);
 
   GeneratedColumn<String> get studentIdNumber => $composableBuilder(
       column: $table.studentIdNumber, builder: (column) => column);
@@ -3925,13 +4556,25 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
               $$CachedPayablesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<String> id = const Value.absent(),
-            Value<String> eventId = const Value.absent(),
             Value<String> studentId = const Value.absent(),
-            Value<int> qrTicketUnlocked = const Value.absent(),
-            Value<double> amountDue = const Value.absent(),
-            Value<String> paymentStatus = const Value.absent(),
-            Value<int> cachedAt = const Value.absent(),
             Value<String?> studentName = const Value.absent(),
+            Value<String?> studentSchoolId = const Value.absent(),
+            Value<String> type = const Value.absent(),
+            Value<String> label = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            Value<String?> organizationId = const Value.absent(),
+            Value<String?> organizationName = const Value.absent(),
+            Value<String?> eventId = const Value.absent(),
+            Value<String> semesterId = const Value.absent(),
+            Value<double> assignedAmount = const Value.absent(),
+            Value<double> paidAmount = const Value.absent(),
+            Value<double> amountDue = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<String> paymentStatus = const Value.absent(),
+            Value<int> qrTicketUnlocked = const Value.absent(),
+            Value<int?> dueDate = const Value.absent(),
+            Value<int?> paidAt = const Value.absent(),
+            Value<int> cachedAt = const Value.absent(),
             Value<String?> studentIdNumber = const Value.absent(),
             Value<String?> profilePhotoUrl = const Value.absent(),
             Value<String?> eventTitle = const Value.absent(),
@@ -3940,13 +4583,25 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
           }) =>
               CachedPayablesCompanion(
             id: id,
-            eventId: eventId,
             studentId: studentId,
-            qrTicketUnlocked: qrTicketUnlocked,
-            amountDue: amountDue,
-            paymentStatus: paymentStatus,
-            cachedAt: cachedAt,
             studentName: studentName,
+            studentSchoolId: studentSchoolId,
+            type: type,
+            label: label,
+            description: description,
+            organizationId: organizationId,
+            organizationName: organizationName,
+            eventId: eventId,
+            semesterId: semesterId,
+            assignedAmount: assignedAmount,
+            paidAmount: paidAmount,
+            amountDue: amountDue,
+            status: status,
+            paymentStatus: paymentStatus,
+            qrTicketUnlocked: qrTicketUnlocked,
+            dueDate: dueDate,
+            paidAt: paidAt,
+            cachedAt: cachedAt,
             studentIdNumber: studentIdNumber,
             profilePhotoUrl: profilePhotoUrl,
             eventTitle: eventTitle,
@@ -3955,13 +4610,25 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
           ),
           createCompanionCallback: ({
             required String id,
-            required String eventId,
             required String studentId,
-            required int qrTicketUnlocked,
-            required double amountDue,
-            required String paymentStatus,
-            required int cachedAt,
             Value<String?> studentName = const Value.absent(),
+            Value<String?> studentSchoolId = const Value.absent(),
+            Value<String> type = const Value.absent(),
+            Value<String> label = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            Value<String?> organizationId = const Value.absent(),
+            Value<String?> organizationName = const Value.absent(),
+            Value<String?> eventId = const Value.absent(),
+            Value<String> semesterId = const Value.absent(),
+            Value<double> assignedAmount = const Value.absent(),
+            Value<double> paidAmount = const Value.absent(),
+            Value<double> amountDue = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<String> paymentStatus = const Value.absent(),
+            Value<int> qrTicketUnlocked = const Value.absent(),
+            Value<int?> dueDate = const Value.absent(),
+            Value<int?> paidAt = const Value.absent(),
+            Value<int> cachedAt = const Value.absent(),
             Value<String?> studentIdNumber = const Value.absent(),
             Value<String?> profilePhotoUrl = const Value.absent(),
             Value<String?> eventTitle = const Value.absent(),
@@ -3970,13 +4637,25 @@ class $$CachedPayablesTableTableManager extends RootTableManager<
           }) =>
               CachedPayablesCompanion.insert(
             id: id,
-            eventId: eventId,
             studentId: studentId,
-            qrTicketUnlocked: qrTicketUnlocked,
-            amountDue: amountDue,
-            paymentStatus: paymentStatus,
-            cachedAt: cachedAt,
             studentName: studentName,
+            studentSchoolId: studentSchoolId,
+            type: type,
+            label: label,
+            description: description,
+            organizationId: organizationId,
+            organizationName: organizationName,
+            eventId: eventId,
+            semesterId: semesterId,
+            assignedAmount: assignedAmount,
+            paidAmount: paidAmount,
+            amountDue: amountDue,
+            status: status,
+            paymentStatus: paymentStatus,
+            qrTicketUnlocked: qrTicketUnlocked,
+            dueDate: dueDate,
+            paidAt: paidAt,
+            cachedAt: cachedAt,
             studentIdNumber: studentIdNumber,
             profilePhotoUrl: profilePhotoUrl,
             eventTitle: eventTitle,

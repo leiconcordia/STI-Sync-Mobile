@@ -5,6 +5,7 @@ import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/features/payables/models/payable_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
+import 'payment_instructions_bottom_sheet.dart';
 
 class DuesListView extends ConsumerWidget {
   const DuesListView({super.key});
@@ -23,12 +24,12 @@ class DuesListView extends ConsumerWidget {
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade200),
             ),
             child: Column(
               children: [
-                Icon(Icons.check_circle_outline, size: 48, color: AppColors.success.withOpacity(0.8)),
+                Icon(Icons.check_circle_outline_rounded, size: 48, color: AppColors.success.withValues(alpha: 0.8)),
                 const SizedBox(height: 12),
                 Text(
                   'No Active Dues',
@@ -48,7 +49,7 @@ class DuesListView extends ConsumerWidget {
         return Column(
           children: dues.map((due) => Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
-            child: _buildDuesCard(due),
+            child: _buildDuesCard(context, due),
           )).toList(),
         );
       },
@@ -72,9 +73,10 @@ class DuesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildDuesCard(PayableModel due) {
-    final String orgName = due.organizationName?.isNotEmpty == true ? due.organizationName! : 'SAO Campus';
-    final String avatarText = orgName.length >= 2 ? orgName.substring(0, 2).toUpperCase() : 'ST';
+  Widget _buildDuesCard(BuildContext context, PayableModel due) {
+    final bool isCampus = due.isCampusWide;
+    final String orgName = due.organizationName?.isNotEmpty == true ? due.organizationName! : (isCampus ? 'School / SAO' : 'Club Organization');
+    final Color badgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
     
     final double total = due.assignedAmount > 0 ? due.assignedAmount : (due.amountDue + due.paidAmount);
     final double paid = due.paidAmount;
@@ -84,125 +86,207 @@ class DuesListView extends ConsumerWidget {
     final String statusText;
     final Color statusColor;
     if (due.isPaid) {
-      statusText = 'Paid';
+      statusText = 'Fully Paid';
       statusColor = AppColors.success;
+    } else if (due.isOverdue) {
+      statusText = 'Overdue';
+      statusColor = AppColors.error;
     } else if (paid > 0) {
-      statusText = 'Partial';
-      statusColor = Colors.orange;
+      statusText = 'Partially Paid';
+      statusColor = Colors.orange.shade800;
     } else {
-      statusText = due.status.toUpperCase();
+      statusText = 'Pending';
       statusColor = AppColors.secondary;
     }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppColors.primary,
-                      child: Text(avatarText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+    return InkWell(
+      onTap: () => PaymentInstructionsBottomSheet.show(context),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: due.isOverdue ? AppColors.error.withValues(alpha: 0.3) : Colors.grey.shade200,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isCampus ? Icons.school_outlined : Icons.groups_outlined,
+                              size: 13,
+                              color: badgeColor,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              isCampus ? 'SAO Campus' : orgName,
+                              style: TextStyle(
+                                color: badgeColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(due.label, style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(orgName, style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                        ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              due.label,
+              style: AppTextStyles.h2.copyWith(
+                color: AppColors.primaryDark,
+                fontSize: 16,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (due.description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                due.description,
+                style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 16),
+            Stack(
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: progress,
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: due.isPaid ? AppColors.success : (due.isOverdue ? AppColors.error : AppColors.primary),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text.rich(TextSpan(
+                  children: [
+                    TextSpan(text: 'Total ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
+                    TextSpan(text: '₱${total.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                  ]
+                )),
+                Text.rich(TextSpan(
+                  children: [
+                    TextSpan(text: 'Paid ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
+                    TextSpan(text: '₱${paid.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
+                  ]
+                )),
+                Text.rich(TextSpan(
+                  children: [
+                    TextSpan(text: 'Balance ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
+                    TextSpan(
+                      text: '₱${remaining.toStringAsFixed(0)}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: remaining > 0 ? (due.isOverdue ? AppColors.error : AppColors.secondary) : AppColors.success,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ]
+                )),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(color: Colors.grey.shade200, height: 1),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 12, color: due.isOverdue ? AppColors.error : Colors.grey),
+                    const SizedBox(width: 5),
+                    Text(
+                      due.dueDate != null ? 'Due by ${DateFormat('MMM dd, yyyy').format(due.dueDate!)}' : 'No due date set',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: due.isOverdue ? AppColors.error : Colors.grey.shade600,
+                        fontSize: 11,
+                        fontWeight: due.isOverdue ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  statusText,
-                  style: AppTextStyles.labelSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Stack(
-            children: [
-              Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: due.isPaid ? AppColors.success : AppColors.primary,
-                    borderRadius: BorderRadius.circular(4),
+                if (!due.isPaid)
+                  Row(
+                    children: [
+                      Text(
+                        'How to Pay',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.arrow_forward_ios, size: 10, color: AppColors.primary),
+                    ],
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text.rich(TextSpan(
-                children: [
-                  TextSpan(text: 'Total ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                  TextSpan(text: '₱${total.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
-                ]
-              )),
-              Text.rich(TextSpan(
-                children: [
-                  TextSpan(text: 'Paid ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                  TextSpan(text: '₱${paid.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
-                ]
-              )),
-              Text.rich(TextSpan(
-                children: [
-                  TextSpan(text: 'Balance ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                  TextSpan(text: '₱${remaining.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: remaining > 0 ? AppColors.error : AppColors.success, fontWeight: FontWeight.bold)),
-                ]
-              )),
-            ],
-          ),
-          if (due.dueDate != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  'Due by ${DateFormat('MMM dd, yyyy').format(due.dueDate!)}',
-                  style: AppTextStyles.labelSmall.copyWith(color: Colors.grey, fontSize: 11),
-                ),
               ],
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
+
