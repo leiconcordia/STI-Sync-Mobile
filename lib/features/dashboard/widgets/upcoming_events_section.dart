@@ -66,7 +66,7 @@ class UpcomingEventsSection extends ConsumerWidget {
                 itemCount: events.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 16),
                 itemBuilder: (context, index) {
-                  return _buildEventCard(context, events[index]);
+                  return _DashboardEventCard(event: events[index]);
                 },
               ),
             );
@@ -91,8 +91,15 @@ class UpcomingEventsSection extends ConsumerWidget {
       ],
     );
   }
+}
 
-  Widget _buildEventCard(BuildContext context, EventModel event) {
+class _DashboardEventCard extends ConsumerWidget {
+  final EventModel event;
+
+  const _DashboardEventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     String dateDisplay = 'TBA';
     if (event.sessions.isNotEmpty && event.sessions.first.date.isNotEmpty) {
       final parsed = DateTime.tryParse(event.sessions.first.date);
@@ -105,9 +112,13 @@ class UpcomingEventsSection extends ConsumerWidget {
       dateDisplay = DateFormat('MMM dd, yyyy').format(event.createdAt);
     }
 
+    final venueName = ref.watch(venueNameProvider(event.venueId));
+    final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
 
-    final String venue = event.venueId.isNotEmpty ? event.venueId : 'Campus Venue';
-    final String orgName = event.hostingOrgId.isNotEmpty ? event.hostingOrgId : 'STI College';
+    final String displayOrg = event.isCampusWide
+        ? 'STI College / SAO'
+        : (orgName.valueOrNull ?? 'Student Organization');
+    final String displayVenue = venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue');
 
     return GestureDetector(
       onTap: () {
@@ -125,9 +136,9 @@ class UpcomingEventsSection extends ConsumerWidget {
           children: [
             Container(
               height: 6,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: event.isCampusWide ? AppColors.primary : Colors.indigo.shade600,
+                borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
                 ),
@@ -152,16 +163,28 @@ class UpcomingEventsSection extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          orgName,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(
+                              event.isCampusWide ? Icons.school_rounded : Icons.groups_outlined,
+                              size: 13,
+                              color: event.isCampusWide ? AppColors.primary : Colors.indigo.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                displayOrg,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: event.isCampusWide ? AppColors.primary : Colors.indigo.shade700,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -188,7 +211,7 @@ class UpcomingEventsSection extends ConsumerWidget {
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                venue,
+                                displayVenue,
                                 style: AppTextStyles.labelSmall,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -204,13 +227,15 @@ class UpcomingEventsSection extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: event.isCampusWide
+                                ? AppColors.primary.withOpacity(0.1)
+                                : Colors.indigo.shade50,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            event.eventFormat.isNotEmpty ? event.eventFormat : 'On-Campus',
+                            event.isCampusWide ? 'SAO / School' : 'Club Org',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.primary,
+                              color: event.isCampusWide ? AppColors.primary : Colors.indigo.shade800,
                               fontWeight: FontWeight.bold,
                               fontSize: 11,
                             ),

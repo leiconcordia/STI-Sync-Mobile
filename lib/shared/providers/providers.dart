@@ -222,24 +222,43 @@ final registrationViewModelProvider =
   (ref) => RegistrationViewModel(ref.watch(registrationRepositoryProvider)),
 );
 
+enum EventFilterCategory { all, schoolSao, clubs, myOrgs }
+
+final eventFilterCategoryProvider =
+    StateProvider<EventFilterCategory>((ref) => EventFilterCategory.all);
+
+final eventSearchQueryProvider =
+    StateProvider<String>((ref) => '');
+
 /// Name Resolvers
 final orgNameProvider =
     FutureProvider.family<String, String>((ref, orgId) async {
-  if (orgId.isEmpty) return 'Unknown Org';
+  final trimmed = orgId.trim();
+  final lower = trimmed.toLowerCase();
+  if (trimmed.isEmpty ||
+      lower == 'sas' ||
+      lower == 'sao' ||
+      lower == 'sas_admin' ||
+      lower == 'sao_admin' ||
+      lower == 'admin' ||
+      lower == 'sti' ||
+      lower == 'sti_college') {
+    return 'STI College / SAO';
+  }
   try {
     final doc = await ref
         .read(firestoreProvider)
         .collection(FirestorePaths.organizations)
-        .doc(orgId)
+        .doc(trimmed)
         .get();
     if (doc.exists) {
       final data = doc.data();
       return data?['name'] as String? ??
           data?['acronym'] as String? ??
-          'Unknown Org';
+          'STI College / SAO';
     }
   } catch (_) {}
-  return 'Unknown Org';
+  return 'STI College / SAO';
 });
 
 final venueNameProvider =

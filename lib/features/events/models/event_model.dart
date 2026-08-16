@@ -104,6 +104,27 @@ class EventModel {
     required this.updatedAt,
   });
 
+  /// True if this event is hosted by STI Administration / Student Affairs Office (SAO)
+  /// or does not belong to a specific student club / organization.
+  bool get isCampusWide {
+    final org = hostingOrgId.trim().toLowerCase();
+    return org.isEmpty ||
+        org == 'sas' ||
+        org == 'sao' ||
+        org == 'sas_admin' ||
+        org == 'sao_admin' ||
+        org == 'admin' ||
+        org == 'sti' ||
+        org == 'sti_college';
+  }
+
+  /// True if this event is hosted by a student club or organization.
+  bool get isOrgEvent => !isCampusWide;
+
+  /// Default display label for the organizer.
+  String get organizerDisplayName =>
+      isCampusWide ? 'STI College / SAO' : 'Student Organization';
+
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return EventModel.fromMap(doc.id, data);

@@ -45,22 +45,23 @@ class EventDetailScreen extends ConsumerWidget {
           }
 
           final venueName = ref.watch(venueNameProvider(event.venueId));
-          final orgDataAsync = ref.watch(orgProvider(event.hostingOrgId));
+          final orgDataAsync = event.isOrgEvent ? ref.watch(orgProvider(event.hostingOrgId)) : null;
+          final resolvedOrgName = ref.watch(orgNameProvider(event.hostingOrgId));
           final categoryName =
               ref.watch(categoryNameProvider(event.eventCategoryId));
 
-          String orgName = 'Loading...';
+          String orgName = event.isCampusWide ? 'STI College / SAO' : (resolvedOrgName.valueOrNull ?? 'Student Organization');
           String? logoUrl;
-          orgDataAsync.whenData((orgMap) {
-            if (orgMap != null) {
-              orgName = orgMap['name'] as String? ??
-                  orgMap['acronym'] as String? ??
-                  'Unknown Org';
-              logoUrl = orgMap['logoUrl'] as String?;
-            } else {
-              orgName = 'Unknown Org';
-            }
-          });
+          if (orgDataAsync != null) {
+            orgDataAsync.whenData((orgMap) {
+              if (orgMap != null) {
+                orgName = orgMap['name'] as String? ??
+                    orgMap['acronym'] as String? ??
+                    'Student Organization';
+                logoUrl = orgMap['logoUrl'] as String?;
+              }
+            });
+          }
 
           final actualParticipantCount =
               ref.watch(actualParticipantCountProvider(event.id));
@@ -148,66 +149,81 @@ class EventDetailScreen extends ConsumerWidget {
                         ],
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.grey.shade300),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              ClipOval(
-                                child: logoUrl != null && logoUrl!.isNotEmpty
-                                    ? CachedNetworkImage(
-                                        imageUrl: logoUrl!,
-                                        width: 20,
-                                        height: 20,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            Container(
-                                          width: 20,
-                                          height: 20,
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            Container(
-                                          width: 20,
-                                          height: 20,
-                                          color: AppColors.primary,
-                                          alignment: Alignment.center,
-                                          child: Text(
+                              CircleAvatar(
+                                radius: 10,
+                                backgroundColor: event.isCampusWide
+                                    ? AppColors.primaryDark
+                                    : AppColors.primary,
+                                child: event.isCampusWide
+                                    ? const Icon(Icons.school_rounded,
+                                        size: 12, color: Colors.white)
+                                    : (logoUrl != null && logoUrl!.isNotEmpty
+                                        ? ClipOval(
+                                            child: CachedNetworkImage(
+                                              imageUrl: logoUrl!,
+                                              width: 20,
+                                              height: 20,
+                                              fit: BoxFit.cover,
+                                              errorWidget: (_, __, ___) =>
+                                                  Text(
+                                                orgName.isNotEmpty
+                                                    ? orgName.substring(0, 1).toUpperCase()
+                                                    : 'C',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
                                             orgName.isNotEmpty
-                                                ? orgName.substring(0, 1)
-                                                : 'O',
+                                                ? orgName.substring(0, 1).toUpperCase()
+                                                : 'C',
                                             style: const TextStyle(
                                                 color: Colors.white,
-                                                fontSize: 8,
+                                                fontSize: 9,
                                                 fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                      )
-                                    : Container(
-                                        width: 20,
-                                        height: 20,
-                                        color: AppColors.primary,
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          orgName.isNotEmpty
-                                              ? orgName.substring(0, 1)
-                                              : 'O',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 8,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
+                                          )),
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
                               Text(
                                 orgName,
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.primary,
+                                  color: event.isCampusWide
+                                      ? AppColors.primaryDark
+                                      : AppColors.primary,
                                   fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: event.isCampusWide
+                                      ? AppColors.primary.withOpacity(0.1)
+                                      : Colors.indigo.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  event.isCampusWide ? 'SAO / School' : 'Club',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: event.isCampusWide
+                                        ? AppColors.primary
+                                        : Colors.indigo.shade800,
+                                  ),
                                 ),
                               ),
                             ],

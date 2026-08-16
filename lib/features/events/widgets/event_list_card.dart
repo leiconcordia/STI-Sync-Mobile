@@ -58,27 +58,55 @@ class EventListCard extends ConsumerWidget {
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 12,
-                  backgroundColor: AppColors.primary,
-                  child: Text(
-                    orgName.valueOrNull?.substring(0, 1) ?? 'O', 
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
+                  radius: 13,
+                  backgroundColor: event.isCampusWide ? AppColors.primaryDark : Colors.indigo.shade700,
+                  child: event.isCampusWide
+                      ? const Icon(Icons.school_rounded, size: 14, color: Colors.white)
+                      : Text(
+                          (orgName.valueOrNull?.isNotEmpty == true)
+                              ? orgName.valueOrNull!.substring(0, 1).toUpperCase()
+                              : 'C',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    orgName.valueOrNull ?? 'Loading...',
+                    event.isCampusWide
+                        ? 'STI College / SAO'
+                        : (orgName.valueOrNull ?? 'Student Organization'),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primary,
+                      color: event.isCampusWide ? AppColors.primaryDark : Colors.indigo.shade900,
                       fontWeight: FontWeight.bold,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 4),
-                Text('• ${categoryName.valueOrNull ?? '...'}', style: AppTextStyles.labelSmall),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: event.isCampusWide ? AppColors.primary.withOpacity(0.1) : Colors.indigo.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: event.isCampusWide ? AppColors.primary.withOpacity(0.2) : Colors.indigo.shade200,
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    event.isCampusWide ? 'SAO / Admin' : 'Club Org',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: event.isCampusWide ? AppColors.primary : Colors.indigo.shade800,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (categoryName.valueOrNull != null && categoryName.valueOrNull!.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Text('• ${categoryName.valueOrNull}', style: AppTextStyles.labelSmall.copyWith(fontSize: 11)),
+                ],
               ],
             ),
           ),

@@ -109,7 +109,23 @@ class PayableModel {
   bool get isPaid => status == 'paid' || paymentStatus == 'paid' || status == 'waived' || paymentStatus == 'waived' || remainingBalance <= 0;
   bool get isPending => !isPaid;
   bool get isOverdue => dueDate != null && DateTime.now().isAfter(dueDate!) && !isPaid;
-  bool get isCampusWide => organizationId == null || organizationId!.trim().isEmpty;
+  bool get isCampusWide {
+    if (organizationId == null) return true;
+    final org = organizationId!.trim().toLowerCase();
+    return org.isEmpty ||
+        org == 'sas' ||
+        org == 'sao' ||
+        org == 'sas_admin' ||
+        org == 'sao_admin' ||
+        org == 'admin' ||
+        org == 'sti' ||
+        org == 'sti_college';
+  }
+
+  String get organizerDisplayName =>
+      organizationName?.trim().isNotEmpty == true
+          ? organizationName!
+          : (isCampusWide ? 'STI College / SAO' : 'Student Organization');
 
   factory PayableModel.fromFirestore(Map<String, dynamic> data, String docId) {
     DateTime? parseDate(dynamic value) {
