@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/features/events/models/event_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 
@@ -102,14 +103,9 @@ class _DashboardEventCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     String dateDisplay = 'TBA';
     if (event.sessions.isNotEmpty && event.sessions.first.date.isNotEmpty) {
-      final parsed = DateTime.tryParse(event.sessions.first.date);
-      if (parsed != null) {
-        dateDisplay = DateFormat('MMM dd, yyyy').format(parsed);
-      } else {
-        dateDisplay = event.sessions.first.date;
-      }
+      dateDisplay = formatAppDate(event.sessions.first.date, fallback: event.sessions.first.date);
     } else {
-      dateDisplay = DateFormat('MMM dd, yyyy').format(event.createdAt);
+      dateDisplay = formatAppDate(event.createdAt, fallback: 'TBA');
     }
 
     final venueName = ref.watch(venueNameProvider(event.venueId));

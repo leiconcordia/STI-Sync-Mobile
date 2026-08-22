@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../widgets/registration_widgets.dart';
@@ -106,11 +107,16 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
             hint: 'Student ID Number *',
             icon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
+            maxLength: 11,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(11),
+            ],
             onChanged: vm.setStudentId,
           ),
           const SizedBox(height: 6),
           const Text(
-            'Enter your official STI student ID exactly as shown on your ID card (11 digits).',
+            'Enter your official STI student ID exactly as shown on your ID card (11 digits max).',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 20),
@@ -146,6 +152,11 @@ class _PersonalInfoStepState extends ConsumerState<PersonalInfoStep> {
             hint: 'Contact Number * (e.g. 9171234567)',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
+            maxLength: 10,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
             onChanged: vm.setContactNumber,
           ),
           const SizedBox(height: 4),

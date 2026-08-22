@@ -7,7 +7,7 @@ import '../../../core/local/app_database.dart';
 import '../../../shared/providers/providers.dart';
 import '../widgets/session_selector_sheet.dart';
 import '../models/scanner_assignment_model.dart';
-import 'package:intl/intl.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 
 final eventAttendanceProvider =
     StreamProvider.family.autoDispose<List<OfflineAttendanceData>, String>(
@@ -97,36 +97,37 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
     final eventId = ref.read(scannerViewModelProvider).selectedEventId;
 
     if (eventId != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Refreshing roster & attendance...'),
+              ],
+            ),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+
       await ref
-          .read(offlineAttendanceRepositoryProvider)
-          .fetchAndCacheRemoteAttendance(eventId);
+          .read(scannerViewModelProvider.notifier)
+          .refreshEventData(eventId);
+
       ref.invalidate(sessionParticipantsProvider(eventId));
       ref.invalidate(eventAttendanceProvider(eventId));
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(width: 12),
-              Text('Refreshing attendance list...'),
-            ],
-          ),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
     }
   }
 
@@ -810,7 +811,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
       statusIcon = Icons.logout;
       statusBgColor = Colors.blue.withValues(alpha: 0.1);
       final date = DateTime.fromMillisecondsSinceEpoch(timeOutRecord.scannedAt);
-      timeLabel = DateFormat.jm().format(date);
+      timeLabel = formatAppTime(date);
     } else if (timeInRecord != null) {
       status = timeInRecord.status; // "Present" or "Late"
       if (status == 'Present') {
@@ -823,7 +824,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
         statusBgColor = Colors.orange.withValues(alpha: 0.1);
       }
       final date = DateTime.fromMillisecondsSinceEpoch(timeInRecord.scannedAt);
-      timeLabel = DateFormat.jm().format(date);
+      timeLabel = formatAppTime(date);
     }
 
     return InkWell(
@@ -986,9 +987,8 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                         style: AppTextStyles.bodyMedium
                             .copyWith(color: Colors.grey.shade600)),
                     Text(
-                      DateFormat.jm().format(
-                          DateTime.fromMillisecondsSinceEpoch(
-                              timeInRecord.scannedAt)),
+                      formatAppTime(DateTime.fromMillisecondsSinceEpoch(
+                          timeInRecord.scannedAt)),
                       style: AppTextStyles.bodyMedium
                           .copyWith(fontWeight: FontWeight.bold),
                     ),
@@ -1004,9 +1004,8 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                         style: AppTextStyles.bodyMedium
                             .copyWith(color: Colors.grey.shade600)),
                     Text(
-                      DateFormat.jm().format(
-                          DateTime.fromMillisecondsSinceEpoch(
-                              timeOutRecord.scannedAt)),
+                      formatAppTime(DateTime.fromMillisecondsSinceEpoch(
+                          timeOutRecord.scannedAt)),
                       style: AppTextStyles.bodyMedium
                           .copyWith(fontWeight: FontWeight.bold),
                     ),

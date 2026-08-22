@@ -127,17 +127,8 @@ class OfflineAttendanceRepository {
     final List<CachedPayablesCompanion> payableCompanions = [];
 
     for (final student in allStudents) {
-      // Determine QR ticket unlocked status
-      int qrTicketUnlocked = 0; // 0 = false, 1 = true
-      
-      if (!payablesEnabled) {
-        qrTicketUnlocked = 1; // Always unlocked if payables are disabled
-      } else {
-        final payable = payablesMap[student.id];
-        if (payable != null && payable['qrTicketUnlocked'] == true) {
-          qrTicketUnlocked = 1;
-        }
-      }
+      // Set QR ticket unlocked for all eligible participants (scanner trusts unlocked QR passes)
+      const int qrTicketUnlocked = 1;
 
       final studentMap = student.toFirestoreMap(
         uid: student.id,
@@ -247,6 +238,15 @@ class OfflineAttendanceRepository {
 
     // Fetch existing cloud attendance and flagged attendance records into local SQLite
     await fetchAndCacheRemoteAttendance(eventId);
+  }
+
+  /// Refreshes all offline event data (student roster, timing, and remote attendance)
+  /// when online.
+  Future<DownloadResult> refreshEventData(
+    String eventId, {
+    void Function(double progress)? onProgress,
+  }) async {
+    return downloadParticipantsForEvent(eventId, onProgress: onProgress);
   }
 
   /// Fetches existing attendance records from both `/events/{eventId}/attendance`

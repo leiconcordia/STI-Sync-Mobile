@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/scanner/models/scanner_assignment_model.dart';
@@ -367,7 +367,7 @@ class _AssignmentCard extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           assignment.downloadedAt != null
-                              ? 'Synced: ${DateFormat("MMM dd, hh:mm a").format(assignment.downloadedAt!)}'
+                              ? 'Synced: ${formatAppDateTime(assignment.downloadedAt!)}'
                               : 'Student Roster Offline Ready',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.textSecondary,

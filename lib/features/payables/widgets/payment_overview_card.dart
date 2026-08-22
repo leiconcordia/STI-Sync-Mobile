@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/currency_formatter.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 
 class PaymentOverviewCard extends ConsumerWidget {
@@ -15,8 +16,8 @@ class PaymentOverviewCard extends ConsumerWidget {
     final String nextDueText;
     if (summary.nextDue != null) {
       final due = summary.nextDue!;
-      final dueDateStr = due.dueDate != null ? ' by ${DateFormat('MMM dd').format(due.dueDate!)}' : '';
-      nextDueText = 'Next due: ${due.label} — ₱${due.remainingBalance.toStringAsFixed(0)}$dueDateStr';
+      final dueDateStr = due.dueDate != null ? ' by ${formatAppDate(due.dueDate)}' : '';
+      nextDueText = 'Next due: ${due.label} — ${formatCurrency(due.remainingBalance)}$dueDateStr';
     } else {
       nextDueText = 'All clear! No upcoming pending dues.';
     }
@@ -82,13 +83,13 @@ class PaymentOverviewCard extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.secondary.withValues(alpha: 0.9),
+                          color: Colors.orange.shade700,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${summary.pendingCount} Pending',
                           style: const TextStyle(
-                            color: AppColors.primaryDark,
+                            color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -112,18 +113,93 @@ class PaymentOverviewCard extends ConsumerWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildColumn('Total Dues', '₱${summary.totalAssigned.toStringAsFixed(0)}', Colors.white),
-                    Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.2)),
-                    _buildColumn('Total Paid', '₱${summary.totalPaid.toStringAsFixed(0)}', const Color(0xFF4ADE80)),
-                    Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.2)),
-                    _buildColumn('Outstanding', '₱${summary.totalOutstanding.toStringAsFixed(0)}', AppColors.secondary),
-                  ],
+                const SizedBox(height: 18),
+                Text(
+                  'Total Dues',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 11,
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 4),
+                Text(
+                  formatCurrency(summary.totalAssigned),
+                  style: AppTextStyles.h1.copyWith(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Total Paid',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 10.5,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              formatCurrency(summary.totalPaid),
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: const Color(0xFF4ADE80),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2)),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Outstanding',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formatCurrency(summary.totalOutstanding),
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: const Color(0xFFFFD54F),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Stack(
                   children: [
                     Container(
@@ -200,30 +276,6 @@ class PaymentOverviewCard extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildColumn(String label, String amount, Color amountColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: Colors.white.withValues(alpha: 0.7),
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          amount,
-          style: AppTextStyles.h2.copyWith(
-            color: amountColor,
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 }

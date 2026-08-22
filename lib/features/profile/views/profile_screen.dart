@@ -8,19 +8,13 @@ import 'package:sti_sync/features/profile/widgets/profile_info_card.dart';
 import 'package:sti_sync/features/profile/widgets/profile_danger_card.dart';
 import 'package:sti_sync/features/organizations/widgets/join_organization_sheet.dart';
 import 'package:sti_sync/features/organizations/models/organization_member_model.dart';
-import 'package:intl/intl.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   String _formatDate(String dateString) {
-    if (dateString.isEmpty) return '—';
-    try {
-      final date = DateTime.parse(dateString);
-      return DateFormat('MMM d, yyyy').format(date);
-    } catch (e) {
-      return dateString;
-    }
+    return formatAppDate(dateString, fallback: dateString.isEmpty ? '—' : dateString);
   }
 
   @override

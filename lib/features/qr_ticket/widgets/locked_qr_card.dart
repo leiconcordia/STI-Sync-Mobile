@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/currency_formatter.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/semester/widgets/re_enrollment_bottom_sheet.dart';
 
@@ -233,7 +234,7 @@ class LockedQrCard extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '₱${amountDue.toStringAsFixed(2)}',
+            formatCurrency(amountDue),
             style: AppTextStyles.h1.copyWith(
               color: AppColors.error,
               fontWeight: FontWeight.bold,

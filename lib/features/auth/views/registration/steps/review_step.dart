@@ -130,7 +130,7 @@ class ReviewStep extends ConsumerWidget {
                 onTap: () => vm.goToStep(1),
               ),
               _ReviewRow(
-                label: 'Year Level',
+                label: s.isSeniorHighSchool ? 'Grade Level' : 'Year Level',
                 value: orDash(s.yearLevel),
                 onTap: () => vm.goToStep(1),
               ),
@@ -145,7 +145,7 @@ class ReviewStep extends ConsumerWidget {
                 editable: false,
               ),
               _ReviewRow(
-                label: 'Semester',
+                label: s.isSeniorHighSchool ? 'Term / Trimester' : 'Semester',
                 value: orDash(s.semester),
                 onTap: () => vm.goToStep(1),
               ),

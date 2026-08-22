@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/currency_formatter.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/features/payables/models/payable_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'payment_instructions_bottom_sheet.dart';
@@ -13,6 +14,7 @@ class FinesListView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payablesAsync = ref.watch(payablesStreamProvider);
+    final myOrgs = ref.watch(myOrganizationsProvider).valueOrNull ?? [];
 
     return payablesAsync.when(
       data: (payables) {
@@ -69,39 +71,45 @@ class FinesListView extends ConsumerWidget {
                 ],
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.error_outline, color: AppColors.secondary, size: 20),
                         ),
-                        child: const Icon(Icons.error_outline, color: AppColors.secondary, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Outstanding Fines',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              color: AppColors.primaryDark,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Outstanding Fines',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: AppColors.primaryDark,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${unpaidFines.length} unpaid violation fine(s)',
+                                style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          Text(
-                            '${unpaidFines.length} unpaid violation fine(s)',
-                            style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
-                          ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
-                    '₱${totalOutstandingFines.toStringAsFixed(0)}',
+                    formatCurrency(totalOutstandingFines),
                     style: AppTextStyles.h2.copyWith(
                       color: totalOutstandingFines > 0 ? AppColors.error : AppColors.success,
                       fontWeight: FontWeight.w800,
@@ -113,7 +121,7 @@ class FinesListView extends ConsumerWidget {
             const SizedBox(height: 16),
             ...fines.map((fine) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
-              child: _buildFineCard(context, fine),
+              child: _buildFineCard(context, fine, myOrgs),
             )),
           ],
         );
@@ -138,11 +146,25 @@ class FinesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildFineCard(BuildContext context, PayableModel fine) {
+  Widget _buildFineCard(BuildContext context, PayableModel fine, List<dynamic> myOrgs) {
     final bool isCampus = fine.isCampusWide;
-    final String orgName = fine.organizationName?.isNotEmpty == true ? fine.organizationName! : (isCampus ? 'SAO Administrative' : 'Club Fine');
+    String orgName = 'Organization';
+    if (fine.organizationName?.isNotEmpty == true) {
+      orgName = fine.organizationName!;
+    } else if (isCampus) {
+      orgName = 'SAO Violation';
+    } else if (fine.organizationId?.isNotEmpty == true) {
+      final matching = myOrgs.where((o) => o.organizationId == fine.organizationId).firstOrNull;
+      if (matching != null && matching.organizationName.toString().isNotEmpty) {
+        orgName = matching.organizationName.toString();
+      } else {
+        orgName = 'Student Organization';
+      }
+    } else {
+      orgName = 'Student Organization';
+    }
     final Color badgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
-    final dueStr = fine.dueDate != null ? DateFormat('MMM dd, yyyy').format(fine.dueDate!) : 'TBA';
+    final dueStr = fine.dueDate != null ? formatAppDate(fine.dueDate) : 'TBA';
     final isUnpaid = fine.isPending;
 
     return InkWell(
@@ -170,21 +192,25 @@ class FinesListView extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    orgName,
-                    style: TextStyle(
-                      color: badgeColor,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      orgName,
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -229,7 +255,7 @@ class FinesListView extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '₱${fine.remainingBalance.toStringAsFixed(0)}',
+                  formatCurrency(fine.remainingBalance),
                   style: AppTextStyles.h2.copyWith(
                     color: isUnpaid ? AppColors.error : AppColors.success,
                     fontWeight: FontWeight.w800,
@@ -243,23 +269,31 @@ class FinesListView extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 12, color: isUnpaid ? AppColors.error : Colors.grey),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Due: $dueStr',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: isUnpaid ? AppColors.error : Colors.grey.shade600,
-                        fontSize: 11,
-                        fontWeight: isUnpaid ? FontWeight.bold : FontWeight.normal,
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today, size: 12, color: isUnpaid ? AppColors.error : Colors.grey),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Due: $dueStr',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: isUnpaid ? AppColors.error : Colors.grey.shade600,
+                            fontSize: 11,
+                            fontWeight: isUnpaid ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (isUnpaid)
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(width: 8),
                       Text(
                         'Pay Fine',
                         style: TextStyle(

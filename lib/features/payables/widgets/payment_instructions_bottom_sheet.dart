@@ -8,6 +8,7 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
   static void show(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const PaymentInstructionsBottomSheet(),
@@ -65,7 +66,7 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'How to settle payables and unlock gate tickets',
+                        'How to settle payables and unlock event QR passes',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: Colors.grey.shade600,
                         ),
@@ -82,7 +83,7 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
               badgeLabel: 'SAO / School Fees',
               title: 'Pay at the SAO / Cashier Counter',
               description:
-                  'Present your 11-digit Student ID Number at the SAO Office or Cashier. Cash and campus payment channels are supported.',
+                  'Present your 11-digit Student ID Number at the SAO Office or Cashier.',
             ),
             const SizedBox(height: 12),
             _buildChannelCard(
@@ -92,15 +93,6 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
               title: 'Pay to Club Treasurer / Officers',
               description:
                   'Visit your club booth or designated organization officers during collection periods to settle membership dues and club event fees.',
-            ),
-            const SizedBox(height: 12),
-            _buildChannelCard(
-              icon: Icons.qr_code_scanner_outlined,
-              badgeColor: Colors.amber.shade800,
-              badgeLabel: 'GCash / Reference',
-              title: 'Keep Payment Reference Numbers',
-              description:
-                  'If paying through club-authorized e-wallets, provide the transaction reference number to the officer for verification.',
             ),
             const SizedBox(height: 20),
             Container(
@@ -118,7 +110,7 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
                       const Icon(Icons.lock_clock_outlined, size: 18, color: AppColors.primaryDark),
                       const SizedBox(width: 8),
                       Text(
-                        'Gate Pass Unlock Rules',
+                        'QR Ticket Unlock Rules',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
@@ -128,7 +120,7 @@ class PaymentInstructionsBottomSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '• 100% Full Settlement: Partial payments record your balance, but the digital QR gate pass unlocks only once fully paid.\n• Real-Time Sync: Once recorded by the cashier or officer, your app unlocks within seconds without needing to restart.',
+                    '• Event QR Ticket Unlock: While event fees should mostly be settled in full, administrators can unlock your event QR code pass regardless of payment status (full, partial, or pending).\n• Real-Time Pass Sync: Once an admin or cashier records your transaction or grants access, your event QR code pass unlocks automatically in real time.',
                     style: AppTextStyles.labelSmall.copyWith(
                       color: Colors.grey.shade800,
                       height: 1.4,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../shared/providers/providers.dart';
 import '../../sync/models/sync_status_model.dart';
 
@@ -229,19 +229,11 @@ class _SyncConflictsScreenState extends ConsumerState<SyncConflictsScreen> {
     final local = conflict.localRecord;
     final remote = conflict.firestoreRecord;
 
-    final localTime = DateFormat('MMM dd, hh:mm a').format(
+    final localTime = formatAppDateTime(
       DateTime.fromMillisecondsSinceEpoch(local.scannedAt),
     );
 
-    String remoteTime = 'Unknown';
-    if (remote['scannedAt'] != null) {
-      try {
-        if (remote['scannedAt'] is String) {
-          remoteTime = DateFormat('MMM dd, hh:mm a')
-              .format(DateTime.parse(remote['scannedAt']));
-        }
-      } catch (_) {}
-    }
+    final remoteTime = formatAppDateTime(remote['scannedAt'], fallback: 'Unknown');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

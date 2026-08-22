@@ -9,6 +9,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:intl/intl.dart';
 import '../../../shared/providers/providers.dart';
 import '../../../core/local/app_database.dart';
+import '../models/scanner_assignment_model.dart';
 import '../widgets/scan_result_overlay.dart';
 
 class ScannerCameraScreen extends ConsumerStatefulWidget {
@@ -75,36 +76,123 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
+      // VALIDATION 2: Attendance Window & Timing Validation
+      final scannerState = ref.read(scannerViewModelProvider);
+      final assignment = scannerState.assignments.firstWhere(
+        (a) => a.eventId == widget.eventId,
+        orElse: () => ScannerAssignmentModel(
+          eventId: widget.eventId,
+          eventTitle: '',
+          eventFormat: '',
+          sessions: const [],
+          officerUserId: '',
+          permissions: const {},
+          eventEndTime: DateTime.now(),
+          proposalStatus: 'approved',
+        ),
+      );
+
+      final session = assignment.sessions.firstWhere(
+        (s) => s['id'] == widget.sessionId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      final dateStr = session['date'] as String?;
+      final startTimeStr = (session['startTime'] as String?) ?? (session['timeInOpen'] as String?);
+      final timeInOpenStr = (session['timeInOpen'] as String?) ?? (session['startTime'] as String?);
+      final timeInCloseStr = session['timeInClose'] as String?;
+      final timeOutOpenStr = session['timeOutOpen'] as String?;
+      final timeOutCloseStr = session['timeOutClose'] as String?;
+
+      final gracePeriod = (session['gracePeriodMinutes'] as num?)?.toInt() ?? assignment.gracePeriodMinutes ?? 15;
+      final lateThreshold = (session['lateThresholdMinutes'] as num?)?.toInt() ?? assignment.lateThresholdMinutes ?? 60;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final scanTime = DateTime.fromMillisecondsSinceEpoch(now);
+
+      final sessionStart = _parseSessionStart(dateStr, startTimeStr);
+      final timeInOpen = _parseSessionStart(dateStr, timeInOpenStr);
+      final timeInClose = _parseSessionStart(dateStr, timeInCloseStr);
+      final timeOutOpen = _parseSessionStart(dateStr, timeOutOpenStr);
+      final timeOutClose = _parseSessionStart(dateStr, timeOutCloseStr);
+
+      String scanStatus = 'Present';
+
+      if (widget.gateType == 'Time-In') {
+        // Window check: Before Time-In Opens
+        if (timeInOpen != null && scanTime.isBefore(timeInOpen)) {
+          await _showOverlay(
+            ScanResultType.windowNotOpen,
+            null,
+            extraMessage: 'Time-In is not open yet.\nOpens at: $timeInOpenStr',
+          );
+          return;
+        }
+
+        // Window check: After Time-In Closes / Late Threshold Ends
+        final lateThresholdEnd = timeInClose ?? sessionStart?.add(Duration(minutes: lateThreshold));
+        if (lateThresholdEnd != null && scanTime.isAfter(lateThresholdEnd)) {
+          final closeTimeDisplay = timeInCloseStr ?? DateFormat('h:mm a').format(lateThresholdEnd);
+          await _showOverlay(
+            ScanResultType.windowClosed,
+            null,
+            extraMessage: 'Time-In window has closed.\nClosed at: $closeTimeDisplay',
+          );
+          return;
+        }
+
+        // Grace Period Evaluation:
+        // Grace period threshold = sessionStart + gracePeriod (e.g. 7:30 AM + 15m = 7:45 AM)
+        final graceThreshold = sessionStart?.add(Duration(minutes: gracePeriod)) ??
+            timeInOpen?.add(Duration(minutes: gracePeriod));
+
+        if (graceThreshold != null && scanTime.isAfter(graceThreshold)) {
+          scanStatus = 'Late';
+        } else {
+          scanStatus = 'Present';
+        }
+      } else if (widget.gateType == 'Time-Out') {
+        // Window check: Before Time-Out Opens
+        if (timeOutOpen != null && scanTime.isBefore(timeOutOpen)) {
+          await _showOverlay(
+            ScanResultType.windowNotOpen,
+            null,
+            extraMessage: 'Time-Out is not open yet.\nOpens at: $timeOutOpenStr',
+          );
+          return;
+        }
+
+        // Window check: After Time-Out Closes
+        if (timeOutClose != null && scanTime.isAfter(timeOutClose)) {
+          await _showOverlay(
+            ScanResultType.windowClosed,
+            null,
+            extraMessage: 'Time-Out window has closed.\nClosed at: $timeOutCloseStr',
+          );
+          return;
+        }
+
+        scanStatus = 'Present';
+      }
+
       final db = ref.read(appDatabaseProvider);
 
-      // VALIDATION 2: Participant check (Drift local database)
-      // Note: `id` in cached_participants is the studentAuthUid
+      // VALIDATION 3: Participant check (Drift local database)
       final participant = await db.participantsDao.getParticipantByStudentId(
         studentAuthUid,
         widget.eventId,
       );
 
       if (participant == null) {
-        // Strict Option A: Missing from offline cache => Reject with online verification warning
         await _showOverlay(
           ScanResultType.notRegistered,
           null,
-          extraMessage: 'PAYMENT VERIFICATION REQUIRED ONLINE\nRecord Not Found in Offline Cache',
+          extraMessage: 'Student is not registered for this event.',
         );
         return;
       }
 
-      // VALIDATION 2b: Gate Lock Check (MOB-GATE-02 / Option A)
-      if (participant.qrTicketUnlocked == 0) {
-        await _showOverlay(
-          ScanResultType.paymentRequired,
-          participant,
-          extraMessage: 'GATE ACCESS DENIED\nUnpaid Event Fee / QR Code Locked',
-        );
-        return;
-      }
-
-      // VALIDATION 3: Duplicate check
+      // VALIDATION 4: Duplicate check
       final existing = await db.attendanceDao.checkDuplicate(
         studentId: studentAuthUid,
         studentNumber: participant.studentNumber,
@@ -127,46 +215,9 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
-
       // SUCCESS: Write to local database
       final currentUserId = ref.read(authViewModelProvider).student?.id ?? 'Unknown';
-      
-      // Generate a unique local ID
-      final now = DateTime.now().millisecondsSinceEpoch;
       final localId = '${studentAuthUid}_${widget.sessionId}_${widget.gateType}_$now';
-
-      // Evaluate Late Status
-      String scanStatus = 'Present';
-      
-      if (widget.gateType == 'Time-In') {
-        try {
-          final scannerState = ref.read(scannerViewModelProvider);
-          final assignment = scannerState.assignments.firstWhere(
-            (a) => a.eventId == widget.eventId,
-          );
-          
-          final session = assignment.sessions.firstWhere(
-            (s) => s['id'] == widget.sessionId,
-            orElse: () => {},
-          );
-          
-          final timeInOpenStr = (session['timeInOpen'] as String?) ?? (session['startTime'] as String?);
-          final dateStr = session['date'] as String?;
-          final gracePeriod = assignment.gracePeriodMinutes ?? (session['gracePeriodMinutes'] as num?)?.toInt() ?? 0;
-          
-          final sessionStart = _parseSessionStart(dateStr, timeInOpenStr);
-          if (sessionStart != null) {
-            final lateThreshold = sessionStart.add(Duration(minutes: gracePeriod));
-            final scanTime = DateTime.fromMillisecondsSinceEpoch(now);
-            
-            if (scanTime.isAfter(lateThreshold)) {
-              scanStatus = 'Late';
-            }
-          }
-        } catch (e) {
-          debugPrint('Failed to calculate Late status: $e');
-        }
-      }
 
       final record = OfflineAttendanceCompanion(
         localId: drift.Value(localId),
@@ -184,7 +235,11 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
       );
 
       await db.attendanceDao.insertOfflineRecord(record);
-      await _showOverlay(ScanResultType.success, participant);
+      await _showOverlay(
+        ScanResultType.success, 
+        participant,
+        status: scanStatus,
+      );
 
     } catch (e) {
       debugPrint('QR Processing Error: $e');
@@ -196,7 +251,12 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
     }
   }
 
-  Future<void> _showOverlay(ScanResultType type, CachedParticipant? participant, {String? extraMessage}) async {
+  Future<void> _showOverlay(
+    ScanResultType type, 
+    CachedParticipant? participant, {
+    String? extraMessage,
+    String? status,
+  }) async {
     _cameraController.stop(); // Temporarily stop camera
 
     if (!mounted) return;
@@ -210,6 +270,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         participant: participant,
         extraMessage: extraMessage,
         gateType: widget.gateType,
+        status: status,
         onDismiss: () => Navigator.of(context).pop(),
       ),
     );

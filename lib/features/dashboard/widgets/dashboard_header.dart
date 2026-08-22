@@ -39,23 +39,26 @@ class DashboardHeader extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  greetingPrefix,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    greetingPrefix,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
-                Text(
-                  firstName,
-                  style: AppTextStyles.h1.copyWith(
-                    color: AppColors.primaryDark,
-                    fontSize: 28,
+                  Text(
+                    firstName,
+                    style: AppTextStyles.h1.copyWith(
+                      color: AppColors.primaryDark,
+                      fontSize: 28,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Row(
               children: [

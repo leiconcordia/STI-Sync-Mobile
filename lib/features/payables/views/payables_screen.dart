@@ -40,26 +40,29 @@ class _PayablesScreenState extends ConsumerState<PayablesScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Payables & Finance',
-                          style: AppTextStyles.h1.copyWith(
-                            fontSize: 26,
-                            color: AppColors.primaryDark,
-                            fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Payables & Finance',
+                            style: AppTextStyles.h1.copyWith(
+                              fontSize: 26,
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          activeSemester.isNotEmpty ? activeSemester : 'Real-time Payment Obligations',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
+                          const SizedBox(height: 2),
+                          Text(
+                            activeSemester.isNotEmpty ? activeSemester : 'Real-time Payment Obligations',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: Container(

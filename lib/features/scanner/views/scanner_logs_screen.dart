@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../core/local/app_database.dart';
 import '../../../shared/providers/providers.dart';
 import '../../sync/models/sync_status_model.dart';
@@ -335,7 +335,7 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
   // ─── Attendance Rows ───────────────────────────────────────────────────
 
   Widget _buildAttendanceRow(OfflineAttendanceData record) {
-    final time = DateFormat('hh:mm a').format(
+    final time = formatAppTime(
       DateTime.fromMillisecondsSinceEpoch(record.scannedAt),
     );
     final isEntry = record.gateType == 'Time-In';

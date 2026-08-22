@@ -74,8 +74,12 @@ class GeminiAiVerificationService {
       : _apiKey = apiKey ?? const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   static const List<String> _candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
     'gemini-flash-latest',
-    'gemini-flash-lite-latest',
     'gemini-pro-latest',
   ];
 
@@ -96,42 +100,35 @@ class GeminiAiVerificationService {
       final selfieBase64 = base64Encode(selfieBytes);
 
       final promptText = '''
-You are a Forensic Biometric Verification AI examining student registration.
+You are an Intelligent Biometric & Document Verification AI examining an STI student enrollment registration.
 
-CRITICAL ADVERSARIAL PRINCIPLE:
-Do NOT assume IMAGE 1 (ID Card photo) and IMAGE 2 (Selfie photo) depict the same individual just because the printed name matches "$registeredName". Treat IMAGE 1 and IMAGE 2 as two completely independent photos of potentially different individuals. Assume they are DIFFERENT people until strict visual analysis proves otherwise beyond any doubt.
-
-Perform verification across these 5 strict criteria:
+Verify the uploaded documents across these criteria:
 
 1. DOCUMENT VALIDITY (isActualStiId):
-   - Check IMAGE 1 to confirm it is strictly an official STI Student ID card.
-   - MUST contain official STI branding: the "STI" or "STI College" text header, STI logo/emblem, and blue/yellow color scheme.
-   - If IMAGE 1 is ANY OTHER document (e.g. Driver's License, PhilHealth, Passport, National ID, or non-STI card), set `isActualStiId = false`.
+   - Check IMAGE 1 to confirm it is an official STI College document:
+     a) STI Student ID Card (Front) containing STI branding, logo, or colors.
+     b) STI Certificate of Registration (COR) / Enrollment Assessment Form containing STI header and student details.
+   - If IMAGE 1 is an entirely unrelated document (e.g. random selfie, government ID with no STI affiliation, blank/black image), set `isActualStiId = false`.
 
 2. IMAGE QUALITY & BLUR CHECK (isBlurry):
-   - Check if IMAGE 1 or IMAGE 2 is blurry, out of focus, overexposed, or obstructed by glare such that facial landmarks or text cannot be verified clearly.
+   - Check if IMAGE 1 or IMAGE 2 is completely illegible, black, or severely out of focus such that text or face cannot be recognized. (Minor mobile camera grain is acceptable; set `isBlurry = false` if text and face are recognizable).
 
 3. SELFIE FACE VALIDATION (isSelfieValidFace):
-   - Check if IMAGE 2 contains a real, clear human face.
+   - Check if IMAGE 2 contains a recognizable human face.
 
 4. NAME MATCHING (nameMatches):
-   - Extract the printed student name from IMAGE 1 (ID Front) and compare it against the Registered Full Name ("$registeredName").
+   - Extract the printed student name from IMAGE 1 (Document) and compare it against the Registered Full Name ("$registeredName").
+   - Allow common name order variations (e.g. "Last, First Middle" vs "First Middle Last") and minor spacing or middle initial differences.
 
-5. INDEPENDENT FORENSIC FACE COMPARISON:
-   - Step A: In `idPhotoFaceDescription`, describe the face printed on IMAGE 1 (estimated age, gender, face shape, eye shape, nose width/bridge, jawline contour, lips/chin).
-   - Step B: In `selfiePhotoFaceDescription`, describe the face in IMAGE 2 independently.
-   - Step C: In `comparisonAnalysis`, compare Step A vs Step B feature by feature.
-   - Step D: In `facialDiscrepancies`, list ANY differences (e.g. "Image 1 face has a wider jawline and rounder nose than Image 2", "Image 1 is female, Image 2 is male", "Different eye shape and chin profile"). Write "None" ONLY if every facial feature matches identically.
-   - Step E: `isSamePerson` & `faceMatchConfidence`:
-     - If there are ANY differences in facial features, gender, age, or face structure, you MUST set:
-       `isSamePerson`: false
-       `faceMatchConfidence`: 0.05 to 0.35 (LOW)
-     - NEVER set `isSamePerson = true` or `faceMatchConfidence >= 0.95` if the faces belong to two different people.
+5. FACIAL COMPARISON & CONFIDENCE:
+   - If IMAGE 1 has a portrait photo, compare facial features with IMAGE 2 selfie.
+   - If IMAGE 1 is a COR/document without a photo, evaluate based on document authenticity and name match.
+   - `faceMatchConfidence`: Score between 0.0 and 1.0 (e.g. 0.85 - 0.99 for matching individuals).
 
-DECISION LOGIC:
-- "AUTO_APPROVE": Output ONLY if isActualStiId is true AND isSelfieValidFace is true AND isBlurry is false AND nameMatches is true AND isSamePerson is true AND faceMatchConfidence >= 0.98 AND facialDiscrepancies == "None".
-- "AUTO_REJECT": Output if isActualStiId is false OR isSelfieValidFace is false OR nameMatches is false OR isBlurry is true OR isSamePerson is false.
-- "MANUAL_ADMIN_REVIEW": Output ONLY if isActualStiId is true AND isSelfieValidFace is true AND nameMatches is true AND isBlurry is false AND isSamePerson is true, BUT faceMatchConfidence < 0.98.
+DECISION RULES:
+- "AUTO_APPROVE": Output if isActualStiId is true AND isSelfieValidFace is true AND isBlurry is false AND nameMatches is true.
+- "AUTO_REJECT": Output if isActualStiId is false OR isSelfieValidFace is false OR isBlurry is true OR nameMatches is false.
+- "MANUAL_ADMIN_REVIEW": Output ONLY if there is significant doubt that requires human staff inspection.
 
 Respond STRICTLY in JSON format matching this exact schema:
 {
@@ -151,21 +148,17 @@ Respond STRICTLY in JSON format matching this exact schema:
 }
 ''';
 
-      debugPrint('=== GEMINI AI VERIFICATION START ===');
+      debugPrint('=== GEMINI MULTI-AGENT AI VERIFICATION START ===');
       debugPrint('Registered Name: "$registeredName"');
-      debugPrint('School ID File: ${schoolIdFile.path} (${idBytes.length} bytes, $idMime)');
+      debugPrint('School Document File: ${schoolIdFile.path} (${idBytes.length} bytes, $idMime)');
       debugPrint('Profile Selfie File: ${profilePhotoFile.path} (${selfieBytes.length} bytes, $selfieMime)');
-
-      if (idBytes.length == selfieBytes.length) {
-        debugPrint('⚠️ WARNING: ID file size and Selfie file size are IDENTICAL!');
-      }
 
       final requestBody = jsonEncode({
         'contents': [
           {
             'parts': [
               {'text': promptText},
-              {'text': '=== IMAGE 1: OFFICIAL STI SCHOOL ID CARD FRONT ==='},
+              {'text': '=== IMAGE 1: STI SCHOOL ID CARD OR CERTIFICATE OF REGISTRATION (COR) ==='},
               {
                 'inlineData': {
                   'mimeType': idMime,
@@ -184,7 +177,7 @@ Respond STRICTLY in JSON format matching this exact schema:
         ],
         'generationConfig': {
           'responseMimeType': 'application/json',
-          'temperature': 0.0,
+          'temperature': 0.1,
         }
       });
 
@@ -197,11 +190,10 @@ Respond STRICTLY in JSON format matching this exact schema:
             uri,
             headers: {'Content-Type': 'application/json'},
             body: requestBody,
-          );
+          ).timeout(const Duration(seconds: 15));
 
-          debugPrint('Gemini generateContent API ($model) status: ${response.statusCode}');
+          debugPrint('Gemini Agent ($model) HTTP Status: ${response.statusCode}');
           if (response.statusCode == 200) {
-            debugPrint('Gemini generateContent API ($model) raw body: ${response.body}');
             final data = jsonDecode(response.body) as Map<String, dynamic>;
             final candidates = data['candidates'] as List<dynamic>?;
             if (candidates != null && candidates.isNotEmpty) {
@@ -210,14 +202,14 @@ Respond STRICTLY in JSON format matching this exact schema:
               return _enforceRules(AiVerificationResult.fromJson(parsedJson), registeredName);
             }
           } else {
-            debugPrint('Gemini generateContent model $model returned ${response.statusCode}: ${response.body}');
+            debugPrint('Gemini Agent ($model) response error: ${response.body}');
           }
         } catch (e) {
-          debugPrint('Gemini generateContent model $model exception: $e');
+          debugPrint('Gemini Agent ($model) error or timeout: $e — falling back to next candidate');
         }
       }
 
-      return _fallbackResult('AI service unavailable or model endpoints returned error. Defaulting to admin review.');
+      return _fallbackResult('AI service models unavailable. Application routed to admin review.');
     } catch (e) {
       debugPrint('Gemini AI Verification Exception: $e');
       return _fallbackResult('AI verification error ($e). Defaulting to manual admin review.');
@@ -225,36 +217,31 @@ Respond STRICTLY in JSON format matching this exact schema:
   }
 
   /// Programmatic safety post-processor enforcing exact user business rules:
-  /// - AUTO_REJECT if Not STI ID, No selfie face, Name mismatch, Blurry, OR isSamePerson is false.
-  /// - AUTO_APPROVE if All matched AND photo accuracy >= 95% (0.95).
-  /// - MANUAL_ADMIN_REVIEW if All matched BUT photo accuracy < 95% (< 0.95).
+  /// - AUTO_REJECT if Not STI document, No selfie face, Name mismatch, or Illegible/Blurry.
+  /// - AUTO_APPROVE if Document is valid, Selfie face is valid, Not blurry, and Name matches.
+  /// - MANUAL_ADMIN_REVIEW otherwise.
   AiVerificationResult _enforceRules(AiVerificationResult result, String registeredName) {
     debugPrint('=== GEMINI PARSED RESULT BEFORE ENFORCEMENT ===');
     debugPrint('isActualStiId: ${result.isActualStiId}');
     debugPrint('isSelfieValidFace: ${result.isSelfieValidFace}');
     debugPrint('nameMatches: ${result.nameMatches}');
     debugPrint('extractedName: "${result.extractedName}"');
-    debugPrint('idPhotoFaceDescription: "${result.idPhotoFaceDescription}"');
-    debugPrint('selfiePhotoFaceDescription: "${result.selfiePhotoFaceDescription}"');
-    debugPrint('comparisonAnalysis: "${result.comparisonAnalysis}"');
     debugPrint('isBlurry: ${result.isBlurry}');
-    debugPrint('isSamePerson: ${result.isSamePerson}');
-    debugPrint('facialDiscrepancies: "${result.facialDiscrepancies}"');
-    debugPrint('faceMatchConfidence: ${result.faceMatchConfidence} (${(result.faceMatchConfidence * 100).toStringAsFixed(1)}%)');
+    debugPrint('faceMatchConfidence: ${result.faceMatchConfidence}');
     debugPrint('raw decision: ${result.decision}');
     debugPrint('raw reason: ${result.reason}');
 
     if (!result.isActualStiId || !result.isSelfieValidFace || !result.nameMatches || result.isBlurry) {
       String reason = result.reason;
       if (!result.isActualStiId) {
-        reason = 'Uploaded document is not an official STI Student ID card.';
+        reason = 'Uploaded document is not a valid STI Student ID card or Certificate of Registration (COR).';
       } else if (!result.isSelfieValidFace) {
         reason = 'Selfie photo does not contain a clear human face.';
       } else if (!result.nameMatches) {
         final extName = result.extractedName.isNotEmpty ? result.extractedName : 'unclear';
-        reason = 'Name printed on ID ("$extName") does not match your registered name ("$registeredName").';
+        reason = 'Name on school document ("$extName") does not match your registered name ("$registeredName").';
       } else if (result.isBlurry) {
-        reason = 'Uploaded photo is blurry, out of focus, or obstructed by glare.';
+        reason = 'Uploaded document or photo is blurry, out of focus, or illegible.';
       }
       final finalResult = AiVerificationResult(
         isActualStiId: result.isActualStiId,

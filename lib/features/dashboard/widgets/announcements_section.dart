@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/features/announcements/models/announcement_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 
@@ -89,9 +90,9 @@ class AnnouncementsSection extends ConsumerWidget {
     final String orgName = item.organizationName?.isNotEmpty == true 
         ? item.organizationName! 
         : (item.authorRole?.isNotEmpty == true ? item.authorRole! : item.authorName);
+    final String orgInitial = orgName.isNotEmpty ? orgName[0].toUpperCase() : 'A';
     
-    final String orgInitial = orgName.length >= 2 ? orgName.substring(0, 2).toUpperCase() : 'SA';
-    final String dateStr = item.createdAt != null ? DateFormat('MMM dd, hh:mm a').format(item.createdAt!) : '';
+    final String dateStr = item.createdAt != null ? formatAppDateTime(item.createdAt!) : '';
 
     final Color barColor = item.isUrgent ? AppColors.error : (item.isImportant ? Colors.orange : AppColors.primary);
 

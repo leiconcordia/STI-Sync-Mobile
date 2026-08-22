@@ -38,8 +38,8 @@ class SchoolIdStep extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const StepHeader(
-            title: 'Upload Your School ID',
-            subtitle: 'Take a clear photo of your physical STI College Ormoc ID card.',
+            title: 'Upload School ID / COR',
+            subtitle: 'Take a clear photo of your official STI Student ID card.',
           ),
           const SizedBox(height: 20),
 
@@ -72,14 +72,14 @@ class SchoolIdStep extends ConsumerWidget {
                           Icon(Icons.badge_outlined, size: 54, color: AppColors.accentPurple),
                           SizedBox(height: 12),
                           Text(
-                            'Tap to photograph Portrait ID',
+                            'Tap to photograph ID or COR',
                             style: TextStyle(
                                 color: AppColors.accentPurple,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15),
                           ),
                           SizedBox(height: 4),
-                          Text('or upload vertical STI ID photo',
+                          Text('STI ID card front or Registration Form',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.grey, fontSize: 12)),
                         ],

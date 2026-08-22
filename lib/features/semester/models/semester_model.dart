@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 
 /// Represents an academic semester document from `/semesters/{semesterId}`.
 class SemesterModel {
@@ -37,7 +38,7 @@ class SemesterModel {
 
   String get formattedDeadline {
     if (reenrollDeadline == null) return 'the designated period';
-    return DateFormat('MMMM dd, yyyy').format(reenrollDeadline!);
+    return formatAppDate(reenrollDeadline);
   }
 
   factory SemesterModel.fromFirestore(DocumentSnapshot doc) {

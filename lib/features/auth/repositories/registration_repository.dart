@@ -83,34 +83,121 @@ class RegistrationRepository {
     return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getSections(String courseIdOrCode) async {
-    // 1. Try subcollection under courses
-    try {
-      final subSnap = await _firestore
-          .collection(FirestorePaths.courses)
-          .doc(courseIdOrCode)
-          .collection(FirestorePaths.sections)
-          .get();
-      if (subSnap.docs.isNotEmpty) {
-        return subSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
-      }
-    } catch (_) {}
+  /// Fetches sections for a course matching courseId/courseCode and yearLevel.
+  /// Follows the exact normalization logic from the Web Admin.
+  Future<List<Map<String, dynamic>>> getSections({
+    required String courseId,
+    String? courseCode,
+    String? yearLevel,
+  }) async {
+    List<Map<String, dynamic>> results = [];
 
-    // 2. Try top-level collection with courseId
-    final snapId = await _firestore
-        .collection(FirestorePaths.sections)
-        .where('courseId', isEqualTo: courseIdOrCode)
-        .get();
-    if (snapId.docs.isNotEmpty) {
-      return snapId.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+    // 1. Try querying /sections by courseId
+    if (courseId.isNotEmpty) {
+      try {
+        final snapId = await _firestore
+            .collection(FirestorePaths.sections)
+            .where('courseId', isEqualTo: courseId)
+            .get();
+        if (snapId.docs.isNotEmpty) {
+          results.addAll(snapId.docs.map((doc) => {'id': doc.id, ...doc.data()}));
+        }
+      } catch (_) {}
     }
 
-    // 3. Fallback to courseCode
-    final snapCode = await _firestore
-        .collection(FirestorePaths.sections)
-        .where('courseCode', isEqualTo: courseIdOrCode)
-        .get();
-    return snapCode.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+    // 2. Try querying /sections by courseCode if results are empty
+    if (results.isEmpty && courseCode != null && courseCode.isNotEmpty) {
+      try {
+        final snapCode = await _firestore
+            .collection(FirestorePaths.sections)
+            .where('courseCode', isEqualTo: courseCode)
+            .get();
+        if (snapCode.docs.isNotEmpty) {
+          results.addAll(snapCode.docs.map((doc) => {'id': doc.id, ...doc.data()}));
+        }
+      } catch (_) {}
+    }
+
+    // 3. Try subcollection under courses if still empty
+    if (results.isEmpty && courseId.isNotEmpty) {
+      try {
+        final subSnap = await _firestore
+            .collection(FirestorePaths.courses)
+            .doc(courseId)
+            .collection(FirestorePaths.sections)
+            .get();
+        if (subSnap.docs.isNotEmpty) {
+          results.addAll(subSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}));
+        }
+      } catch (_) {}
+    }
+
+    // 4. Fallback: Fetch all sections if queries didn't yield results (in case of field differences)
+    if (results.isEmpty) {
+      try {
+        final allSnap = await _firestore.collection(FirestorePaths.sections).get();
+        results = allSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+      } catch (_) {}
+    }
+
+    // 5. In-memory filter matching the Web Admin:
+    return results.where((s) {
+      if (s['archived'] == true) return false;
+
+      // Filter by course
+      final sCourseId = s['courseId']?.toString() ?? '';
+      final sCourseCode = s['courseCode']?.toString() ?? '';
+      final matchesCourse = (courseId.isNotEmpty && sCourseId == courseId) ||
+          (courseCode != null && courseCode.isNotEmpty && (sCourseCode == courseCode || sCourseId == courseCode));
+      if (!matchesCourse && (courseId.isNotEmpty || (courseCode != null && courseCode.isNotEmpty))) {
+        return false;
+      }
+
+      // Filter by yearLevel if provided
+      if (yearLevel == null || yearLevel.trim().isEmpty) return true;
+
+      final rawYl = yearLevel.trim();
+      int yNum;
+      if (rawYl.contains('11')) {
+        yNum = 11;
+      } else if (rawYl.contains('12')) {
+        yNum = 12;
+      } else if (rawYl.contains('1st') || rawYl == '1') {
+        yNum = 1;
+      } else if (rawYl.contains('2nd') || rawYl == '2') {
+        yNum = 2;
+      } else if (rawYl.contains('3rd') || rawYl == '3') {
+        yNum = 3;
+      } else if (rawYl.contains('4th') || rawYl == '4') {
+        yNum = 4;
+      } else if (rawYl.contains('5th') || rawYl == '5') {
+        yNum = 5;
+      } else {
+        yNum = int.tryParse(rawYl) ?? 1;
+      }
+
+      final dynamic sYl = s['yearLevel'] ?? s['year'];
+      if (sYl == null) return true;
+
+      if (sYl is num) {
+        if (sYl == yNum) return true;
+        if (yNum == 11 && sYl == 1) return true;
+        if (yNum == 12 && sYl == 2) return true;
+        return false;
+      }
+
+      final sYlStr = sYl.toString().trim();
+      if (sYlStr.toLowerCase() == rawYl.toLowerCase()) return true;
+
+      final sYlNum = int.tryParse(sYlStr);
+      if (sYlNum != null) {
+        if (sYlNum == yNum) return true;
+        if (yNum == 11 && sYlNum == 1) return true;
+        if (yNum == 12 && sYlNum == 2) return true;
+      }
+
+      return false;
+    }).toList();
   }
 
   /// Fetches a department by its ID
@@ -124,28 +211,53 @@ class RegistrationRepository {
     return null;
   }
 
-  /// Fetches the active semester robustly.
-  Future<Map<String, dynamic>?> getActiveSemester() async {
+  /// Fetches all active academic periods (College Semesters and SHS Trimesters)
+  /// matching the Web Admin's useActiveAcademicPeriods hook.
+  Future<Map<String, Map<String, dynamic>?>> getActiveAcademicPeriods() async {
+    Map<String, dynamic>? collegePeriod;
+    Map<String, dynamic>? shsPeriod;
+
     try {
       final snap = await _firestore.collection(FirestorePaths.semesters).get();
-      if (snap.docs.isEmpty) return null;
+      if (snap.docs.isNotEmpty) {
+        for (var doc in snap.docs) {
+          final data = doc.data();
+          if (data['archived'] == true) continue;
 
-      for (var doc in snap.docs) {
-        final data = doc.data();
-        final status = data['status']?.toString().toLowerCase();
-        final isActive = data['isActive'] == true || data['is_active'] == true || data['current'] == true;
-        
-        if (status == 'active' || status == 'current' || isActive) {
-          return {'id': doc.id, ...data};
+          final status = data['status']?.toString().toUpperCase();
+          final isActive = data['isActive'] == true || data['is_active'] == true || data['current'] == true;
+          if (status != 'ACTIVE' && !isActive) continue;
+
+          final level = (data['academicLevel'] as String?)?.toUpperCase() ?? '';
+          final semName = (data['semester'] as String? ?? data['name'] as String? ?? data['term'] as String? ?? '');
+          final isTrimester = semName.toLowerCase().contains('trimester');
+
+          if (shsPeriod == null && (level == 'SHS' || isTrimester)) {
+            shsPeriod = {'id': doc.id, ...data};
+          }
+
+          if (collegePeriod == null && (level == 'COLLEGE' || level == 'TERTIARY' || (!isTrimester && level.isEmpty))) {
+            collegePeriod = {'id': doc.id, ...data};
+          }
         }
       }
-      
-      // Fallback: If there's only 1 semester in the collection, assume it's the active one.
-      if (snap.docs.length == 1) {
-        return {'id': snap.docs.first.id, ...snap.docs.first.data()};
-      }
     } catch (_) {}
-    return null;
+
+    return {
+      'college': collegePeriod,
+      'shs': shsPeriod,
+    };
+  }
+
+  /// Fetches the active semester robustly for a specific academic level ('COLLEGE' / 'TERTIARY' vs 'SHS').
+  Future<Map<String, dynamic>?> getActiveSemester({String academicLevel = 'COLLEGE'}) async {
+    final periods = await getActiveAcademicPeriods();
+    final isShs = academicLevel.toUpperCase() == 'SHS';
+    if (isShs) {
+      return periods['shs'] ?? periods['college'];
+    } else {
+      return periods['college'] ?? periods['shs'];
+    }
   }
 
   /// Full self-registration pipeline with AI Verification.
@@ -182,7 +294,7 @@ class RegistrationRepository {
     )) {
       throw const AppException(
         code: 'name-dob-taken',
-        message: 'A student record with the same name and date of birth already exists.',
+        message: 'This user already exists. A student record with the same name and date of birth is already registered.',
       );
     }
 
@@ -306,7 +418,7 @@ class RegistrationRepository {
     )) {
       throw const AppException(
         code: 'name-dob-taken',
-        message: 'A student record with the same name and date of birth already exists.',
+        message: 'This user already exists. A student record with the same name and date of birth is already registered.',
       );
     }
 

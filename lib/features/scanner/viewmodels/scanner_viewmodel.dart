@@ -243,6 +243,11 @@ class ScannerViewModel extends StateNotifier<ScannerState> {
     }
   }
 
+  /// Refreshes all offline event data (participants, timing, and remote attendance) when online.
+  Future<void> refreshEventData(String eventId) async {
+    await downloadParticipantData(eventId);
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();

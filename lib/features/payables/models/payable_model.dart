@@ -145,8 +145,12 @@ class PayableModel {
       studentId: data['studentId'] as String? ?? '',
       studentName: data['studentName'] as String? ?? data['name'] as String? ?? 'Student',
       studentSchoolId: data['studentSchoolId'] as String? ?? data['studentId'] as String? ?? data['schoolId'] as String? ?? '',
-      organizationId: data['organizationId'] as String?,
-      organizationName: data['organizationName'] as String?,
+      organizationId: data['organizationId'] as String? ?? data['organization_id'] as String? ?? data['orgId'] as String?,
+      organizationName: data['organizationName'] as String? ??
+          data['orgName'] as String? ??
+          data['organization_name'] as String? ??
+          data['org_name'] as String? ??
+          data['organizationTitle'] as String?,
       eventId: data['eventId'] as String?,
       semesterId: data['semesterId'] as String? ?? '',
       type: data['type'] as String? ?? 'event_fee',

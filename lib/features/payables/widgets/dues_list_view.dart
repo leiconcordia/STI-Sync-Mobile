@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/currency_formatter.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/features/payables/models/payable_model.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'payment_instructions_bottom_sheet.dart';
@@ -13,6 +14,8 @@ class DuesListView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payablesAsync = ref.watch(payablesStreamProvider);
+
+    final myOrgs = ref.watch(myOrganizationsProvider).valueOrNull ?? [];
 
     return payablesAsync.when(
       data: (payables) {
@@ -49,7 +52,7 @@ class DuesListView extends ConsumerWidget {
         return Column(
           children: dues.map((due) => Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
-            child: _buildDuesCard(context, due),
+            child: _buildDuesCard(context, due, myOrgs),
           )).toList(),
         );
       },
@@ -73,9 +76,23 @@ class DuesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildDuesCard(BuildContext context, PayableModel due) {
+  Widget _buildDuesCard(BuildContext context, PayableModel due, List<dynamic> myOrgs) {
     final bool isCampus = due.isCampusWide;
-    final String orgName = due.organizationName?.isNotEmpty == true ? due.organizationName! : (isCampus ? 'School / SAO' : 'Club Organization');
+    String orgName = 'Organization';
+    if (due.organizationName?.isNotEmpty == true) {
+      orgName = due.organizationName!;
+    } else if (isCampus) {
+      orgName = 'SAO Campus';
+    } else if (due.organizationId?.isNotEmpty == true) {
+      final matching = myOrgs.where((o) => o.organizationId == due.organizationId).firstOrNull;
+      if (matching != null && matching.organizationName.toString().isNotEmpty) {
+        orgName = matching.organizationName.toString();
+      } else {
+        orgName = 'Student Organization';
+      }
+    } else {
+      orgName = 'Student Organization';
+    }
     final Color badgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
     
     final double total = due.assignedAmount > 0 ? due.assignedAmount : (due.amountDue + due.paidAmount);
@@ -96,7 +113,7 @@ class DuesListView extends ConsumerWidget {
       statusColor = Colors.orange.shade800;
     } else {
       statusText = 'Pending';
-      statusColor = AppColors.secondary;
+      statusColor = Colors.orange.shade700;
     }
 
     return InkWell(
@@ -124,39 +141,39 @@ class DuesListView extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isCampus ? Icons.school_outlined : Icons.groups_outlined,
+                          size: 13,
+                          color: badgeColor,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isCampus ? Icons.school_outlined : Icons.groups_outlined,
-                              size: 13,
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            isCampus ? 'SAO Campus' : orgName,
+                            style: TextStyle(
                               color: badgeColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
                             ),
-                            const SizedBox(width: 5),
-                            Text(
-                              isCampus ? 'SAO Campus' : orgName,
-                              style: TextStyle(
-                                color: badgeColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -217,34 +234,82 @@ class DuesListView extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text.rich(TextSpan(
-                  children: [
-                    TextSpan(text: 'Total ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                    TextSpan(text: '₱${total.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
-                  ]
-                )),
-                Text.rich(TextSpan(
-                  children: [
-                    TextSpan(text: 'Paid ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                    TextSpan(text: '₱${paid.toStringAsFixed(0)}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
-                  ]
-                )),
-                Text.rich(TextSpan(
-                  children: [
-                    TextSpan(text: 'Balance ', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey)),
-                    TextSpan(
-                      text: '₱${remaining.toStringAsFixed(0)}',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: remaining > 0 ? (due.isOverdue ? AppColors.error : AppColors.secondary) : AppColors.success,
-                        fontWeight: FontWeight.bold,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 10)),
+                        const SizedBox(height: 2),
+                        Text(
+                          formatCurrency(total),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.primaryDark,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(width: 1, height: 24, color: Colors.grey.shade300),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Paid', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 10)),
+                          const SizedBox(height: 2),
+                          Text(
+                            formatCurrency(paid),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                  ]
-                )),
-              ],
+                  ),
+                  Container(width: 1, height: 24, color: Colors.grey.shade300),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Balance', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 10)),
+                          const SizedBox(height: 2),
+                          Text(
+                            formatCurrency(remaining),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: remaining > 0 ? (due.isOverdue ? AppColors.error : Colors.orange.shade800) : AppColors.success,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             Divider(color: Colors.grey.shade200, height: 1),
@@ -252,23 +317,31 @@ class DuesListView extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today_outlined, size: 12, color: due.isOverdue ? AppColors.error : Colors.grey),
-                    const SizedBox(width: 5),
-                    Text(
-                      due.dueDate != null ? 'Due by ${DateFormat('MMM dd, yyyy').format(due.dueDate!)}' : 'No due date set',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: due.isOverdue ? AppColors.error : Colors.grey.shade600,
-                        fontSize: 11,
-                        fontWeight: due.isOverdue ? FontWeight.bold : FontWeight.normal,
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today_outlined, size: 12, color: due.isOverdue ? AppColors.error : Colors.grey),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          due.dueDate != null ? 'Due by ${formatAppDate(due.dueDate)}' : 'No due date set',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: due.isOverdue ? AppColors.error : Colors.grey.shade600,
+                            fontSize: 11,
+                            fontWeight: due.isOverdue ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (!due.isPaid)
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(width: 8),
                       Text(
                         'How to Pay',
                         style: TextStyle(

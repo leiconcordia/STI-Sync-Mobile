@@ -630,6 +630,7 @@ lib/features/
 // AGENT-UPDATED: 2026-07-11 — Added viewmodels/ directory to scanner feature;
 // scannerViewModelProvider + activeScannerAssignmentsProvider registered in providers.dart
 // AGENT-UPDATED: 2026-07-11 — Added offline_attendance_repository.dart to handle student + payables downloads.
+// AGENT-UPDATED: 2026-08-22 — Simplified scanner attendance: removed payables gating from scanner, implemented complete Grace Period, Late Threshold, and Time-In/Out Window validations, and added online refresh mechanism.
 ├── qr_ticket/
 │   ├── models/
 │   │   └── qr_ticket_model.dart

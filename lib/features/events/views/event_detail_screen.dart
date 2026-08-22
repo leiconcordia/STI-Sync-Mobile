@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/core/utils/currency_formatter.dart';
+import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/events/models/event_model.dart';
@@ -664,11 +666,7 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   String _formatSessionDate(String value) {
-    try {
-      return DateFormat('MMM d, y').format(DateTime.parse(value));
-    } catch (_) {
-      return value.isEmpty ? 'Date to be announced' : value;
-    }
+    return formatAppDate(value, fallback: value.isEmpty ? 'Date to be announced' : value);
   }
 
   String _formatSessionTime(EventSessionModel session, String value) {
@@ -676,9 +674,9 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   String _formatTime(DateTime? value) =>
-      value == null ? 'Not set' : DateFormat('h:mm a').format(value);
+      value == null ? 'Not set' : formatAppTime(value);
 
-  String _formatCurrency(double value) => '₱${value.toStringAsFixed(2)}';
+  String _formatCurrency(double value) => formatCurrency(value);
 
   String _formatNumber(double value) =>
       value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);

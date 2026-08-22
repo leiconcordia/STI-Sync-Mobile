@@ -47,7 +47,7 @@ void main() {
     test('SemesterModel parses fields and handles active/display state', () {
       expect(activeSemester.isActive, true);
       expect(activeSemester.displayName, '2nd Semester · A.Y. 2026-2027');
-      expect(activeSemester.formattedDeadline, 'August 31, 2026');
+      expect(activeSemester.formattedDeadline, 'Aug 31 2026');
 
       final fromMap = SemesterModel.fromMap({
         'name': '1st Semester',

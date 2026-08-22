@@ -10,6 +10,8 @@ enum ScanResultType {
   wrongEvent,
   paymentRequired,
   invalidFormat,
+  windowNotOpen,
+  windowClosed,
 }
 
 class ScanResultOverlay extends StatefulWidget {
@@ -18,6 +20,7 @@ class ScanResultOverlay extends StatefulWidget {
   final String? extraMessage;
   final VoidCallback onDismiss;
   final String? gateType; // 'Time-In' or 'Time-Out'
+  final String? status; // 'Present' or 'Late'
 
   const ScanResultOverlay({
     super.key,
@@ -26,6 +29,7 @@ class ScanResultOverlay extends StatefulWidget {
     this.participant,
     this.extraMessage,
     this.gateType,
+    this.status,
   });
 
   @override
@@ -63,16 +67,33 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
 
     switch (widget.type) {
       case ScanResultType.success:
-        bgColor = Colors.green.shade700;
-        icon = Icons.check_circle_outline;
-        title = widget.gateType == 'Time-Out' ? 'CHECKED OUT ✓' : 'CHECKED IN ✓';
-        subtitle = 'Successfully recorded';
+        final isLate = widget.status?.toLowerCase() == 'late';
+        bgColor = isLate ? Colors.orange.shade800 : Colors.green.shade700;
+        icon = isLate ? Icons.access_time : Icons.check_circle_outline;
+        if (widget.gateType == 'Time-Out') {
+          title = isLate ? 'CHECKED OUT (LATE)' : 'CHECKED OUT ✓';
+        } else {
+          title = isLate ? 'CHECKED IN (LATE)' : 'CHECKED IN ✓';
+        }
+        subtitle = widget.extraMessage ?? (isLate ? 'Recorded as Late' : 'Recorded as On-Time');
         break;
       case ScanResultType.duplicate:
         bgColor = Colors.amber.shade800;
         icon = Icons.warning_amber_rounded;
         title = 'Duplicate Scan';
         subtitle = widget.extraMessage ?? 'Already scanned for this session.';
+        break;
+      case ScanResultType.windowNotOpen:
+        bgColor = Colors.indigo.shade800;
+        icon = Icons.lock_clock;
+        title = 'Window Not Open';
+        subtitle = widget.extraMessage ?? 'Attendance window is not yet open.';
+        break;
+      case ScanResultType.windowClosed:
+        bgColor = Colors.deepOrange.shade900;
+        icon = Icons.timer_off_outlined;
+        title = 'Window Closed';
+        subtitle = widget.extraMessage ?? 'Attendance window has closed for this session.';
         break;
       case ScanResultType.paymentRequired:
         bgColor = AppColors.primaryDark; // Dark navy

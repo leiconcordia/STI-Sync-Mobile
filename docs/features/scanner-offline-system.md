@@ -12,28 +12,34 @@ The **Scanner & Offline Attendance System** allows authorized scanner officers t
 ---
 
 ## 2. Core Workflows & Step-by-Step Validations
-
 ### 2.1 QR Code Scanning Validations (`ScannerCameraScreen`)
 
-When a QR code is scanned via the camera, the app executes **3 mandatory validations** in strict sequential order before recording attendance:
+When a QR code is scanned via the camera, the app executes **6 mandatory validations** in strict sequential order before recording attendance:
 
 ```
 [QR Code Scanned]
         │
         ▼
-1. Format & Payload Check ──► (Invalid format?) ──► [SHOW INVALID OVERLAY]
+1. Format & Payload Check ────────► (Invalid format?) ────────► [SHOW INVALID FORMAT OVERLAY]
         │
         ▼
-2. Event Match Check ───────► (Wrong eventId?) ──► [SHOW WRONG EVENT OVERLAY]
+2. Event Match Check ─────────────► (Wrong eventId?) ─────────► [SHOW WRONG EVENT OVERLAY]
         │
         ▼
-3. Participant Check ───────► (Not in Drift?) ────► [SHOW NOT REGISTERED OVERLAY]
+3. Attendance Window Check ───────► (Before Time-In Open / ───► [SHOW WINDOW NOT OPEN /
+                                     After Time-In Close?)      SHOW WINDOW CLOSED OVERLAY]
         │
         ▼
-4. Duplicate Check ─────────► (Already scanned?) ─► [SHOW DUPLICATE OVERLAY]
+4. Participant Check ─────────────► (Not in Drift?) ──────────► [SHOW NOT REGISTERED OVERLAY]
         │
         ▼
-[SAVE LOCAL RECORD TO DRIFT] ──► [SHOW SUCCESS OVERLAY]
+5. Duplicate Check ───────────────► (Already scanned?) ───────► [SHOW DUPLICATE OVERLAY]
+        │
+        ▼
+6. Status Calculation ────────────► (Evaluate Grace / Late) ──► Record 'Present' (On-Time) or 'Late'
+        │
+        ▼
+[SAVE LOCAL RECORD TO DRIFT] ─────► [SHOW SUCCESS OVERLAY WITH ON-TIME / LATE BADGE]
 ```
 
 #### Detailed Validation Rules:
@@ -43,29 +49,48 @@ When a QR code is scanned via the camera, the app executes **3 mandatory validat
 2. **Event Match Validation:**
    - Evaluates `qrEventId == activeEventId`.
    - If mismatched -> **Result:** `ScanResultType.wrongEvent` ("Wrong Event QR Code"). Prevents cross-event ticket scanning.
-3. **Participant Eligibility Validation:**
+3. **Attendance Window Validation (Time-In & Time-Out):**
+   - **Time-In**: If scan occurs before `timeInOpen` -> `ScanResultType.windowNotOpen` ("Time-In is not open yet. Opens at [timeInOpen]").
+   - If scan occurs after `timeInClose` / `lateThresholdEnd` -> `ScanResultType.windowClosed` ("Time-In window has closed at [timeInClose]").
+   - **Time-Out**: If scan occurs before `timeOutOpen` -> `ScanResultType.windowNotOpen`. If after `timeOutClose` -> `ScanResultType.windowClosed`.
+4. **Participant Eligibility Validation:**
    - Searches local Drift `cached_participants` by `studentAuthUid` for `eventId`.
-   - If student is not found -> **Result:** `ScanResultType.notRegistered` ("Student Not Eligible / Not Registered").
-4. **Duplicate Check Validation:**
+   - If student is not found -> **Result:** `ScanResultType.notRegistered` ("Student is not registered for this event").
+5. **Duplicate Check Validation:**
    - Queries `offline_attendance` where `studentId == studentAuthUid`, `sessionId == currentSessionId`, and `gateType == selectedGateType` (`Time-In` or `Time-Out`).
    - If record exists -> **Result:** `ScanResultType.duplicate` ("Already scanned for [Time-In/Time-Out] at [Time]").
+6. **Grace Period & Late Status Evaluation:**
+   - Evaluates scan timestamp against `sessionStartTime` and `gracePeriodMinutes`.
+   - `scanTime <= sessionStart + gracePeriodMinutes` -> Status: **`Present`** (On-Time)
+   - `scanTime > sessionStart + gracePeriodMinutes` -> Status: **`Late`**
 
-*Note: Payment gate validation is strictly enforced on the student side during QR generation (`QrTicketScreen`). If unpaid, the student app will not generate a QR code. Any valid QR code scanned by the camera scanner is trusted for attendance entry.*
+*Note: Payment gate validation is strictly enforced on the admin and student side during QR generation (`QrTicketScreen`). If the QR code is generated/unlocked by Admin or Student App, any valid QR code scanned by the camera scanner is trusted for attendance entry without requiring local payables checking.*
 
 ---
 
-### 2.2 Late Calculation & Grace Period Rule
+### 2.2 Grace Period, Late Threshold & Attendance Windows Interconnect
 
-- **Formula:** `lateThreshold = sessionTimeInOpen.add(Duration(minutes: gracePeriodMinutes))`
-- **Time Source:** Evaluated against `timeInOpen` (or `startTime`) in the active session map.
-- **Grace Period Source:** `assignment.gracePeriodMinutes` (default `0`).
-- **Evaluation:**
-  - `scanTime <= lateThreshold` -> Status: **`Present`**
-  - `scanTime > lateThreshold` -> Status: **`Late`**
-- **Defense Test Example:**
-  - Session `timeInOpen` = 7:00 AM, `gracePeriodMinutes` = 30 mins.
-  - Scan at 7:30:00 AM -> **`Present`**
-  - Scan at 7:30:01 AM (7:31 AM) -> **`Late`**
+```
+       7:00 AM                  7:30 AM                  7:45 AM                                  8:30 AM
+          │                        │                        │                                        │
+          ▼                        ▼                        ▼                                        ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐                     ┌──────────────────┐
+│  Time-In Opens   │ ──► │  Session Start   │ ──► │ Grace Period Ends│ ──────────────────► │Late Threshold Ends
+│ (Early Check-In) │     │    (7:30 AM)     │     │  (7:30 + 15 min) │                     │ / Time-In Closes │
+└──────────────────┘     └──────────────────┘     └──────────────────┘                     └──────────────────┘
+        │                         │                        │                                         │
+        ▼                         ▼                        ▼                                         ▼
+   [BEFORE 7:00 AM]         [7:00 AM – 7:45 AM]      [7:45 AM – 8:30 AM]                       [AFTER 8:30 AM]
+ REJECT: "Time-In is      RECORDED STATUS:          RECORDED STATUS:                     REJECT: "Time-In window
+  not open yet"           ► PRESENT (ON-TIME)       ► LATE                                has closed at 8:30 AM"
+```
+
+- **Grace Period Formula:** `graceThreshold = sessionStart.add(Duration(minutes: gracePeriodMinutes))` (default `15` mins).
+- **Late Threshold Formula:** `lateThreshold = sessionStart.add(Duration(minutes: lateThresholdMinutes))` or session `timeInClose`.
+- **Status Assignment:**
+  - `scanTime <= graceThreshold` -> Status: **`Present`** (On-Time / Green badge)
+  - `scanTime > graceThreshold && scanTime <= lateThreshold` -> Status: **`Late`** (Orange badge)
+  - `scanTime > lateThreshold` -> **Window Closed** (Rejected scan)
 
 ---
 

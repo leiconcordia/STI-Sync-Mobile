@@ -69,6 +69,7 @@ class RegistrationFlowScreen extends ConsumerWidget {
     }
 
     final asyncError = await vm.validateStepAsync(s.currentStep);
+    if (!context.mounted) return;
     if (asyncError != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()

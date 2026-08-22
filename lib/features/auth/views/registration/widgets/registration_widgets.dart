@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../../core/theme/app_colors.dart';
 
 /// Standard outlined text field used across registration steps.
@@ -13,6 +14,9 @@ class RegistrationTextField extends StatelessWidget {
   final bool obscureText;
   final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
+  final bool hideCounter;
 
   const RegistrationTextField({
     super.key,
@@ -23,6 +27,9 @@ class RegistrationTextField extends StatelessWidget {
     this.obscureText = false,
     this.suffixIcon,
     this.onChanged,
+    this.inputFormatters,
+    this.maxLength,
+    this.hideCounter = true,
   });
 
   @override
@@ -32,8 +39,11 @@ class RegistrationTextField extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       onChanged: onChanged,
+      inputFormatters: inputFormatters,
+      maxLength: maxLength,
       decoration: InputDecoration(
         hintText: hint,
+        counterText: hideCounter ? '' : null,
         prefixIcon: icon == null ? null : Icon(icon, color: Colors.grey),
         suffixIcon: suffixIcon,
         contentPadding:

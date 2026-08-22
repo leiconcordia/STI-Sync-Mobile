@@ -46,6 +46,9 @@ class ScannerAssignmentModel {
   /// Grace period in minutes after start time before late threshold
   final int? gracePeriodMinutes;
 
+  /// Late threshold in minutes after start time before time-in closes
+  final int? lateThresholdMinutes;
+
   /// Original Firestore snapshot — available when built from Firestore,
   /// null when restored from local Drift cache.
   final DocumentSnapshot? eventSnapshot;
@@ -60,6 +63,7 @@ class ScannerAssignmentModel {
     required this.eventEndTime,
     required this.proposalStatus,
     this.gracePeriodMinutes,
+    this.lateThresholdMinutes,
     this.dataDownloaded = false,
     this.downloadedAt,
     this.eventSnapshot,
@@ -75,6 +79,7 @@ class ScannerAssignmentModel {
     DateTime? eventEndTime,
     String? proposalStatus,
     int? gracePeriodMinutes,
+    int? lateThresholdMinutes,
     bool? dataDownloaded,
     DateTime? downloadedAt,
     DocumentSnapshot? eventSnapshot,
@@ -89,6 +94,7 @@ class ScannerAssignmentModel {
       eventEndTime: eventEndTime ?? this.eventEndTime,
       proposalStatus: proposalStatus ?? this.proposalStatus,
       gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
+      lateThresholdMinutes: lateThresholdMinutes ?? this.lateThresholdMinutes,
       dataDownloaded: dataDownloaded ?? this.dataDownloaded,
       downloadedAt: downloadedAt ?? this.downloadedAt,
       eventSnapshot: eventSnapshot ?? this.eventSnapshot,
@@ -110,9 +116,6 @@ class ScannerAssignmentModel {
   ///
   /// Finds the matching officer entry in `scanners[]` array.
   /// Throws if the officer is not found in the scanners list.
-  /// Build from a live Firestore EventDocument snapshot.
-  ///
-  /// Finds the matching officer entry in `scanners[]` array.
   factory ScannerAssignmentModel.fromEventDoc(
     DocumentSnapshot doc,
     String officerUserId,
@@ -147,10 +150,22 @@ class ScannerAssignmentModel {
           'ScannerAssignmentModel: Warning: Officer IDs $targetOfficerIds found in scannerUserIds but not in scanners[] array for event ${doc.id}. Defaulting to basic access.');
     }
 
-    // Extract full sessions array
+    final gracePeriod = (data['gracePeriodMinutes'] as num?)?.toInt();
+    final lateThreshold = (data['lateThresholdMinutes'] as num?)?.toInt();
+
+    // Extract full sessions array and propagate event-level timing defaults
     final List<dynamic> rawSessions = data['sessions'] as List<dynamic>? ?? [];
     final sessions = rawSessions
-        .map((s) => s as Map<String, dynamic>)
+        .map((s) {
+          final sMap = Map<String, dynamic>.from(s as Map<String, dynamic>);
+          if (sMap['gracePeriodMinutes'] == null && gracePeriod != null) {
+            sMap['gracePeriodMinutes'] = gracePeriod;
+          }
+          if (sMap['lateThresholdMinutes'] == null && lateThreshold != null) {
+            sMap['lateThresholdMinutes'] = lateThreshold;
+          }
+          return sMap;
+        })
         .toList();
 
     final eventEndTime = _computeLastEndTime(rawSessions);
@@ -173,7 +188,8 @@ class ScannerAssignmentModel {
       eventEndTime: eventEndTime,
       // Default to 'approved' if missing so legacy/test events still show up
       proposalStatus: data['proposalStatus'] as String? ?? 'approved',
-      gracePeriodMinutes: (data['gracePeriodMinutes'] as num?)?.toInt(),
+      gracePeriodMinutes: gracePeriod,
+      lateThresholdMinutes: lateThreshold,
       dataDownloaded: false,
       downloadedAt: null,
       eventSnapshot: doc,
@@ -182,19 +198,29 @@ class ScannerAssignmentModel {
 
   /// Restore from a Drift local database row.
   factory ScannerAssignmentModel.fromDrift(ScannerAssignment entity) {
+    final parsedSessions = List<Map<String, dynamic>>.from(
+      json.decode(entity.sessions) as List<dynamic>,
+    );
+    int? lateThresh;
+    for (final s in parsedSessions) {
+      if (s['lateThresholdMinutes'] != null) {
+        lateThresh = (s['lateThresholdMinutes'] as num).toInt();
+        break;
+      }
+    }
+
     return ScannerAssignmentModel(
       eventId: entity.eventId,
       eventTitle: entity.eventTitle,
       eventFormat: entity.eventFormat,
-      sessions: List<Map<String, dynamic>>.from(
-        json.decode(entity.sessions) as List<dynamic>,
-      ),
+      sessions: parsedSessions,
       officerUserId: entity.officerUserId,
       permissions:
           json.decode(entity.permissions) as Map<String, dynamic>,
       eventEndTime: DateTime.fromMillisecondsSinceEpoch(entity.eventEndTime),
       proposalStatus: entity.proposalStatus,
       gracePeriodMinutes: entity.gracePeriodMinutes,
+      lateThresholdMinutes: lateThresh,
       dataDownloaded: entity.dataDownloaded == 1,
       downloadedAt: entity.downloadedAt > 0
           ? DateTime.fromMillisecondsSinceEpoch(entity.downloadedAt)
