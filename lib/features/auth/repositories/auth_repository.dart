@@ -122,4 +122,20 @@ class AuthRepository {
       );
     }
   }
+
+  /// Updates student profile fields in Firestore `students/{uid}`.
+  Future<void> updateStudentProfile(String uid, Map<String, dynamic> data) async {
+    try {
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore
+          .collection(FirestorePaths.students)
+          .doc(uid)
+          .update(data);
+    } on FirebaseException catch (e) {
+      throw AppException(
+        code: e.code,
+        message: e.message ?? 'Failed to update student profile.',
+      );
+    }
+  }
 }

@@ -127,7 +127,14 @@ class _AssignmentCard extends ConsumerWidget {
     final hasData = assignment.dataDownloaded;
 
 
-    final String format = assignment.eventFormat.isNotEmpty ? assignment.eventFormat : 'On-Campus';
+    final venueNameAsync = ref.watch(venueNameProvider(assignment.venueId));
+    final String venue = (assignment.customVenueName != null && assignment.customVenueName!.isNotEmpty)
+        ? assignment.customVenueName!
+        : (venueNameAsync.valueOrNull != null && venueNameAsync.valueOrNull != 'Campus Venue' && venueNameAsync.valueOrNull != 'TBA'
+            ? venueNameAsync.valueOrNull!
+            : (assignment.venue.isNotEmpty && assignment.venue != 'STI Campus' && assignment.venue != 'Campus Venue'
+                ? assignment.venue
+                : (venueNameAsync.valueOrNull ?? 'Campus Venue')));
     final int sessionCount = assignment.sessions.length;
 
     return Container(
@@ -227,11 +234,34 @@ class _AssignmentCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // Format & Sessions Metadata Badges
+                // Date, Venue & Sessions Metadata Badges
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   children: [
+                    // Start Date Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.primaryDark),
+                          const SizedBox(width: 4),
+                          Text(
+                            assignment.formattedStartDate,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Venue Badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -244,7 +274,7 @@ class _AssignmentCard extends ConsumerWidget {
                           const Icon(Icons.location_on_outlined, size: 12, color: AppColors.primary),
                           const SizedBox(width: 4),
                           Text(
-                            format,
+                            venue,
                             style: AppTextStyles.labelSmall.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.bold,
@@ -253,6 +283,7 @@ class _AssignmentCard extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    // Sessions Count Badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(

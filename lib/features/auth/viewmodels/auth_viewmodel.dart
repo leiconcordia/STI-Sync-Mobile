@@ -179,4 +179,30 @@ class AuthViewModel extends StateNotifier<AuthState> {
     }
     await _repository.logout();
   }
+
+  Future<void> updateProfile({
+    String? contactNumber,
+    String? profilePhotoUrl,
+  }) async {
+    final currentStudent = state.student;
+    if (currentStudent == null) return;
+
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updates = <String, dynamic>{};
+      if (contactNumber != null) updates['contactNumber'] = contactNumber;
+      if (profilePhotoUrl != null) updates['profilePhotoUrl'] = profilePhotoUrl;
+
+      if (updates.isNotEmpty) {
+        await _repository.updateStudentProfile(currentStudent.id, updates);
+      }
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+      rethrow;
+    }
+  }
 }

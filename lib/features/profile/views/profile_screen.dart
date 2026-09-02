@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/profile/widgets/profile_header.dart';
 import 'package:sti_sync/features/profile/widgets/profile_info_card.dart';
 import 'package:sti_sync/features/profile/widgets/profile_danger_card.dart';
+import 'package:sti_sync/features/profile/widgets/edit_profile_sheet.dart';
 import 'package:sti_sync/features/organizations/widgets/join_organization_sheet.dart';
 import 'package:sti_sync/features/organizations/models/organization_member_model.dart';
 import 'package:sti_sync/core/utils/date_formatter.dart';
@@ -39,14 +39,13 @@ class ProfileScreen extends ConsumerWidget {
               ProfileHeader(
                 student: student,
                 onEditProfile: () {
-                  // TODO: Implement Edit Profile
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Edit Profile coming soon')),
+                  showModalBottomSheet(
+                    context: context,
+                    useRootNavigator: true,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => EditProfileSheet(student: student),
                   );
-                },
-                onQrCode: () {
-                  // As requested, navigate to dashboard for now
-                  context.goNamed('dashboard');
                 },
               ),
               
@@ -244,46 +243,9 @@ class ProfileScreen extends ConsumerWidget {
                       },
                     ),
                     
-                    // Mock Certificates
-                    ProfileInfoCard(
-                      title: 'My Certificates',
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                      children: [
-                        _MockCertRow(
-                          title: 'Tech Summit 2025',
-                          date: 'Nov 20, 2025',
-                        ),
-                        const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-                        _MockCertRow(
-                          title: 'Leadership Seminar',
-                          date: 'Sep 5, 2025',
-                        ),
-                        const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-                        InkWell(
-                          onTap: () {},
-                          child: const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text('View All Certificates', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    
                     ProfileDangerCard(
                       onLogOut: () {
                         ref.read(authViewModelProvider.notifier).logout();
-                      },
-                      onDeactivate: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Deactivation request coming soon')),
-                        );
                       },
                     ),
                     
@@ -376,43 +338,6 @@ class _OrgRow extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MockCertRow extends StatelessWidget {
-  final String title;
-  final String date;
-
-  const _MockCertRow({
-    required this.title,
-    required this.date,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 20,
-            backgroundColor: AppColors.success,
-            child: Icon(Icons.workspace_premium, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark, fontSize: 15)),
-                Text(date, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-              ],
-            ),
-          ),
-          const Text('Download', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
         ],
       ),
     );

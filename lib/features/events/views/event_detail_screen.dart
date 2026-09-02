@@ -249,7 +249,7 @@ class EventDetailScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           _buildInfoRow(Icons.location_on_outlined, 'Venue',
-                              venueName.valueOrNull ?? 'Loading...'),
+                              event.customVenueName ?? venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue')),
                           Divider(color: Colors.grey.shade200, height: 1),
                           _buildInfoRow(Icons.people_outline, 'Attendees',
                               '${actualParticipantCount.valueOrNull ?? '...'} expected'),
@@ -306,8 +306,7 @@ class EventDetailScreen extends ConsumerWidget {
                           )),
                       const SizedBox(height: 12),
                     ],
-                    if (event.budgetItems.isNotEmpty ||
-                        event.totalApprovedBudget > 0 ||
+                    if (event.totalApprovedBudget > 0 ||
                         (event.adminFeeOverride ?? 0) > 0) ...[
                       Text(
                         'Budget & Event Fee',
@@ -325,60 +324,15 @@ class EventDetailScreen extends ConsumerWidget {
                         ),
                         child: Column(
                           children: [
-                            ExpansionTile(
-                              tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              childrenPadding: const EdgeInsets.only(bottom: 8),
-                              title: Row(
-                                children: [
-                                  const Icon(
-                                      Icons.account_balance_wallet_outlined,
-                                      color: AppColors.primary,
-                                      size: 20),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Text(
-                                      'Total Budget',
-                                      style: AppTextStyles.bodyMedium.copyWith(
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    _formatCurrency(event.totalApprovedBudget),
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.primaryDark,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                            if (event.totalApprovedBudget > 0)
+                              _buildInfoRow(
+                                Icons.account_balance_wallet_outlined,
+                                'Total Budget',
+                                _formatCurrency(event.totalApprovedBudget),
                               ),
-                              subtitle: Text(
-                                'View budget breakdown',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              children: event.budgetItems.isEmpty
-                                  ? [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            16, 0, 16, 12),
-                                        child: Text(
-                                          'No budget items were provided.',
-                                          style:
-                                              AppTextStyles.bodyMedium.copyWith(
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      ),
-                                    ]
-                                  : event.budgetItems
-                                      .map(_buildBudgetItem)
-                                      .toList(),
-                            ),
                             if ((event.adminFeeOverride ?? 0) > 0) ...[
-                              Divider(color: Colors.grey.shade200, height: 1),
+                              if (event.totalApprovedBudget > 0)
+                                Divider(color: Colors.grey.shade200, height: 1),
                               _buildInfoRow(
                                 Icons.confirmation_number_outlined,
                                 'Event Fee',
@@ -545,15 +499,12 @@ class EventDetailScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         _buildGuideRow('Time-In Opens', _formatTime(opens)),
-        _buildGuideRow('Session Starts', _formatTime(start)),
-        _buildGuideRow('On-Time Until', _formatTime(onTimeUntil)),
-        _buildGuideRow('Late Until / Time-In Closes', _formatTime(lateUntil)),
-        if (event.gracePeriodMinutes == null)
+        if (onTimeUntil != null)
+          _buildGuideRow('On-Time Check-In Until', _formatTime(onTimeUntil)),
+        _buildGuideRow('Time-In Closes (Late Cutoff)', _formatTime(lateUntil)),
+        if (event.gracePeriodMinutes == null && onTimeUntil != null)
           _buildGuideNotice(
-              'No grace period is set. Check in by the session start time to be on time.'),
-        if (event.lateThresholdMinutes == null)
-          _buildGuideNotice(
-              'The configured time-in closing time is used as the late cutoff.'),
+              'Check in promptly once time-in opens to be marked on time.'),
         if (session.hasTimeOut) ...[
           const SizedBox(height: 8),
           _buildGuideRow(
@@ -602,54 +553,6 @@ class EventDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBudgetItem(BudgetItemModel item) {
-    final status = item.status.isEmpty ? 'pending' : item.status;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.item.isEmpty ? 'Budget item' : item.item,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.primaryDark,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Text(
-                _formatCurrency(item.approvedAmount),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primaryDark,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          if (item.description.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              item.description,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: 2),
-          Text(
-            '${_formatNumber(item.quantity)} × ${_formatCurrency(item.unitCost)} · ${_capitalize(status)}',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   DateTime? _parseSessionDateTime(EventSessionModel session, String time) {
     if (session.date.isEmpty || time.isEmpty) return null;
     try {
@@ -677,12 +580,6 @@ class EventDetailScreen extends ConsumerWidget {
       value == null ? 'Not set' : formatAppTime(value);
 
   String _formatCurrency(double value) => formatCurrency(value);
-
-  String _formatNumber(double value) =>
-      value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
-
-  String _capitalize(String value) =>
-      value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(

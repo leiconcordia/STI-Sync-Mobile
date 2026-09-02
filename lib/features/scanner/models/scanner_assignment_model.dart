@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import '../../../core/local/app_database.dart';
+import '../../../core/utils/date_formatter.dart';
 import 'package:drift/drift.dart' as drift;
 
 /// Represents the scanner assignment for a single event.
@@ -16,8 +18,18 @@ class ScannerAssignmentModel {
   /// Human-readable event name (denormalized for offline display).
   final String eventTitle;
 
-  /// Event format: 'On-Campus' | 'Online' | 'Hybrid'.
+  /// Event format / Venue string.
   final String eventFormat;
+
+  /// Human-readable venue of the event.
+  final String venue;
+
+  /// Venue ID pointing to Firestore `venues/{venueId}`.
+  final String venueId;
+
+  /// Custom venue name override if set on the event.
+  final String? customVenueName;
+  final String? startDate;
 
   /// All session metadata for this event (used for session selector UI).
   final List<Map<String, dynamic>> sessions;
@@ -56,7 +68,11 @@ class ScannerAssignmentModel {
   const ScannerAssignmentModel({
     required this.eventId,
     required this.eventTitle,
-    required this.eventFormat,
+    this.eventFormat = 'Campus Venue',
+    this.venue = 'Campus Venue',
+    this.venueId = '',
+    this.customVenueName,
+    this.startDate,
     required this.sessions,
     required this.officerUserId,
     required this.permissions,
@@ -73,6 +89,10 @@ class ScannerAssignmentModel {
     String? eventId,
     String? eventTitle,
     String? eventFormat,
+    String? venue,
+    String? venueId,
+    String? customVenueName,
+    String? startDate,
     List<Map<String, dynamic>>? sessions,
     String? officerUserId,
     Map<String, dynamic>? permissions,
@@ -88,6 +108,10 @@ class ScannerAssignmentModel {
       eventId: eventId ?? this.eventId,
       eventTitle: eventTitle ?? this.eventTitle,
       eventFormat: eventFormat ?? this.eventFormat,
+      venue: venue ?? this.venue,
+      venueId: venueId ?? this.venueId,
+      customVenueName: customVenueName ?? this.customVenueName,
+      startDate: startDate ?? this.startDate,
       sessions: sessions ?? this.sessions,
       officerUserId: officerUserId ?? this.officerUserId,
       permissions: permissions ?? this.permissions,
@@ -102,6 +126,20 @@ class ScannerAssignmentModel {
   }
 
   // ─── Computed getters ────────────────────────────────────────────────────
+
+  /// Formatted event start date (e.g. "Aug 2, 2026")
+  String get formattedStartDate {
+    if (startDate != null && startDate!.trim().isNotEmpty) {
+      return formatAppDate(startDate);
+    }
+    if (sessions.isNotEmpty) {
+      final firstDate = sessions.first['date'] as String?;
+      if (firstDate != null && firstDate.trim().isNotEmpty) {
+        return formatAppDate(firstDate);
+      }
+    }
+    return formatAppDate(DateTime.now());
+  }
 
   /// True when the event's last session has not yet ended (plus a 12-hour grace period).
   bool get isActive => DateTime.now().isBefore(eventEndTime.add(const Duration(hours: 12)));
@@ -153,6 +191,13 @@ class ScannerAssignmentModel {
     final gracePeriod = (data['gracePeriodMinutes'] as num?)?.toInt();
     final lateThreshold = (data['lateThresholdMinutes'] as num?)?.toInt();
 
+    final customVenue = data['customVenueName'] as String?;
+    final venueId = data['venueId'] as String? ?? '';
+    final rawVenue = (data['venue'] as String?) ?? (data['venueName'] as String?);
+    final venue = (customVenue != null && customVenue.isNotEmpty)
+        ? customVenue
+        : (rawVenue != null && rawVenue.isNotEmpty ? rawVenue : (data['eventFormat'] as String? ?? 'STI Campus'));
+
     // Extract full sessions array and propagate event-level timing defaults
     final List<dynamic> rawSessions = data['sessions'] as List<dynamic>? ?? [];
     final sessions = rawSessions
@@ -170,10 +215,17 @@ class ScannerAssignmentModel {
 
     final eventEndTime = _computeLastEndTime(rawSessions);
 
+    final startDate = (data['startDate'] as String?)?.trim() ??
+        (sessions.isNotEmpty ? (sessions.first['date'] as String?)?.trim() : null);
+
     return ScannerAssignmentModel(
       eventId: doc.id,
       eventTitle: data['title'] as String? ?? 'Unknown Event',
-      eventFormat: data['eventFormat'] as String? ?? '',
+      eventFormat: venue,
+      venue: venue,
+      venueId: venueId,
+      customVenueName: customVenue,
+      startDate: startDate,
       sessions: sessions,
       officerUserId: matchedOfficerId,
       permissions: {
@@ -209,10 +261,17 @@ class ScannerAssignmentModel {
       }
     }
 
+    final venueStr = entity.eventFormat.isNotEmpty ? entity.eventFormat : 'Campus Venue';
+    final parsedStartDate = parsedSessions.isNotEmpty ? parsedSessions.first['date'] as String? : null;
+
     return ScannerAssignmentModel(
       eventId: entity.eventId,
       eventTitle: entity.eventTitle,
       eventFormat: entity.eventFormat,
+      venue: venueStr,
+      venueId: '',
+      customVenueName: null,
+      startDate: parsedStartDate,
       sessions: parsedSessions,
       officerUserId: entity.officerUserId,
       permissions:
@@ -248,27 +307,60 @@ class ScannerAssignmentModel {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   /// Computes the end DateTime of the last session in the list.
-  /// Returns a far-future date if sessions are empty (keeps assignment active).
+  static DateTime computeLastEndTime(List<dynamic> sessions) => _computeLastEndTime(sessions);
+
+  /// Computes the end DateTime of the last session in the list.
+  /// Supports both 24-hour ('17:00') and 12-hour AM/PM ('5:00 PM') formats.
   static DateTime _computeLastEndTime(List<dynamic> sessions) {
     if (sessions.isEmpty) {
-      // No sessions → treat as ongoing so assignment stays visible
-      return DateTime.now().add(const Duration(days: 365));
+      // No sessions → fallback to past date so empty events don't stay active forever
+      return DateTime.now().subtract(const Duration(days: 1));
     }
 
     DateTime? latest;
     for (final s in sessions) {
-      final session = s as Map<String, dynamic>;
-      final dateStr = session['date'] as String?;
-      final endTimeStr = session['endTime'] as String?;
-      if (dateStr != null && endTimeStr != null) {
-        try {
-          final dt = DateTime.parse('${dateStr}T$endTimeStr:00');
-          if (latest == null || dt.isAfter(latest)) latest = dt;
-        } catch (_) {
-          // Ignore malformed date strings
+      if (s is! Map) continue;
+      final session = Map<String, dynamic>.from(s);
+      final dateStr = (session['date'] as String?)?.trim();
+      final endTimeStr = (session['endTime'] as String? ?? session['timeOutClose'] as String?)?.trim();
+
+      if (dateStr != null && dateStr.isNotEmpty) {
+        DateTime? dt;
+        if (endTimeStr != null && endTimeStr.isNotEmpty) {
+          dt = _parseDateTime(dateStr, endTimeStr);
+        }
+        // Fallback: If no endTime, use end of that day (23:59)
+        dt ??= _parseDateTime(dateStr, '23:59');
+
+        if (dt != null) {
+          if (latest == null || dt.isAfter(latest)) {
+            latest = dt;
+          }
         }
       }
     }
-    return latest ?? DateTime.now().add(const Duration(days: 365));
+    return latest ?? DateTime.now().subtract(const Duration(days: 1));
+  }
+
+  static DateTime? _parseDateTime(String dateStr, String timeStr) {
+    try {
+      final cleanTime = timeStr.trim();
+      final cleanDate = dateStr.trim();
+      if (cleanTime.toUpperCase().contains('AM') || cleanTime.toUpperCase().contains('PM')) {
+        final format = DateFormat('yyyy-MM-dd h:mm a');
+        return format.parse('$cleanDate $cleanTime', true).toLocal();
+      } else {
+        final parts = cleanTime.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = parts.length > 1 ? int.parse(parts[1].substring(0, 2)) : 0;
+        final dateParts = cleanDate.split('-');
+        final year = int.parse(dateParts[0]);
+        final month = int.parse(dateParts[1]);
+        final day = int.parse(dateParts[2]);
+        return DateTime(year, month, day, hour, minute);
+      }
+    } catch (_) {
+      return null;
+    }
   }
 }

@@ -32,16 +32,45 @@ class EventCleanupService {
         _scannerDao = scannerDao,
         _syncService = syncService;
 
-  /// Purges all locally cached data for a specific event.
+  /// Purges all locally cached data for a specific event IF AND ONLY IF
+  /// all offline attendance records are completely synced to the cloud.
   ///
   /// Steps:
-  /// 1. Delete cached_participants for this event
-  /// 2. Delete cached_payables for this event
-  /// 3. Sync any pending offline_attendance for this event first
-  /// 4. Delete only synced offline_attendance for this event
-  /// 5. Delete the scanner_assignment for this event
-  Future<void> purgeEventData(String eventId) async {
-    debugPrint('EventCleanupService: Purging data for event $eventId');
+  /// 1. Check if there are unsynced offline attendance records for this event.
+  /// 2. If unsynced records exist, attempt to upload/sync them first.
+  /// 3. Re-verify if any unsynced records still remain.
+  ///    - If unsynced records STILL remain (e.g. offline, connection error) -> ABORT cleanup completely.
+  /// 4. Once 0 unsynced records remain:
+  ///    a. Delete cached_participants for this event
+  ///    b. Delete cached_payables for this event
+  ///    c. Delete only synced offline_attendance for this event
+  ///    d. Delete the scanner_assignment for this event
+  Future<bool> purgeEventData(String eventId) async {
+    debugPrint('EventCleanupService: Checking sync status before purging event $eventId');
+
+    // 1. Check for pending unsynced records
+    final pending = await _attendanceDao.getPendingSyncsForEvent(eventId);
+    if (pending.isNotEmpty) {
+      debugPrint('EventCleanupService: ${pending.length} unsynced records for $eventId — attempting sync...');
+      try {
+        await _syncService.uploadPendingAttendance();
+      } catch (e) {
+        debugPrint('EventCleanupService: Sync failed during purge check: $e');
+      }
+    }
+
+    // 2. Strict validation: Re-check if any unsynced records still remain
+    final remainingPending = await _attendanceDao.getPendingSyncsForEvent(eventId);
+    if (remainingPending.isNotEmpty) {
+      debugPrint(
+        'EventCleanupService: ABORTING cleanup for event $eventId. '
+        '${remainingPending.length} unsynced attendance records still pending upload.',
+      );
+      return false; // Retain all event data in SQLite until synced
+    }
+
+    // 3. All attendance is 100% synced — proceed with complete local cleanup
+    debugPrint('EventCleanupService: All attendance verified synced. Purging event $eventId cache...');
 
     // 1. Delete cached participants
     await _participantsDao.purgeEventParticipants(eventId);
@@ -51,33 +80,22 @@ class EventCleanupService {
     await _payablesDao.purgeEventPayables(eventId);
     debugPrint('EventCleanupService: Purged payables for $eventId');
 
-    // 3. Ensure all offline attendance for this event is synced first
-    final pending = await _attendanceDao.getPendingSyncsForEvent(eventId);
-    if (pending.isNotEmpty) {
-      debugPrint('EventCleanupService: ${pending.length} pending records — syncing before purge');
-      try {
-        await _syncService.uploadPendingAttendance();
-      } catch (e) {
-        debugPrint('EventCleanupService: Sync failed during purge: $e');
-        // Don't block purge — leave unsynced records in place
-      }
-    }
-
-    // 4. Delete only already-synced attendance records
+    // 3. Delete synced attendance records
     await _attendanceDao.deleteSyncedForEvent(eventId);
     debugPrint('EventCleanupService: Purged synced attendance for $eventId');
 
-    // 5. Delete the scanner assignment
+    // 4. Delete the scanner assignment
     await _scannerDao.deleteAssignment(eventId);
     debugPrint('EventCleanupService: Deleted scanner assignment for $eventId');
 
     debugPrint('EventCleanupService: Purge complete for event $eventId');
+    return true;
   }
 
   /// Checks all local scanner assignments and purges data for expired events.
   ///
   /// An event is considered expired when `now > eventEndTime + 12 hours`.
-  /// This matches the same grace period used by [ScannerAssignmentModel.isActive].
+  /// If expired, it verifies that all attendance is synced before purging.
   Future<void> checkAndPurgeExpiredEvents() async {
     debugPrint('EventCleanupService: Checking for expired events...');
 
@@ -96,7 +114,7 @@ class EventCleanupService {
       if (now.isAfter(expiryTime)) {
         debugPrint(
           'EventCleanupService: Event ${assignment.eventId} '
-          '("${assignment.eventTitle}") expired at $expiryTime — purging',
+          '("${assignment.eventTitle}") passed 12h post-event window ($expiryTime) — evaluating sync status...',
         );
         await purgeEventData(assignment.eventId);
       }

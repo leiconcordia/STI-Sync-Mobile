@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/features/events/models/event_model.dart';
 import 'package:sti_sync/core/constants/firestore_paths.dart';
 import '../../core/firebase/firebase_service.dart';
+import '../../features/auth/models/student_model.dart';
 import '../../features/auth/repositories/auth_repository.dart';
 import '../../features/auth/repositories/registration_repository.dart';
 import '../../features/auth/viewmodels/auth_viewmodel.dart';
@@ -157,7 +159,16 @@ final eventViewModelProvider =
 final eventsStreamProvider = StreamProvider<List<EventModel>>((ref) {
   final student = ref.watch(authViewModelProvider).student;
   if (student == null || student.id.isEmpty) return Stream.value([]);
-  return ref.watch(eventRepositoryProvider).watchEligibleEvents(student.id);
+  final myOrgsAsync = ref.watch(myOrganizationsProvider);
+  final studentOrgIds = myOrgsAsync.maybeWhen(
+    data: (memberships) => memberships.map((m) => m.organizationId).toList(),
+    orElse: () => <String>[],
+  );
+
+  return ref.watch(eventRepositoryProvider).watchEligibleEvents(
+        student: student,
+        studentOrgIds: studentOrgIds,
+      );
 });
 
 final activeSemesterModelProvider = StreamProvider<SemesterModel?>((ref) {
@@ -222,7 +233,7 @@ final registrationViewModelProvider =
   (ref) => RegistrationViewModel(ref.watch(registrationRepositoryProvider)),
 );
 
-enum EventFilterCategory { all, schoolSao, clubs, myOrgs }
+enum EventFilterCategory { all, schoolSao, myOrgs, completed }
 
 final eventFilterCategoryProvider =
     StateProvider<EventFilterCategory>((ref) => EventFilterCategory.all);
@@ -263,19 +274,31 @@ final orgNameProvider =
 
 final venueNameProvider =
     FutureProvider.family<String, String>((ref, venueId) async {
-  if (venueId.isEmpty) return 'TBA';
+  final trimmed = venueId.trim();
+  if (trimmed.isEmpty) return 'Campus Venue';
   try {
     final doc = await ref
         .read(firestoreProvider)
         .collection(FirestorePaths.venues)
-        .doc(venueId)
+        .doc(trimmed)
         .get();
-    if (doc.exists) {
-      final data = doc.data();
-      return data?['name'] as String? ?? 'TBA';
+    if (doc.exists && doc.data() != null) {
+      final data = doc.data()!;
+      final name = data['name'] as String? ??
+          data['venueName'] as String? ??
+          data['venue_name'] as String? ??
+          data['title'] as String? ??
+          data['venue'] as String? ??
+          data['location'] as String? ??
+          data['label'] as String?;
+      if (name != null && name.trim().isNotEmpty) {
+        return name.trim();
+      }
     }
-  } catch (_) {}
-  return 'TBA';
+  } catch (e) {
+    debugPrint('venueNameProvider: Failed to load venue for $trimmed: $e');
+  }
+  return 'Campus Venue';
 });
 
 final categoryNameProvider =
@@ -340,35 +363,24 @@ final actualParticipantCountProvider =
     if (!eventDoc.exists) return 0;
     final event = EventModel.fromFirestore(eventDoc);
 
-    if (event.targetDepartmentIds.isEmpty && event.targetYearLevels.isEmpty) {
+    if (event.targetAudienceScope != 'members' &&
+        event.targetDepartmentIds.isEmpty &&
+        event.targetYearLevels.isEmpty &&
+        event.targetCourses.isEmpty &&
+        event.targetSections.isEmpty &&
+        (event.targetAcademicLevel == null || event.targetAcademicLevel == 'BOTH')) {
       final countSnap =
           await firestore.collection(FirestorePaths.students).count().get();
       return countSnap.count ?? 0;
     }
 
-    if (event.targetDepartmentIds.isNotEmpty) {
-      final snap = await firestore
-          .collection(FirestorePaths.students)
-          .where('departmentId',
-              whereIn: event.targetDepartmentIds.take(10).toList())
-          .get();
+    final snap = await firestore.collection(FirestorePaths.students).get();
+    final eligibleCount = snap.docs.where((doc) {
+      final student = StudentModel.fromFirestore(doc);
+      return event.isStudentEligible(student);
+    }).length;
 
-      var docs = snap.docs;
-      if (event.targetYearLevels.isNotEmpty) {
-        docs = docs.where((doc) {
-          final data = doc.data();
-          final yearLevel = data['yearLevel'] as String?;
-          return event.targetYearLevels.contains(yearLevel);
-        }).toList();
-      }
-      return docs.length;
-    } else {
-      final snap = await firestore
-          .collection(FirestorePaths.students)
-          .where('yearLevel', whereIn: event.targetYearLevels.take(10).toList())
-          .get();
-      return snap.docs.length;
-    }
+    return eligibleCount;
   } catch (_) {
     return 0;
   }
@@ -448,7 +460,13 @@ final activeScannerAssignmentsProvider = StreamProvider(
     if (uid.isEmpty) {
       return const Stream.empty();
     }
-    return ref.watch(scannerRepositoryProvider).watchScannerAssignments(uid);
+    return ref.watch(scannerRepositoryProvider).watchScannerAssignments(uid).map(
+      (assignments) {
+        final active = assignments.where((a) => a.canScan).toList();
+        active.sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
+        return active;
+      },
+    );
   },
 );
 

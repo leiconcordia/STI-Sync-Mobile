@@ -12,6 +12,7 @@ class StiSyncApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    ref.watch(eventCleanupServiceProvider);
 
     ref.listen<AsyncValue<bool>>(connectivityStatusProvider, (previous, next) {
       if (previous != null && next.hasValue && previous.value != next.value) {

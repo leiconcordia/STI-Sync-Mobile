@@ -6,13 +6,11 @@ import 'package:sti_sync/features/auth/models/student_model.dart';
 class ProfileHeader extends StatelessWidget {
   final StudentModel student;
   final VoidCallback onEditProfile;
-  final VoidCallback onQrCode;
 
   const ProfileHeader({
     super.key,
     required this.student,
     required this.onEditProfile,
-    required this.onQrCode,
   });
 
   @override
@@ -123,29 +121,15 @@ class ProfileHeader extends StatelessWidget {
           ),
         ),
         
-        // Floating Action Buttons
+        // Floating Action Button
         Positioned(
           bottom: -24,
-          left: 24,
-          right: 24,
-          child: Row(
-            children: [
-              Expanded(
-                child: _ActionButton(
-                  icon: Icons.edit_outlined,
-                  label: 'Edit Profile',
-                  onTap: onEditProfile,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _ActionButton(
-                  icon: Icons.qr_code_scanner,
-                  label: 'My QR Code',
-                  onTap: onQrCode,
-                ),
-              ),
-            ],
+          left: 48,
+          right: 48,
+          child: _ActionButton(
+            icon: Icons.edit_outlined,
+            label: 'Edit Profile',
+            onTap: onEditProfile,
           ),
         ),
       ],

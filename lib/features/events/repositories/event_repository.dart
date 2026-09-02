@@ -17,12 +17,22 @@ class EventRepository {
   EventRepository(
       this._firestore, this._appDatabase, this._connectivityService);
 
-  Stream<List<EventModel>> watchEligibleEvents(String studentId) {
-    final studentStream = _firestore
-        .collection(FirestorePaths.students)
-        .doc(studentId)
-        .snapshots()
-        .map((doc) => doc.exists ? StudentModel.fromFirestore(doc) : null);
+  Stream<List<EventModel>> watchEligibleEvents({
+    String? studentId,
+    StudentModel? student,
+    List<String> studentOrgIds = const [],
+  }) {
+    final effectiveStudentId = student?.id ?? studentId ?? '';
+
+    final Stream<StudentModel?> studentStream = student != null
+        ? Stream.value(student)
+        : (effectiveStudentId.isNotEmpty
+            ? _firestore
+                .collection(FirestorePaths.students)
+                .doc(effectiveStudentId)
+                .snapshots()
+                .map((doc) => doc.exists ? StudentModel.fromFirestore(doc) : null)
+            : Stream.value(null));
 
     final firestoreEventsStream = _firestore
         .collection(FirestorePaths.events)
@@ -55,26 +65,30 @@ class EventRepository {
     return Rx.combineLatest2<StudentModel?, List<EventModel>, List<EventModel>>(
       studentStream,
       eventsStream,
-      (student, events) {
-        if (student == null) return [];
+      (currentStudent, events) {
+        if (currentStudent == null) return [];
 
         final filtered = events.where((event) {
-          final isDeptEligible = event.targetDepartmentIds.isEmpty ||
-              event.targetDepartmentIds.contains(student.departmentId);
-          final isYearEligible = event.targetYearLevels.isEmpty ||
-              event.targetYearLevels.contains(student.yearLevel);
+          // 1. Scheduled visibility window check (Show in feed & Visible From)
+          if (!event.isVisibleNow()) {
+            return false;
+          }
 
-          return isDeptEligible && isYearEligible;
+          // 2. Multi-factor audience eligibility (Scope, Org, Academic Level, Courses, Years, Sections, Depts)
+          return event.isStudentEligible(
+            currentStudent,
+            studentOrgIds: studentOrgIds,
+          );
         }).toList();
 
-        // Sort by newest first
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        // Sort by event start date ascending (events starting soonest / first)
+        filtered.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
         return filtered;
       },
     ).doOnData((events) {
       _cacheEventsSilently(events);
-      if (_connectivityService.isOnline) {
-        _cacheTicketStatesSilently(studentId, events);
+      if (_connectivityService.isOnline && effectiveStudentId.isNotEmpty) {
+        _cacheTicketStatesSilently(effectiveStudentId, events);
       }
     }).handleError((e) {
       if (e is FirebaseException) {
@@ -85,9 +99,17 @@ class EventRepository {
     });
   }
 
-  Future<void> cacheEligibleEvents(String studentId) async {
+  Future<void> cacheEligibleEvents({
+    String? studentId,
+    StudentModel? student,
+    List<String> studentOrgIds = const [],
+  }) async {
     try {
-      final events = await watchEligibleEvents(studentId).first;
+      final events = await watchEligibleEvents(
+        studentId: studentId,
+        student: student,
+        studentOrgIds: studentOrgIds,
+      ).first;
       await _cacheEventsSilently(events);
     } on FirebaseException catch (e) {
       throw AppException(code: e.code, message: e.message ?? 'Firestore error');

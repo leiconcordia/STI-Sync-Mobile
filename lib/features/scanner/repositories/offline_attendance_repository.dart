@@ -8,6 +8,8 @@ import '../../../core/local/daos/payables_dao.dart';
 import '../../../core/local/daos/scanner_dao.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../auth/models/student_model.dart';
+import '../../events/models/event_model.dart';
+import '../models/scanner_assignment_model.dart';
 
 class DownloadResult {
   final int studentCount;
@@ -35,8 +37,8 @@ class OfflineAttendanceRepository {
         _payablesDao = payablesDao,
         _scannerDao = scannerDao;
 
-  /// Downloads active students (based on event targets) and their payable records
-  /// into the local Drift database to enable offline QR scanning.
+  /// Downloads participants and their payable records for an event, storing
+  /// them locally in Drift for 100% offline attendance verification.
   Future<DownloadResult> downloadParticipantsForEvent(
     String eventId, {
     void Function(double progress)? onProgress,
@@ -49,22 +51,100 @@ class OfflineAttendanceRepository {
       throw Exception('Event not found.');
     }
 
-    final eventData = eventDoc.data()!;
-    final List<String> targetDeptIds = List<String>.from(eventData['targetDepartmentIds'] ?? []);
-    final List<String> targetYearLevels = List<String>.from(eventData['targetYearLevels'] ?? []);
-    final bool payablesEnabled = eventData['studentPayablesEnabled'] ?? false;
+    final event = EventModel.fromFirestore(eventDoc);
+    final bool payablesEnabled = event.studentPayablesEnabled;
+
+    // 1b. Refresh ScannerAssignments in local SQLite with latest session times and venue
+    final eventData = eventDoc.data() ?? {};
+    final customVenue = eventData['customVenueName'] as String?;
+    final venueId = eventData['venueId'] as String? ?? event.venueId;
+    final rawVenue = (eventData['venue'] as String?) ?? (eventData['venueName'] as String?);
+
+    String resolvedVenue = (customVenue != null && customVenue.isNotEmpty)
+        ? customVenue
+        : (rawVenue != null && rawVenue.isNotEmpty ? rawVenue : '');
+
+    if (resolvedVenue.isEmpty && venueId.isNotEmpty) {
+      try {
+        final vDoc = await _firestore.collection(FirestorePaths.venues).doc(venueId.trim()).get();
+        if (vDoc.exists && vDoc.data() != null) {
+          final data = vDoc.data()!;
+          resolvedVenue = data['name'] as String? ??
+              data['venueName'] as String? ??
+              data['venue_name'] as String? ??
+              data['title'] as String? ??
+              data['venue'] as String? ??
+              data['location'] as String? ??
+              '';
+        }
+      } catch (_) {}
+    }
+    if (resolvedVenue.isEmpty) resolvedVenue = 'Campus Venue';
+    final venue = resolvedVenue;
+
+    final gracePeriod = (eventData['gracePeriodMinutes'] as num?)?.toInt();
+    final lateThreshold = (eventData['lateThresholdMinutes'] as num?)?.toInt();
+    final List<dynamic> rawSessions = eventData['sessions'] as List<dynamic>? ?? [];
+    final sessions = rawSessions.map((s) {
+      final sMap = Map<String, dynamic>.from(s as Map<String, dynamic>);
+      if (sMap['gracePeriodMinutes'] == null && gracePeriod != null) {
+        sMap['gracePeriodMinutes'] = gracePeriod;
+      }
+      if (sMap['lateThresholdMinutes'] == null && lateThreshold != null) {
+        sMap['lateThresholdMinutes'] = lateThreshold;
+      }
+      return sMap;
+    }).toList();
+
+    final eventEndTime = ScannerAssignmentModel.computeLastEndTime(rawSessions);
+    final existingAssignment = await _scannerDao.getAssignment(eventId);
+
+    if (existingAssignment != null) {
+      await _scannerDao.saveAssignment(ScannerAssignmentsCompanion(
+        eventId: Value(eventId),
+        eventTitle: Value(event.title),
+        eventFormat: Value(venue),
+        sessions: Value(json.encode(sessions)),
+        officerUserId: Value(existingAssignment.officerUserId),
+        permissions: Value(existingAssignment.permissions),
+        eventEndTime: Value(eventEndTime.millisecondsSinceEpoch),
+        proposalStatus: Value(eventData['proposalStatus'] as String? ?? 'approved'),
+        gracePeriodMinutes: Value(gracePeriod),
+        dataDownloaded: const Value(1),
+        downloadedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
+    }
 
     onProgress?.call(0.2);
 
-    // 2. Query Students (handling empty target arrays as "ALL")
+    // 2. If Org Members-only event, resolve member student IDs
+    final Set<String> memberStudentIds = {};
+    if (event.targetAudienceScope == 'members' && event.hostingOrgId.isNotEmpty) {
+      final membersSnap = await _firestore
+          .collection(FirestorePaths.organizationMembers)
+          .where('organizationId', isEqualTo: event.hostingOrgId)
+          .get();
+
+      for (var mDoc in membersSnap.docs) {
+        final mData = mDoc.data();
+        final sId = mData['studentId'] as String?;
+        final sAuthUid = mData['studentAuthUid'] as String?;
+        final sNum = mData['student_id'] as String?;
+        if (sId != null && sId.isNotEmpty) memberStudentIds.add(sId);
+        if (sAuthUid != null && sAuthUid.isNotEmpty) memberStudentIds.add(sAuthUid);
+        if (sNum != null && sNum.isNotEmpty) memberStudentIds.add(sNum);
+      }
+    }
+
+    // 3. Query Students with multi-factor audience eligibility filtering
     final List<StudentModel> allStudents = [];
 
-    if (targetDeptIds.isNotEmpty) {
+    if (event.targetDepartmentIds.isNotEmpty) {
       final int batchSize = 30;
-      for (int i = 0; i < targetDeptIds.length; i += batchSize) {
-        final deptBatch = targetDeptIds.sublist(
+      for (int i = 0; i < event.targetDepartmentIds.length; i += batchSize) {
+        final deptBatch = event.targetDepartmentIds.sublist(
           i,
-          i + batchSize > targetDeptIds.length ? targetDeptIds.length : i + batchSize,
+          i + batchSize > event.targetDepartmentIds.length ? event.targetDepartmentIds.length : i + batchSize,
         );
 
         final querySnapshot = await _firestore
@@ -75,13 +155,19 @@ class OfflineAttendanceRepository {
         for (var doc in querySnapshot.docs) {
           final student = StudentModel.fromFirestore(doc);
           final isStatusActive = student.status.toUpperCase() == 'ACTIVE' || student.status.isEmpty;
-          if (isStatusActive && _isYearLevelMatching(student.yearLevel, targetYearLevels)) {
-            allStudents.add(student);
+          if (isStatusActive) {
+            final isMember = memberStudentIds.contains(student.id) ||
+                memberStudentIds.contains(student.authUid) ||
+                memberStudentIds.contains(student.studentId);
+            final studentOrgs = isMember ? [event.hostingOrgId] : const <String>[];
+            if (event.isStudentEligible(student, studentOrgIds: studentOrgs)) {
+              allStudents.add(student);
+            }
           }
         }
       }
     } else {
-      // targetDeptIds is empty -> Target ALL departments
+      // Query ALL departments and filter
       final querySnapshot = await _firestore
           .collection(FirestorePaths.students)
           .get();
@@ -89,8 +175,14 @@ class OfflineAttendanceRepository {
       for (var doc in querySnapshot.docs) {
         final student = StudentModel.fromFirestore(doc);
         final isStatusActive = student.status.toUpperCase() == 'ACTIVE' || student.status.isEmpty;
-        if (isStatusActive && _isYearLevelMatching(student.yearLevel, targetYearLevels)) {
-          allStudents.add(student);
+        if (isStatusActive) {
+          final isMember = memberStudentIds.contains(student.id) ||
+              memberStudentIds.contains(student.authUid) ||
+              memberStudentIds.contains(student.studentId);
+          final studentOrgs = isMember ? [event.hostingOrgId] : const <String>[];
+          if (event.isStudentEligible(student, studentOrgIds: studentOrgs)) {
+            allStudents.add(student);
+          }
         }
       }
     }
@@ -171,7 +263,7 @@ class OfflineAttendanceRepository {
             studentName: Value('${student.firstName} ${student.lastName}'),
             studentSchoolId: Value(student.studentId),
             type: Value(payable['type'] as String? ?? 'event_fee'),
-            label: Value(payable['label'] as String? ?? (eventData['title'] as String? ?? 'Event Fee')),
+            label: Value(payable['label'] as String? ?? (event.title.isNotEmpty ? event.title : 'Event Fee')),
             description: Value(payable['description'] as String?),
             organizationId: Value(payable['organizationId'] as String?),
             organizationName: Value(payable['organizationName'] as String?),
@@ -187,7 +279,7 @@ class OfflineAttendanceRepository {
             cachedAt: Value(nowMs),
             studentIdNumber: Value(student.studentId),
             profilePhotoUrl: Value(student.profilePhotoUrl),
-            eventTitle: Value(eventData['title'] as String? ?? ''),
+            eventTitle: Value(event.title),
             courseInfo: Value(student.courseCode),
           ));
         }
@@ -204,17 +296,6 @@ class OfflineAttendanceRepository {
     );
   }
 
-  bool _isYearLevelMatching(String studentYearLevel, List<String> targetYearLevels) {
-    if (targetYearLevels.isEmpty) return true;
-    if (targetYearLevels.contains(studentYearLevel)) return true;
-    final studentDigits = studentYearLevel.replaceAll(RegExp(r'[^0-9]'), '');
-    for (final target in targetYearLevels) {
-      if (target == studentYearLevel) return true;
-      final targetDigits = target.replaceAll(RegExp(r'[^0-9]'), '');
-      if (studentDigits.isNotEmpty && studentDigits == targetDigits) return true;
-    }
-    return false;
-  }
 
   Future<void> _finalizeDownload(
     String eventId,

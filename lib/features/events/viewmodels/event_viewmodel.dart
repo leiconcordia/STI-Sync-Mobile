@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/models/student_model.dart';
 import '../models/event_model.dart';
 import '../repositories/event_repository.dart';
 
@@ -23,13 +24,29 @@ class EventViewModel extends StateNotifier<EventState> {
 
   EventViewModel(this._repo) : super(const EventState.loading());
 
-  Stream<List<EventModel>> watchEligibleEvents(String studentId) {
-    return _repo.watchEligibleEvents(studentId);
+  Stream<List<EventModel>> watchEligibleEvents({
+    String? studentId,
+    StudentModel? student,
+    List<String> studentOrgIds = const [],
+  }) {
+    return _repo.watchEligibleEvents(
+      studentId: studentId,
+      student: student,
+      studentOrgIds: studentOrgIds,
+    );
   }
 
-  Future<void> cacheEligibleEvents(String studentId) async {
+  Future<void> cacheEligibleEvents({
+    String? studentId,
+    StudentModel? student,
+    List<String> studentOrgIds = const [],
+  }) async {
     try {
-      await _repo.cacheEligibleEvents(studentId);
+      await _repo.cacheEligibleEvents(
+        studentId: studentId,
+        student: student,
+        studentOrgIds: studentOrgIds,
+      );
     } catch (e) {
       // Ignored for background operations
     }

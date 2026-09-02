@@ -42,7 +42,10 @@ class UpcomingEventsSection extends ConsumerWidget {
         const SizedBox(height: 16),
         eventsAsync.when(
           data: (events) {
-            if (events.isEmpty) {
+            final upcomingEvents = events.where((e) => e.isUpcomingOrOngoing()).toList()
+              ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+
+            if (upcomingEvents.isEmpty) {
               return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -64,10 +67,10 @@ class UpcomingEventsSection extends ConsumerWidget {
               height: 190,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: events.length,
+                itemCount: upcomingEvents.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 16),
                 itemBuilder: (context, index) {
-                  return _DashboardEventCard(event: events[index]);
+                  return _DashboardEventCard(event: upcomingEvents[index]);
                 },
               ),
             );
@@ -114,7 +117,7 @@ class _DashboardEventCard extends ConsumerWidget {
     final String displayOrg = event.isCampusWide
         ? 'STI College / SAO'
         : (orgName.valueOrNull ?? 'Student Organization');
-    final String displayVenue = venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue');
+    final String displayVenue = event.customVenueName ?? venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue');
 
     return GestureDetector(
       onTap: () {

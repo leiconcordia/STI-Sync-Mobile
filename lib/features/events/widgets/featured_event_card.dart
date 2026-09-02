@@ -13,11 +13,7 @@ class FeaturedEventCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // If sessions are present, use the first session's date, else just a placeholder
-    String dateStr = 'No schedule yet';
-    if (event.sessions.isNotEmpty) {
-      dateStr = event.sessions.first.date;
-    }
+    final String dateStr = event.displayDate;
 
     final venueName = ref.watch(venueNameProvider(event.venueId));
     final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
@@ -74,7 +70,7 @@ class FeaturedEventCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    venueName.valueOrNull ?? 'Loading...',
+                    event.customVenueName ?? venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue'),
                     style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

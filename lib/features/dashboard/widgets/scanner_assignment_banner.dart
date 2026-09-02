@@ -20,7 +20,15 @@ class ScannerAssignmentBanner extends ConsumerWidget {
 
         final latest = assignments.first;
         final String eventTitle = latest.eventTitle.isNotEmpty ? latest.eventTitle : 'Assigned Event';
-        final String format = latest.eventFormat.isNotEmpty ? latest.eventFormat : 'On-Campus';
+        final venueNameAsync = ref.watch(venueNameProvider(latest.venueId));
+        final String venue = (latest.customVenueName != null && latest.customVenueName!.isNotEmpty)
+            ? latest.customVenueName!
+            : (venueNameAsync.valueOrNull != null && venueNameAsync.valueOrNull != 'Campus Venue' && venueNameAsync.valueOrNull != 'TBA'
+                ? venueNameAsync.valueOrNull!
+                : (latest.venue.isNotEmpty && latest.venue != 'STI Campus' && latest.venue != 'Campus Venue'
+                    ? latest.venue
+                    : (venueNameAsync.valueOrNull ?? 'Campus Venue')));
+        final String formattedDate = latest.formattedStartDate;
         final int sessionCount = latest.sessions.length;
 
         return Material(
@@ -143,7 +151,7 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '$format • $sessionCount Session(s)',
+                                '$formattedDate • $venue • $sessionCount Session(s)',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,

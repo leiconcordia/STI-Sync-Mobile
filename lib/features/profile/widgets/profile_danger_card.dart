@@ -3,12 +3,10 @@ import 'package:sti_sync/core/theme/app_colors.dart';
 
 class ProfileDangerCard extends StatelessWidget {
   final VoidCallback onLogOut;
-  final VoidCallback onDeactivate;
 
   const ProfileDangerCard({
     super.key,
     required this.onLogOut,
-    required this.onDeactivate,
   });
 
   @override
@@ -45,12 +43,6 @@ class ProfileDangerCard extends StatelessWidget {
             icon: Icons.logout,
             label: 'Log Out',
             onTap: onLogOut,
-          ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFFFEBEE)),
-          _DangerRow(
-            icon: Icons.person_off_outlined,
-            label: 'Request Account Deactivation',
-            onTap: onDeactivate,
           ),
         ],
       ),
