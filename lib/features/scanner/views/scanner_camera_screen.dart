@@ -76,7 +76,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
-      // VALIDATION 2: Attendance Window & Timing Validation
+      // VALIDATION 2: Event Cancellation Check
       final scannerState = ref.read(scannerViewModelProvider);
       final assignment = scannerState.assignments.firstWhere(
         (a) => a.eventId == widget.eventId,
@@ -92,6 +92,18 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         ),
       );
 
+      if (assignment.isEffectivelyCancelled) {
+        await _showOverlay(
+          ScanResultType.eventCancelled,
+          null,
+          extraMessage: assignment.cancellationReason != null && assignment.cancellationReason!.isNotEmpty
+              ? 'Event cancelled: ${assignment.cancellationReason}'
+              : 'Attendance scanning is voided because this event has been cancelled.',
+        );
+        return;
+      }
+
+      // VALIDATION 3: Attendance Window & Timing Validation
       final session = assignment.sessions.firstWhere(
         (s) => s['id'] == widget.sessionId,
         orElse: () => <String, dynamic>{},
@@ -282,6 +294,21 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scannerState = ref.watch(scannerViewModelProvider);
+    final assignment = scannerState.assignments.firstWhere(
+      (a) => a.eventId == widget.eventId,
+      orElse: () => ScannerAssignmentModel(
+        eventId: widget.eventId,
+        eventTitle: '',
+        eventFormat: '',
+        sessions: const [],
+        officerUserId: '',
+        permissions: const {},
+        eventEndTime: DateTime.now(),
+        proposalStatus: 'approved',
+      ),
+    );
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -349,6 +376,45 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
                     ],
                   ),
                 ),
+                if (assignment.isEffectivelyCancelled)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade900.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade400),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cancel, color: Colors.white, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'EVENT CANCELLED — SCANNING VOIDED',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                assignment.cancellationReason != null && assignment.cancellationReason!.isNotEmpty
+                                    ? assignment.cancellationReason!
+                                    : 'Scanning is disabled because this event has been cancelled.',
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 
                 const Spacer(),
                 

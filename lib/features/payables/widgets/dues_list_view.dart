@@ -102,7 +102,16 @@ class DuesListView extends ConsumerWidget {
 
     final String statusText;
     final Color statusColor;
-    if (due.isPaid) {
+    if (due.isWaived) {
+      statusText = 'Waived';
+      statusColor = Colors.teal.shade700;
+    } else if (due.isRefundPending) {
+      statusText = 'Refund Pending';
+      statusColor = Colors.amber.shade900;
+    } else if (due.isRefunded) {
+      statusText = 'Refunded';
+      statusColor = Colors.blue.shade700;
+    } else if (due.isPaid) {
       statusText = 'Fully Paid';
       statusColor = AppColors.success;
     } else if (due.isOverdue) {
@@ -292,12 +301,27 @@ class DuesListView extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Balance', style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 10)),
+                          Text(
+                            due.isRefundPending ? 'Due Back' : 'Balance',
+                            style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 10),
+                          ),
                           const SizedBox(height: 2),
                           Text(
-                            formatCurrency(remaining),
+                            due.isWaived
+                                ? '₱0.00 (Waived)'
+                                : (due.isRefundPending
+                                    ? formatCurrency((due.refundDue ?? 0) > 0 ? due.refundDue! : paid)
+                                    : (due.isRefunded
+                                        ? '₱0.00'
+                                        : formatCurrency(remaining))),
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: remaining > 0 ? (due.isOverdue ? AppColors.error : Colors.orange.shade800) : AppColors.success,
+                              color: due.isWaived
+                                  ? Colors.teal.shade700
+                                  : (due.isRefundPending
+                                      ? Colors.amber.shade900
+                                      : (due.isRefunded
+                                          ? Colors.blue.shade700
+                                          : (remaining > 0 ? (due.isOverdue ? AppColors.error : Colors.orange.shade800) : AppColors.success))),
                               fontWeight: FontWeight.bold,
                               fontSize: 12.5,
                             ),
@@ -311,6 +335,55 @@ class DuesListView extends ConsumerWidget {
                 ],
               ),
             ),
+            if (due.isWaived) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.teal.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 16, color: Colors.teal.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        due.waivedReason != null && due.waivedReason!.isNotEmpty
+                            ? 'Waived: ${due.waivedReason}'
+                            : 'Fee waived. Clearance requirement is satisfied for this item.',
+                        style: TextStyle(color: Colors.teal.shade900, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (due.isRefundPending) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.monetization_on_outlined, size: 16, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Event cancelled. ${formatCurrency((due.refundDue ?? 0) > 0 ? due.refundDue! : paid)} is due back to you. Visit the organization treasurer or SAO office to claim your refund.',
+                        style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Divider(color: Colors.grey.shade200, height: 1),
             const SizedBox(height: 10),

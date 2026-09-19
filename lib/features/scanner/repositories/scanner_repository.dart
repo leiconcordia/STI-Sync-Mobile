@@ -344,6 +344,8 @@ class ScannerRepository {
     final assignments = await _scannerDao.getAllAssignments();
 
     for (final assignment in assignments) {
+      // Do not delete cancelled assignments so their cancelled status stays visible to officers
+      if (assignment.proposalStatus.toLowerCase().contains('cancel')) continue;
       final hasEnded = await isEventEnded(assignment.eventId);
       if (hasEnded) {
         await _scannerDao.deleteAssignment(assignment.eventId);

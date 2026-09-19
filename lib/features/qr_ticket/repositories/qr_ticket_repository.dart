@@ -14,6 +14,10 @@ class EventTicketConfig {
   final bool attendanceEnabled;
   final bool studentPayablesEnabled;
   final double eventFee;
+  final bool isCancelled;
+  final String? cancellationReason;
+  final String? refundPolicy;
+  final DateTime? cancelledAt;
 
   const EventTicketConfig({
     required this.title,
@@ -21,6 +25,10 @@ class EventTicketConfig {
     required this.attendanceEnabled,
     required this.studentPayablesEnabled,
     required this.eventFee,
+    this.isCancelled = false,
+    this.cancellationReason,
+    this.refundPolicy,
+    this.cancelledAt,
   });
 
   bool get isTicketAvailable => enableQRTickets || attendanceEnabled || studentPayablesEnabled;
@@ -31,6 +39,10 @@ class EventTicketConfig {
         attendanceEnabled: event.attendanceEnabled,
         studentPayablesEnabled: event.studentPayablesEnabled,
         eventFee: event.adminFeeOverride ?? 0,
+        isCancelled: event.isEffectivelyCancelled,
+        cancellationReason: event.cancellationReason,
+        refundPolicy: event.refundPolicy,
+        cancelledAt: event.cancelledAt,
       );
 }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import '../../../core/local/app_database.dart';
 import '../../../core/local/daos/attendance_dao.dart';
 import '../../../core/local/daos/participants_dao.dart';
 import '../../../core/constants/firestore_paths.dart';
@@ -58,12 +59,55 @@ class SyncService {
 
       debugPrint('SyncService: ${pending.length} pending records to sync');
 
+      // Check event cancellation status before uploading to prevent ghost records
+      final uniqueEventIds = pending.map((r) => r.eventId).toSet();
+      final Map<String, bool> eventCancelledMap = {};
+
+      for (final eventId in uniqueEventIds) {
+        try {
+          final eventDoc = await _firestore.collection(FirestorePaths.events).doc(eventId).get();
+          if (eventDoc.exists) {
+            final data = eventDoc.data() ?? {};
+            final isCancelled = (data['isCancelled'] as bool?) ?? false;
+            final status = (data['status'] as String?)?.toLowerCase() ?? '';
+            final proposalStatus = (data['proposalStatus'] as String?)?.toLowerCase() ?? '';
+            if (isCancelled || status == 'cancelled' || proposalStatus == 'cancelled') {
+              eventCancelledMap[eventId] = true;
+            } else {
+              eventCancelledMap[eventId] = false;
+            }
+          }
+        } catch (e) {
+          debugPrint('SyncService: Failed to check event status for $eventId: $e');
+        }
+      }
+
+      // Void/purge pending records belonging to cancelled events
+      final List<OfflineAttendanceData> validPending = [];
+      int cancelledScansCount = 0;
+
+      for (final record in pending) {
+        if (eventCancelledMap[record.eventId] == true) {
+          await _attendanceDao.deleteRecordByLocalId(record.localId);
+          cancelledScansCount++;
+        } else {
+          validPending.add(record);
+        }
+      }
+
+      if (validPending.isEmpty && cancelledScansCount > 0) {
+        debugPrint('SyncService: ERR_EVENT_CANCELLED - $cancelledScansCount scans voided');
+        return SyncResult.error(
+          'ERR_EVENT_CANCELLED: $cancelledScansCount scan(s) voided because the event was cancelled.',
+        );
+      }
+
       final List<SyncConflict> conflicts = [];
       final List<dynamic> uploadList = []; // OfflineAttendanceData items
 
       // Check each record for Firestore duplicates across both subcollections (normal and flagged)
       // and checking both Auth UID and 11-digit Student Number.
-      for (final record in pending) {
+      for (final record in validPending) {
         String? studentNumber;
         if (record.studentId.isNotEmpty) {
           final participant = await _participantsDao.getParticipantByStudentId(

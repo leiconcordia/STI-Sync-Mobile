@@ -25,7 +25,9 @@ enum PayableStatus {
   partial('partial', 'Partially Paid'),
   paid('paid', 'Fully Paid'),
   overdue('overdue', 'Overdue'),
-  waived('waived', 'Waived');
+  waived('waived', 'Waived'),
+  refundPending('refund_pending', 'Refund Pending'),
+  refunded('refunded', 'Refund Disbursed');
 
   final String value;
   final String label;
@@ -33,8 +35,9 @@ enum PayableStatus {
 
   static PayableStatus fromString(String? val) {
     if (val == null) return PayableStatus.pending;
+    final normalized = val.toLowerCase().replaceAll('-', '_');
     return PayableStatus.values.firstWhere(
-      (e) => e.value.toLowerCase() == val.toLowerCase(),
+      (e) => e.value.toLowerCase() == normalized,
       orElse: () => PayableStatus.pending,
     );
   }
@@ -58,9 +61,20 @@ class PayableModel {
   final double assignedAmount;            // Total fee in PHP (₱)
   final double paidAmount;                // Amount paid to date in PHP (₱)
   final double amountDue;                 // Remaining balance or assigned fee
-  final String status;                    // 'pending' | 'partial' | 'paid' | 'overdue' | 'waived'
+  final String status;                    // 'pending' | 'partial' | 'paid' | 'overdue' | 'waived' | 'refund_pending' | 'refunded'
   final String paymentStatus;             // Legacy compatibility field ('unpaid' | 'paid' | 'waived' | 'refunded')
   final DateTime? dueDate;
+
+  // ─── Cancellation, Waiver & Refund Context ───
+  final DateTime? waivedAt;
+  final String? waivedReason;
+  final String? waivedBy;
+  final double? refundDue;
+  final String? refundReason;
+  final String? refundMethod;
+  final DateTime? refundedAt;
+  final String? refundedBy;
+  final String? refundReceiptNumber;
 
   // ─── Gate Control & Access ───
   final bool qrTicketUnlocked;            // Explicit gate control flag
@@ -91,6 +105,15 @@ class PayableModel {
     required this.status,
     required this.paymentStatus,
     this.dueDate,
+    this.waivedAt,
+    this.waivedReason,
+    this.waivedBy,
+    this.refundDue,
+    this.refundReason,
+    this.refundMethod,
+    this.refundedAt,
+    this.refundedBy,
+    this.refundReceiptNumber,
     required this.qrTicketUnlocked,
     this.paidAt,
     this.recordedBy,
@@ -104,11 +127,46 @@ class PayableModel {
   PayableType get payableType => PayableType.fromString(type);
   PayableStatus get payableStatus => PayableStatus.fromString(status);
 
+  // Status checkers
+  bool get isWaived =>
+      status.toLowerCase() == 'waived' ||
+      paymentStatus.toLowerCase() == 'waived' ||
+      waivedAt != null;
+
+  bool get isRefundPending =>
+      status.toLowerCase() == 'refund_pending' ||
+      paymentStatus.toLowerCase() == 'refund_pending' ||
+      status.toLowerCase().contains('pending_refund') ||
+      (refundDue != null && refundDue! > 0 && !isRefunded);
+
+  bool get isRefunded =>
+      status.toLowerCase() == 'refunded' ||
+      paymentStatus.toLowerCase() == 'refunded' ||
+      status.toLowerCase() == 'refund' ||
+      paymentStatus.toLowerCase() == 'refund' ||
+      refundedAt != null;
+
+  /// True if this item represents a zero-liability / resolved state for student clearance.
+  bool get isCleared => isPaid || isWaived || isRefundPending || isRefunded;
+
+  /// True if payment is actively owed by the student (blocks clearance).
+  bool get blocksClearance => !isCleared;
+
   /// Computed financial & access properties
-  double get remainingBalance => (assignedAmount - paidAmount).clamp(0.0, double.infinity);
-  bool get isPaid => status == 'paid' || paymentStatus == 'paid' || status == 'waived' || paymentStatus == 'waived' || remainingBalance <= 0;
-  bool get isPending => !isPaid;
-  bool get isOverdue => dueDate != null && DateTime.now().isAfter(dueDate!) && !isPaid;
+  double get remainingBalance {
+    if (isWaived || isRefundPending || isRefunded) return 0.0;
+    return (assignedAmount - paidAmount).clamp(0.0, double.infinity);
+  }
+
+  bool get isPaid =>
+      status == 'paid' ||
+      paymentStatus == 'paid' ||
+      isWaived ||
+      isRefunded ||
+      (!isRefundPending && (assignedAmount > 0 && paidAmount >= assignedAmount));
+
+  bool get isPending => !isPaid && !isWaived && !isRefundPending && !isRefunded;
+  bool get isOverdue => dueDate != null && DateTime.now().isAfter(dueDate!) && isPending;
   bool get isCampusWide {
     if (organizationId == null) return true;
     final org = organizationId!.trim().toLowerCase();
@@ -159,9 +217,19 @@ class PayableModel {
       assignedAmount: assigned,
       paidAmount: paid,
       amountDue: rawDue > 0 ? rawDue : (assigned - paid > 0 ? assigned - paid : 0.0),
-      status: data['status'] as String? ?? (data['paymentStatus'] as String? ?? 'pending'),
-      paymentStatus: data['paymentStatus'] as String? ?? (data['status'] as String? ?? 'unpaid'),
+      status: (data['status'] as String? ?? data['paymentStatus'] as String? ?? 'pending').toLowerCase(),
+      paymentStatus: (data['paymentStatus'] as String? ?? data['status'] as String? ?? 'unpaid').toLowerCase(),
       dueDate: parseDate(data['dueDate']),
+      waivedAt: parseDate(data['waivedAt'] ?? data['waived_at']),
+      waivedReason: (data['waivedReason'] ?? data['waived_reason']) as String?,
+      waivedBy: (data['waivedBy'] ?? data['waived_by']) as String?,
+      refundDue: ((data['refundDue'] ?? data['refundAmount'] ?? data['refundedAmount'] ?? data['amountRefunded']) as num?)?.toDouble() ??
+          (((data['status'] ?? data['paymentStatus'])?.toString().toLowerCase().contains('refund') == true) ? (paid > 0 ? paid : assigned) : null),
+      refundReason: (data['refundReason'] ?? data['refund_reason'] ?? data['reason']) as String?,
+      refundMethod: (data['refundMethod'] ?? data['refund_method'] ?? data['disbursementMethod']) as String?,
+      refundedAt: parseDate(data['refundedAt'] ?? data['refunded_at'] ?? data['refundDate'] ?? data['refund_date']),
+      refundedBy: (data['refundedBy'] ?? data['refunded_by']) as String?,
+      refundReceiptNumber: (data['refundReceiptNumber'] ?? data['refund_receipt_number'] ?? data['refundReceipt'] ?? data['receiptNumber'] ?? data['referenceNumber']) as String?,
       qrTicketUnlocked: data['qrTicketUnlocked'] as bool? ?? false,
       paidAt: parseDate(data['paidAt']),
       recordedBy: data['recordedBy'] as String? ?? data['processedBy'] as String?,
@@ -196,6 +264,15 @@ class PayableModel {
       'status': status,
       'paymentStatus': paymentStatus,
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
+      'waivedAt': waivedAt != null ? Timestamp.fromDate(waivedAt!) : null,
+      'waivedReason': waivedReason,
+      'waivedBy': waivedBy,
+      'refundDue': refundDue,
+      'refundReason': refundReason,
+      'refundMethod': refundMethod,
+      'refundedAt': refundedAt != null ? Timestamp.fromDate(refundedAt!) : null,
+      'refundedBy': refundedBy,
+      'refundReceiptNumber': refundReceiptNumber,
       'qrTicketUnlocked': qrTicketUnlocked,
       'paidAt': paidAt != null ? Timestamp.fromDate(paidAt!) : null,
       'recordedBy': recordedBy,

@@ -12,6 +12,7 @@ enum ScanResultType {
   invalidFormat,
   windowNotOpen,
   windowClosed,
+  eventCancelled,
 }
 
 class ScanResultOverlay extends StatefulWidget {
@@ -118,6 +119,12 @@ class _ScanResultOverlayState extends State<ScanResultOverlay> with SingleTicker
         icon = Icons.qr_code_scanner;
         title = 'Invalid QR Code!';
         subtitle = widget.extraMessage ?? 'The scanned QR code is not recognized.';
+        break;
+      case ScanResultType.eventCancelled:
+        bgColor = Colors.red.shade900;
+        icon = Icons.cancel_outlined;
+        title = 'Event Cancelled!';
+        subtitle = widget.extraMessage ?? 'Attendance scanning is voided because this event was cancelled.';
         break;
     }
 

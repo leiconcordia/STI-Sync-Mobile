@@ -43,10 +43,14 @@ class PayablesSummary {
     int overdueCount = 0;
 
     for (final p in payables) {
+      // Waived, refunded, and refund_pending payables NEVER add to student liability or overdue counts
+      if (p.isWaived || p.isRefundPending || p.isRefunded) {
+        continue;
+      }
       final itemTotal = p.assignedAmount > 0 ? p.assignedAmount : (p.amountDue + p.paidAmount);
       assigned += itemTotal;
       paid += p.paidAmount;
-      if (!p.isPaid) {
+      if (p.isPending) {
         pendingCount++;
       }
       if (p.isOverdue) {
@@ -92,16 +96,25 @@ class PayablesRepository {
 
   /// Streams all payables targeting the specified student in real time.
   /// Automatically persists the stream snapshots into the local Drift SQLite cache.
-  Stream<List<PayableModel>> watchStudentPayables(String studentId) {
-    if (studentId.isEmpty) {
+  Stream<List<PayableModel>> watchStudentPayables(String studentId, {String? officialStudentId}) {
+    final validIds = <String>{studentId};
+    if (officialStudentId != null && officialStudentId.trim().isNotEmpty) {
+      validIds.add(officialStudentId.trim());
+    }
+    final idList = validIds.where((id) => id.isNotEmpty).toList();
+    if (idList.isEmpty) {
       return Stream.value([]);
     }
 
-    return _firestore
-        .collection(FirestorePaths.payables)
-        .where('studentId', isEqualTo: studentId)
-        .snapshots()
-        .map((snapshot) {
+    final Query<Map<String, dynamic>> query = idList.length == 1
+        ? _firestore
+            .collection(FirestorePaths.payables)
+            .where('studentId', isEqualTo: idList.first)
+        : _firestore
+            .collection(FirestorePaths.payables)
+            .where('studentId', whereIn: idList);
+
+    return query.snapshots().map((snapshot) {
       final list = snapshot.docs
           .map((doc) => PayableModel.fromFirestore(doc.data(), doc.id))
           .toList();

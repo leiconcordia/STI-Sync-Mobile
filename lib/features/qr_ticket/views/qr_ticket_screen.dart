@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../viewmodels/qr_ticket_viewmodel.dart';
 import '../widgets/qr_code_display.dart';
 import '../widgets/locked_qr_card.dart';
+import '../widgets/cancelled_qr_card.dart';
 
 class QrTicketScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -104,6 +105,18 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
       );
     }
 
+    if (state is QrTicketCancelled) {
+      return CancelledQrCard(
+        eventTitle: state.eventTitle,
+        studentName: state.studentName,
+        studentId: state.studentId,
+        profilePhotoUrl: state.profilePhotoUrl,
+        courseInfo: state.courseInfo,
+        cancellationReason: state.cancellationReason,
+        refundPolicy: state.refundPolicy,
+        cancelledAt: state.cancelledAt,
+      );
+    }
 
     if (state is QrTicketError) {
       return Center(
@@ -142,7 +155,6 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
         ),
       );
     }
-
     return const SizedBox.shrink();
   }
 }

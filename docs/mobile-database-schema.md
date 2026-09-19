@@ -139,8 +139,16 @@ class EventModel {
   /// Organization-officer document IDs assigned as scanners.
   final List<String> scannerUserIds;
 
-  // ─── Lifecycle ───
+  // ─── Lifecycle & Cancellation ───
+  final String status; // 'draft' | 'pending' | 'approved' | 'completed' | 'cancelled'
   final String proposalStatus; // 'draft' | 'pending_review' | 'approved' | 'rejected' | 'cancelled'
+  final bool isCancelled;
+  final DateTime? cancelledAt;
+  final String? cancelledBy;
+  final String? cancelledByName;
+  final String? cancellationReason;
+  final String? refundPolicy; // 'refund_cash' | 'credit_next_event' | 'no_fees_collected'
+
   final String createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -253,9 +261,20 @@ class PayableModel {
   final double assignedAmount;            // Total fee in PHP (₱)
   final double paidAmount;                // Amount paid to date in PHP (₱)
   final double amountDue;                 // Assigned fee or remaining balance
-  final String status;                    // 'pending' | 'partial' | 'paid' | 'overdue' | 'waived'
+  final String status;                    // 'pending' | 'partial' | 'paid' | 'overdue' | 'waived' | 'refund_pending' | 'refunded'
   final String paymentStatus;             // Legacy compatibility field ('unpaid' | 'paid' | 'waived' | 'refunded')
   final DateTime? dueDate;
+
+  // ─── Cancellation, Waiver & Refund Context ───
+  final DateTime? waivedAt;
+  final String? waivedReason;
+  final String? waivedBy;
+  final double? refundDue;                // Amount due back to student (e.g. 150.00)
+  final String? refundReason;             // e.g. "Event Cancelled: Typhoon Closure"
+  final String? refundMethod;             // 'refund_cash' | 'credit_next_event' | 'no_fees_collected'
+  final DateTime? refundedAt;
+  final String? refundedBy;
+  final String? refundReceiptNumber;
 
   // ─── QR Ticket Gate Access Control (CRITICAL) ───
   /// Explicit gate control flag set by SAO Admin / Officers.

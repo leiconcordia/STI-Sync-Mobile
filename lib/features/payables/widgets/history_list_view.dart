@@ -18,9 +18,9 @@ class HistoryListView extends ConsumerWidget {
 
     return payablesAsync.when(
       data: (payables) {
-        final paidHistory = payables.where((p) => p.isPaid || p.status == 'paid' || (p.assignedAmount > 0 && p.paidAmount >= p.assignedAmount)).toList();
+        final history = payables.where((p) => p.isPaid || p.status == 'paid' || p.isRefunded || (p.assignedAmount > 0 && p.paidAmount >= p.assignedAmount)).toList();
 
-        if (paidHistory.isEmpty) {
+        if (history.isEmpty) {
           return Container(
             width: double.infinity,
             padding: const EdgeInsets.all(32),
@@ -39,7 +39,7 @@ class HistoryListView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Your completed payment transactions and receipts will appear here once settled.',
+                  'Your completed payment transactions, refunds, and receipts will appear here once settled.',
                   style: AppTextStyles.labelSmall.copyWith(color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
@@ -55,17 +55,17 @@ class HistoryListView extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Completed Payments',
+                  'Transaction History',
                   style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark, fontSize: 16),
                 ),
                 Text(
-                  '${paidHistory.length} completed',
+                  '${history.length} settled',
                   style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            ...paidHistory.map((item) => Padding(
+            ...history.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: _buildHistoryCard(item, myOrgs),
             )),
@@ -93,9 +93,14 @@ class HistoryListView extends ConsumerWidget {
   }
 
   Widget _buildHistoryCard(PayableModel item, List<dynamic> myOrgs) {
-    final dateStr = item.paidAt != null 
-        ? formatAppDate(item.paidAt) 
-        : (item.createdAt != null ? formatAppDate(item.createdAt) : 'Recorded');
+    final isRefunded = item.isRefunded;
+    final dateStr = isRefunded
+        ? (item.refundedAt != null
+            ? formatAppDate(item.refundedAt)
+            : (item.paidAt != null ? formatAppDate(item.paidAt) : 'Recorded'))
+        : (item.paidAt != null 
+            ? formatAppDate(item.paidAt) 
+            : (item.createdAt != null ? formatAppDate(item.createdAt) : 'Recorded'));
 
     final bool isCampus = item.isCampusWide;
     String orgName = 'Organization';
@@ -115,20 +120,32 @@ class HistoryListView extends ConsumerWidget {
     }
     final Color orgBadgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
 
-    final String methodStr = item.paymentMethod != null && item.paymentMethod!.isNotEmpty
-        ? ' • ${item.paymentMethod!.toUpperCase()}'
-        : '';
+    final String methodStr = isRefunded
+        ? (item.refundMethod != null && item.refundMethod!.isNotEmpty
+            ? ' • Disbursed via ${item.refundMethod!.toUpperCase()}'
+            : ' • Refund Disbursed')
+        : (item.paymentMethod != null && item.paymentMethod!.isNotEmpty
+            ? ' • ${item.paymentMethod!.toUpperCase()}'
+            : '');
 
-    final String refStr = item.paymentReference != null && item.paymentReference!.isNotEmpty
-        ? ' (Ref: ${item.paymentReference})'
-        : '';
+    final String refStr = isRefunded
+        ? (item.refundReceiptNumber != null && item.refundReceiptNumber!.isNotEmpty
+            ? ' (Receipt #${item.refundReceiptNumber})'
+            : '')
+        : (item.paymentReference != null && item.paymentReference!.isNotEmpty
+            ? ' (Ref: ${item.paymentReference})'
+            : '');
+
+    final double amount = isRefunded
+        ? ((item.refundDue ?? 0) > 0 ? item.refundDue! : item.paidAmount)
+        : (item.paidAmount > 0 ? item.paidAmount : item.assignedAmount);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: isRefunded ? Colors.blue.shade100 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -142,10 +159,16 @@ class HistoryListView extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.12),
+              color: isRefunded
+                  ? Colors.blue.shade50
+                  : AppColors.success.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
+            child: Icon(
+              isRefunded ? Icons.assignment_return_rounded : Icons.check_circle_rounded,
+              color: isRefunded ? Colors.blue.shade700 : AppColors.success,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -180,7 +203,10 @@ class HistoryListView extends ConsumerWidget {
                       Flexible(
                         child: Text(
                           '$methodStr$refStr',
-                          style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade600, fontSize: 11),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: isRefunded ? Colors.blue.shade800 : Colors.grey.shade600,
+                            fontSize: 11,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -195,17 +221,20 @@ class HistoryListView extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                formatCurrency(item.paidAmount > 0 ? item.paidAmount : item.assignedAmount),
+                formatCurrency(amount),
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.success,
+                  color: isRefunded ? Colors.blue.shade700 : AppColors.success,
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                dateStr,
-                style: AppTextStyles.labelSmall.copyWith(color: Colors.grey.shade500, fontSize: 10.5),
+                isRefunded ? '$dateStr (Refunded)' : dateStr,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: isRefunded ? Colors.blue.shade600 : Colors.grey.shade500,
+                  fontSize: 10.5,
+                ),
               ),
             ],
           ),

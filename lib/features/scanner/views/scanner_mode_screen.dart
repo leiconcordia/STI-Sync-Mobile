@@ -134,7 +134,9 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
   @override
   Widget build(BuildContext context) {
     final eventId = ref.watch(scannerViewModelProvider).selectedEventId;
+    final liveEvent = eventId != null ? ref.watch(eventDetailProvider(eventId)).valueOrNull : null;
     final assignment = _assignment;
+    final isCancelled = (assignment?.isEffectivelyCancelled == true) || (liveEvent?.isEffectivelyCancelled == true);
 
     final activeSessionId = _selectedSessionId ??
         (assignment?.sessions.isNotEmpty == true
@@ -162,6 +164,50 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
         child: Column(
           children: [
             _buildHeader(context, eventId, activeSessionId),
+            if (isCancelled)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade900.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade400),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cancel, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'EVENT CANCELLED — SCANNING DISABLED',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if ((assignment?.cancellationReason ?? liveEvent?.cancellationReason) != null &&
+                              (assignment?.cancellationReason ?? liveEvent?.cancellationReason)!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                (assignment?.cancellationReason ?? liveEvent?.cancellationReason)!,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             _buildSessionSelector(),
             const SizedBox(height: 16),
@@ -213,7 +259,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                                     color: AppColors.primary, size: 22),
                               ),
                             ),
-                          if (eventId != null && _hasManualPermission)
+                          if (eventId != null && _hasManualPermission && !isCancelled)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: FloatingActionButton.small(
@@ -234,11 +280,31 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                             ),
                           FloatingActionButton(
                             heroTag: 'scan_fab',
-                            onPressed: _openScannerConfig,
-                            backgroundColor: AppColors.secondary,
-                            elevation: 4,
-                            child: const Icon(Icons.qr_code_scanner,
-                                color: AppColors.primaryDark, size: 28),
+                            onPressed: isCancelled
+                                ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text('Scanning is disabled because this event has been cancelled.'),
+                                        backgroundColor: AppColors.error,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                    );
+                                  }
+                                : _openScannerConfig,
+                            backgroundColor: isCancelled
+                                ? Colors.grey.shade400
+                                : AppColors.secondary,
+                            elevation: isCancelled ? 2 : 4,
+                            child: Icon(
+                              isCancelled
+                                  ? Icons.block
+                                  : Icons.qr_code_scanner,
+                              color: isCancelled
+                                  ? Colors.white
+                                  : AppColors.primaryDark,
+                              size: 28,
+                            ),
                           ),
                         ],
                       ),
@@ -261,6 +327,19 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
         ref.read(scannerViewModelProvider).assignments.firstWhere(
               (a) => a.eventId == eventId,
             );
+    final liveEvent = ref.read(eventDetailProvider(eventId)).valueOrNull;
+
+    if (assignment.isEffectivelyCancelled || (liveEvent?.isEffectivelyCancelled == true)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Scanning is disabled because this event has been cancelled.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
 
     showModalBottomSheet(
       context: context,

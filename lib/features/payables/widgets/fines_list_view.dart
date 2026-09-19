@@ -166,6 +166,24 @@ class FinesListView extends ConsumerWidget {
     final Color badgeColor = isCampus ? Colors.blue.shade700 : Colors.purple.shade600;
     final dueStr = fine.dueDate != null ? formatAppDate(fine.dueDate) : 'TBA';
     final isUnpaid = fine.isPending;
+    final String fineStatusText;
+    final Color fineStatusColor;
+    if (fine.isWaived) {
+      fineStatusText = 'Waived';
+      fineStatusColor = Colors.teal.shade700;
+    } else if (fine.isRefundPending) {
+      fineStatusText = 'Refund Pending';
+      fineStatusColor = Colors.amber.shade900;
+    } else if (fine.isRefunded) {
+      fineStatusText = 'Refunded';
+      fineStatusColor = Colors.blue.shade700;
+    } else if (isUnpaid) {
+      fineStatusText = 'Unpaid Fine';
+      fineStatusColor = AppColors.error;
+    } else {
+      fineStatusText = 'Settled';
+      fineStatusColor = AppColors.success;
+    }
 
     return InkWell(
       onTap: () => PaymentInstructionsBottomSheet.show(context),
@@ -176,7 +194,9 @@ class FinesListView extends ConsumerWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isUnpaid ? AppColors.error.withValues(alpha: 0.25) : Colors.grey.shade200,
+            color: fine.isWaived
+                ? Colors.teal.shade200
+                : (isUnpaid ? AppColors.error.withValues(alpha: 0.25) : Colors.grey.shade200),
           ),
           boxShadow: [
             BoxShadow(
@@ -214,13 +234,13 @@ class FinesListView extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isUnpaid ? AppColors.error.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
+                    color: fineStatusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    isUnpaid ? 'Unpaid Fine' : 'Settled',
+                    fineStatusText,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: isUnpaid ? AppColors.error : AppColors.success,
+                      color: fineStatusColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -255,9 +275,13 @@ class FinesListView extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  formatCurrency(fine.remainingBalance),
+                  fine.isWaived
+                      ? '₱0.00'
+                      : formatCurrency(fine.remainingBalance),
                   style: AppTextStyles.h2.copyWith(
-                    color: isUnpaid ? AppColors.error : AppColors.success,
+                    color: fine.isWaived
+                        ? Colors.teal.shade700
+                        : (isUnpaid ? AppColors.error : AppColors.success),
                     fontWeight: FontWeight.w800,
                   ),
                 ),

@@ -3,6 +3,13 @@ import 'dart:convert';
 import '../../auth/models/student_model.dart';
 import '../../../core/utils/date_formatter.dart';
 
+enum MobileEventDisplayStatus {
+  upcoming,
+  ongoing,
+  completed,
+  cancelled,
+}
+
 class EventModel {
   final String id;
   final String referenceId;
@@ -67,7 +74,16 @@ class EventModel {
   final String scannerActivationCode;
   final List<String> scannerUserIds;
 
+  // ─── Lifecycle & Cancellation ───
+  final String status;
   final String proposalStatus;
+  final bool isCancelled;
+  final DateTime? cancelledAt;
+  final String? cancelledBy;
+  final String? cancelledByName;
+  final String? cancellationReason;
+  final String? refundPolicy; // 'refund_cash' | 'credit_next_event' | 'no_fees_collected'
+
   final String createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -121,11 +137,73 @@ class EventModel {
     required this.lockAfterApproval,
     required this.scannerActivationCode,
     required this.scannerUserIds,
+    this.status = 'approved',
     required this.proposalStatus,
+    this.isCancelled = false,
+    this.cancelledAt,
+    this.cancelledBy,
+    this.cancelledByName,
+    this.cancellationReason,
+    this.refundPolicy,
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// True if the event has been officially cancelled (evaluates isCancelled, status, proposalStatus, and cancellationReason).
+  bool get isEffectivelyCancelled =>
+      isCancelled ||
+      status.toLowerCase().contains('cancel') ||
+      status.toLowerCase().contains('void') ||
+      proposalStatus.toLowerCase().contains('cancel') ||
+      proposalStatus.toLowerCase().contains('void') ||
+      proposalStatus.toLowerCase().contains('reject') ||
+      proposalStatus.toLowerCase().contains('disapprove') ||
+      (cancellationReason != null && cancellationReason!.trim().isNotEmpty);
+
+  /// Primary 5-state lifecycle resolution per specification Section 2.1
+  MobileEventDisplayStatus get mobileStatus {
+    if (isEffectivelyCancelled) {
+      return MobileEventDisplayStatus.cancelled;
+    }
+    if (status.toLowerCase() == 'completed' || proposalStatus.toLowerCase() == 'completed') {
+      return MobileEventDisplayStatus.completed;
+    }
+    if (sessions.isEmpty) return MobileEventDisplayStatus.upcoming;
+
+    final now = DateTime.now();
+    bool hasOngoing = false;
+    bool allCompleted = true;
+
+    for (final session in sessions) {
+      if (session.date.trim().isEmpty) continue;
+      final sessionDay = DateTime.tryParse(session.date.trim());
+      if (sessionDay == null) continue;
+
+      final startParts = (session.startTime.trim().isNotEmpty ? session.startTime.trim() : '00:00').split(':');
+      final endParts = (session.endTime.trim().isNotEmpty ? session.endTime.trim() : '23:59').split(':');
+      final startH = int.tryParse(startParts[0]) ?? 0;
+      final startM = startParts.length > 1 ? (int.tryParse(startParts[1]) ?? 0) : 0;
+      final endH = int.tryParse(endParts[0]) ?? 23;
+      final endM = endParts.length > 1 ? (int.tryParse(endParts[1]) ?? 59) : 59;
+
+      final start = DateTime(sessionDay.year, sessionDay.month, sessionDay.day, startH, startM);
+      final end = DateTime(sessionDay.year, sessionDay.month, sessionDay.day, endH, endM, 59);
+
+      if ((now.isAfter(start) && now.isBefore(end)) || now.isAtSameMomentAs(start) || now.isAtSameMomentAs(end)) {
+        hasOngoing = true;
+        allCompleted = false;
+        break;
+      }
+      if (now.isBefore(start)) {
+        allCompleted = false;
+      }
+    }
+
+    if (hasOngoing) return MobileEventDisplayStatus.ongoing;
+    if (allCompleted) return MobileEventDisplayStatus.completed;
+    return MobileEventDisplayStatus.upcoming;
+  }
 
   /// Checks if the event is set to visible and has reached its scheduled visibility start date/time.
   bool isVisibleNow([DateTime? now]) {
@@ -139,8 +217,14 @@ class EventModel {
   bool isStudentEligible(StudentModel? student, {List<String> studentOrgIds = const []}) {
     if (student == null) return false;
 
-    // 1. Check Proposal Status (must be approved)
-    if (proposalStatus.isNotEmpty && proposalStatus.toLowerCase() != 'approved') {
+    // 1. Check Proposal Status & Cancellation (must be approved, or cancelled if previously approved)
+    final pStatus = proposalStatus.toLowerCase();
+    final sStatus = status.toLowerCase();
+    final isValidLifecycle = pStatus == 'approved' ||
+        pStatus == 'cancelled' ||
+        sStatus == 'cancelled' ||
+        isCancelled;
+    if (proposalStatus.isNotEmpty && !isValidLifecycle) {
       return false;
     }
 
@@ -395,7 +479,66 @@ class EventModel {
       scannerActivationCode: data['scannerActivationCode'] as String? ?? '',
 
       scannerUserIds: List<String>.from(data['scannerUserIds'] ?? []),
-      proposalStatus: data['proposalStatus'] as String? ?? '',
+      status: (data['status'] as String? ?? data['eventStatus'] as String? ?? data['event_status'] as String?) ??
+          ((data['isCancelled'] == true ||
+                  data['is_cancelled'] == true ||
+                  data['isCanceled'] == true ||
+                  data['is_canceled'] == true ||
+                  (data['proposalStatus'] as String?)?.toLowerCase().contains('cancel') == true ||
+                  (data['proposal_status'] as String?)?.toLowerCase().contains('cancel') == true)
+              ? 'cancelled'
+              : 'approved'),
+      proposalStatus: (data['proposalStatus'] ?? data['proposal_status'] ?? data['approvalStatus'] ?? data['approval_status']) as String? ?? '',
+      isCancelled: () {
+        final rawIsCancelled = data['isCancelled'] == true ||
+            data['isCancelled'] == 'true' ||
+            data['isCancelled'] == 1 ||
+            data['is_cancelled'] == true ||
+            data['is_cancelled'] == 'true' ||
+            data['is_cancelled'] == 1 ||
+            data['isCanceled'] == true ||
+            data['isCanceled'] == 'true' ||
+            data['isCanceled'] == 1 ||
+            data['is_canceled'] == true ||
+            data['is_canceled'] == 'true' ||
+            data['is_canceled'] == 1 ||
+            data['cancelled'] == true ||
+            data['canceled'] == true;
+
+        final s = (data['status'] as String? ?? data['eventStatus'] as String? ?? data['event_status'] as String?)?.toLowerCase() ?? '';
+        final ps = (data['proposalStatus'] as String? ?? data['proposal_status'] as String? ?? data['approvalStatus'] as String? ?? data['approval_status'] as String?)?.toLowerCase() ?? '';
+        final ls = (data['lifecycleStatus'] as String? ?? data['lifecycle_status'] as String?)?.toLowerCase() ?? '';
+        final st = (data['state'] as String? ?? data['eventState'] as String? ?? data['event_state'] as String?)?.toLowerCase() ?? '';
+
+        final hasDate = data['cancelledAt'] != null || data['cancelled_at'] != null || data['canceledAt'] != null || data['canceled_at'] != null;
+        final reason = (data['cancellationReason'] ?? data['cancellation_reason'] ?? data['canceledReason'] ?? data['canceled_reason'] ?? data['reason']) as String?;
+        final hasReason = reason != null && reason.trim().isNotEmpty;
+
+        return rawIsCancelled ||
+            s.contains('cancel') ||
+            s.contains('void') ||
+            ps.contains('cancel') ||
+            ps.contains('void') ||
+            ps.contains('reject') ||
+            ps.contains('disapprove') ||
+            ls.contains('cancel') ||
+            ls.contains('void') ||
+            st.contains('cancel') ||
+            st.contains('void') ||
+            hasDate ||
+            hasReason;
+      }(),
+      cancelledAt: () {
+        final raw = data['cancelledAt'] ?? data['cancelled_at'] ?? data['canceledAt'] ?? data['canceled_at'];
+        if (raw is Timestamp) return raw.toDate();
+        if (raw is String && raw.trim().isNotEmpty) return DateTime.tryParse(raw.trim());
+        if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+        return null;
+      }(),
+      cancelledBy: (data['cancelledBy'] ?? data['cancelled_by'] ?? data['canceledBy'] ?? data['canceled_by']) as String?,
+      cancelledByName: (data['cancelledByName'] ?? data['cancelled_by_name'] ?? data['canceledByName'] ?? data['canceled_by_name']) as String?,
+      cancellationReason: (data['cancellationReason'] ?? data['cancellation_reason'] ?? data['canceledReason'] ?? data['canceled_reason'] ?? data['reason']) as String?,
+      refundPolicy: data['refundPolicy'] as String?,
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
@@ -460,7 +603,14 @@ class EventModel {
       'lockAfterApproval': lockAfterApproval,
       'scannerActivationCode': scannerActivationCode,
       'scannerUserIds': scannerUserIds,
+      'status': status,
       'proposalStatus': proposalStatus,
+      'isCancelled': isCancelled,
+      'cancelledAt': cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
+      'cancelledBy': cancelledBy,
+      'cancelledByName': cancelledByName,
+      'cancellationReason': cancellationReason,
+      'refundPolicy': refundPolicy,
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -472,6 +622,9 @@ class EventModel {
     map['createdAt'] = createdAt.toIso8601String();
     map['updatedAt'] = updatedAt.toIso8601String();
     map['visibilityStart'] = visibilityStart?.toIso8601String();
+    if (cancelledAt != null) {
+      map['cancelledAt'] = cancelledAt!.toIso8601String();
+    }
     return json.encode(map);
   }
 }

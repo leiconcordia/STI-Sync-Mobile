@@ -136,12 +136,34 @@ class _AssignmentCard extends ConsumerWidget {
                 ? assignment.venue
                 : (venueNameAsync.valueOrNull ?? 'Campus Venue')));
     final int sessionCount = assignment.sessions.length;
+    final liveEvent = ref.watch(eventDetailProvider(assignment.eventId)).valueOrNull;
+    final isCancelled = assignment.isEffectivelyCancelled || (liveEvent?.isEffectivelyCancelled ?? false);
+
+    // If live event is cancelled in cloud, immediately sync cancellation state to local Drift
+    if (liveEvent != null && liveEvent.isEffectivelyCancelled && !assignment.isEffectivelyCancelled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(scannerRepositoryProvider).saveAssignmentLocally(
+          assignment.copyWith(
+            isCancelled: true,
+            status: 'cancelled',
+            proposalStatus: 'cancelled',
+            cancellationReason: liveEvent.cancellationReason,
+          ),
+        );
+      });
+    }
+
+    final reason = (assignment.cancellationReason != null && assignment.cancellationReason!.trim().isNotEmpty)
+        ? assignment.cancellationReason!
+        : (liveEvent?.cancellationReason != null && liveEvent!.cancellationReason!.trim().isNotEmpty
+            ? liveEvent.cancellationReason!
+            : 'Gate duty assignments and QR check-ins are revoked for this event.');
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: isCancelled ? Colors.red.shade200 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -158,9 +180,11 @@ class _AssignmentCard extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: hasData 
-                    ? [AppColors.primaryDark, const Color(0xFF1E3A8A)]
-                    : [const Color(0xFF1E293B), const Color(0xFF334155)],
+                colors: isCancelled
+                    ? [const Color(0xFF991B1B), const Color(0xFF7F1D1D)]
+                    : hasData 
+                        ? [AppColors.primaryDark, const Color(0xFF1E3A8A)]
+                        : [const Color(0xFF1E293B), const Color(0xFF334155)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -174,12 +198,16 @@ class _AssignmentCard extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.shield_outlined, color: AppColors.secondary, size: 16),
+                    Icon(
+                      isCancelled ? Icons.cancel_outlined : Icons.shield_outlined,
+                      color: isCancelled ? Colors.white : AppColors.secondary,
+                      size: 16,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'GATE DUTY ASSIGNMENT',
+                      isCancelled ? 'CANCELLED EVENT' : 'GATE DUTY ASSIGNMENT',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.secondary,
+                        color: isCancelled ? Colors.white : AppColors.secondary,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.8,
                         fontSize: 10,
@@ -190,23 +218,29 @@ class _AssignmentCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: hasData 
-                        ? AppColors.success
-                        : AppColors.secondary,
+                    color: isCancelled
+                        ? Colors.red.shade800
+                        : hasData 
+                            ? AppColors.success
+                            : AppColors.secondary,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        hasData ? Icons.check_circle : Icons.downloading_rounded,
+                        isCancelled
+                            ? Icons.block
+                            : hasData ? Icons.check_circle : Icons.downloading_rounded,
                         size: 11,
-                        color: hasData ? Colors.white : AppColors.primaryDark,
+                        color: isCancelled || hasData ? Colors.white : AppColors.primaryDark,
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        hasData ? 'ROSTER READY' : 'DOWNLOAD NEEDED',
+                        isCancelled
+                            ? 'DUTY VOIDED'
+                            : hasData ? 'ROSTER READY' : 'DOWNLOAD NEEDED',
                         style: TextStyle(
-                          color: hasData ? Colors.white : AppColors.primaryDark,
+                          color: isCancelled || hasData ? Colors.white : AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
                           fontSize: 9,
                         ),
@@ -223,14 +257,48 @@ class _AssignmentCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Event Title
-                Text(
-                  assignment.eventTitle,
-                  style: AppTextStyles.h2.copyWith(
-                    color: AppColors.primaryDark,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                // Event Title and CANCELLED badge
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        assignment.eventTitle,
+                        style: AppTextStyles.h2.copyWith(
+                          color: isCancelled ? Colors.grey.shade800 : AppColors.primaryDark,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (isCancelled) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.cancel, size: 12, color: Colors.red.shade800),
+                            const SizedBox(width: 4),
+                            Text(
+                              'CANCELLED',
+                              style: TextStyle(
+                                color: Colors.red.shade800,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
 
@@ -239,6 +307,30 @@ class _AssignmentCard extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 6,
                   children: [
+                    if (isCancelled)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.cancel, size: 12, color: Colors.red.shade800),
+                            const SizedBox(width: 4),
+                            Text(
+                              'CANCELLED',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: Colors.red.shade900,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Start Date Badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -313,6 +405,47 @@ class _AssignmentCard extends ConsumerWidget {
                 const SizedBox(height: 16),
 
                 // Status & Action buttons
+                if (isCancelled)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.red.shade800, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Event Cancelled — Duty Voided',
+                                style: TextStyle(
+                                  color: Colors.red.shade900,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                reason,
+                                style: TextStyle(
+                                  color: Colors.red.shade800,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 if (isDownloading) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
@@ -336,6 +469,76 @@ class _AssignmentCard extends ConsumerWidget {
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (isCancelled) ...[
+                  // Event Cancelled: Action buttons Re-sync & Launch Gate Scanner are explicitly disabled / not clickable
+                  Row(
+                    children: [
+                      Icon(Icons.block, color: Colors.red.shade700, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Duty Revoked — Event has been cancelled',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: Colors.red.shade800,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: null, // Disabled / not clickable
+                        style: OutlinedButton.styleFrom(
+                          disabledForegroundColor: Colors.grey.shade400,
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                        icon: Icon(Icons.refresh, size: 16, color: Colors.grey.shade400),
+                        label: Text(
+                          'Re-sync',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: null, // Disabled / not clickable
+                          style: ElevatedButton.styleFrom(
+                            disabledBackgroundColor: Colors.grey.shade200,
+                            disabledForegroundColor: Colors.grey.shade500,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: Icon(
+                            Icons.qr_code_scanner,
+                            size: 18,
+                            color: Colors.grey.shade500,
+                          ),
+                          label: Text(
+                            'Launch Gate Scanner',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -389,7 +592,6 @@ class _AssignmentCard extends ConsumerWidget {
                       ),
                     ],
                   ),
-
                 ] else ...[
                   Row(
                     children: [
@@ -436,7 +638,6 @@ class _AssignmentCard extends ConsumerWidget {
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton.icon(
@@ -455,10 +656,18 @@ class _AssignmentCard extends ConsumerWidget {
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          icon: const Icon(Icons.qr_code_scanner, size: 18, color: AppColors.primaryDark),
+                          icon: const Icon(
+                            Icons.qr_code_scanner,
+                            size: 18,
+                            color: AppColors.primaryDark,
+                          ),
                           label: const Text(
                             'Launch Gate Scanner',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: AppColors.primaryDark,
+                            ),
                           ),
                         ),
                       ),

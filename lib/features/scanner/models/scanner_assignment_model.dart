@@ -52,8 +52,17 @@ class ScannerAssignmentModel {
   /// Derived from sessions[last].date + sessions[last].endTime.
   final DateTime eventEndTime;
 
-  /// Firestore proposalStatus of the event ('approved' | 'draft').
+  /// Firestore proposalStatus of the event ('approved' | 'draft' | 'cancelled').
   final String proposalStatus;
+
+  /// Whether the event is cancelled
+  final bool isCancelled;
+
+  /// General event status ('draft' | 'approved' | 'cancelled' | 'completed')
+  final String status;
+
+  /// Official cancellation reason if cancelled
+  final String? cancellationReason;
 
   /// Grace period in minutes after start time before late threshold
   final int? gracePeriodMinutes;
@@ -78,6 +87,9 @@ class ScannerAssignmentModel {
     required this.permissions,
     required this.eventEndTime,
     required this.proposalStatus,
+    this.isCancelled = false,
+    this.status = 'approved',
+    this.cancellationReason,
     this.gracePeriodMinutes,
     this.lateThresholdMinutes,
     this.dataDownloaded = false,
@@ -98,6 +110,9 @@ class ScannerAssignmentModel {
     Map<String, dynamic>? permissions,
     DateTime? eventEndTime,
     String? proposalStatus,
+    bool? isCancelled,
+    String? status,
+    String? cancellationReason,
     int? gracePeriodMinutes,
     int? lateThresholdMinutes,
     bool? dataDownloaded,
@@ -117,6 +132,9 @@ class ScannerAssignmentModel {
       permissions: permissions ?? this.permissions,
       eventEndTime: eventEndTime ?? this.eventEndTime,
       proposalStatus: proposalStatus ?? this.proposalStatus,
+      isCancelled: isCancelled ?? this.isCancelled,
+      status: status ?? this.status,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
       gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
       lateThresholdMinutes: lateThresholdMinutes ?? this.lateThresholdMinutes,
       dataDownloaded: dataDownloaded ?? this.dataDownloaded,
@@ -144,9 +162,20 @@ class ScannerAssignmentModel {
   /// True when the event's last session has not yet ended (plus a 12-hour grace period).
   bool get isActive => DateTime.now().isBefore(eventEndTime.add(const Duration(hours: 12)));
 
+  /// True when this event has been cancelled
+  bool get isEffectivelyCancelled =>
+      isCancelled ||
+      status.toLowerCase().contains('cancel') ||
+      status.toLowerCase().contains('void') ||
+      proposalStatus.toLowerCase().contains('cancel') ||
+      proposalStatus.toLowerCase().contains('void') ||
+      proposalStatus.toLowerCase().contains('reject') ||
+      proposalStatus.toLowerCase().contains('disapprove') ||
+      (cancellationReason != null && cancellationReason!.trim().isNotEmpty);
+
   /// True when this assignment is valid for scanning:
-  /// event is still active AND in an approved state.
-  bool get canScan => isActive && proposalStatus.toLowerCase() == 'approved';
+  /// event is still active AND in an approved state AND not cancelled.
+  bool get canScan => isActive && !isEffectivelyCancelled && proposalStatus.toLowerCase() == 'approved';
 
   // ─── Factories ───────────────────────────────────────────────────────────
 
@@ -218,6 +247,56 @@ class ScannerAssignmentModel {
     final startDate = (data['startDate'] as String?)?.trim() ??
         (sessions.isNotEmpty ? (sessions.first['date'] as String?)?.trim() : null);
 
+    final rawIsCancelled = data['isCancelled'] == true ||
+        data['isCancelled'] == 'true' ||
+        data['isCancelled'] == 1 ||
+        data['is_cancelled'] == true ||
+        data['is_cancelled'] == 'true' ||
+        data['is_cancelled'] == 1 ||
+        data['isCanceled'] == true ||
+        data['isCanceled'] == 'true' ||
+        data['isCanceled'] == 1 ||
+        data['is_canceled'] == true ||
+        data['is_canceled'] == 'true' ||
+        data['is_canceled'] == 1 ||
+        data['cancelled'] == true ||
+        data['canceled'] == true;
+
+    final rawStatus = (data['status'] as String? ?? data['eventStatus'] as String? ?? data['event_status'] as String?)?.toLowerCase() ?? '';
+    final rawProposalStatus = (data['proposalStatus'] as String? ?? data['proposal_status'] as String? ?? data['approvalStatus'] as String? ?? data['approval_status'] as String?)?.toLowerCase() ?? '';
+    final rawLifecycleStatus = (data['lifecycleStatus'] as String? ?? data['lifecycle_status'] as String?)?.toLowerCase() ?? '';
+    final rawState = (data['state'] as String? ?? data['eventState'] as String? ?? data['event_state'] as String?)?.toLowerCase() ?? '';
+
+    final hasCancelledAt = data['cancelledAt'] != null || data['cancelled_at'] != null || data['canceledAt'] != null || data['canceled_at'] != null;
+    final cancellationReason = (data['cancellationReason'] ?? data['cancellation_reason'] ?? data['canceledReason'] ?? data['canceled_reason'] ?? data['reason']) as String?;
+    final hasCancellationReason = cancellationReason != null && cancellationReason.trim().isNotEmpty;
+
+    final scannerIsCancelled = scannerData['isCancelled'] == true ||
+        scannerData['is_cancelled'] == true ||
+        scannerData['cancelled'] == true ||
+        (scannerData['status'] as String?)?.toLowerCase().contains('cancel') == true ||
+        (scannerData['status'] as String?)?.toLowerCase().contains('void') == true ||
+        (scannerData['status'] as String?)?.toLowerCase().contains('revoke') == true ||
+        scannerData['revoked'] == true;
+
+    final isCancelled = rawIsCancelled ||
+        rawStatus.contains('cancel') ||
+        rawStatus.contains('void') ||
+        rawProposalStatus.contains('cancel') ||
+        rawProposalStatus.contains('void') ||
+        rawProposalStatus.contains('reject') ||
+        rawProposalStatus.contains('disapprove') ||
+        rawLifecycleStatus.contains('cancel') ||
+        rawLifecycleStatus.contains('void') ||
+        rawState.contains('cancel') ||
+        rawState.contains('void') ||
+        hasCancelledAt ||
+        hasCancellationReason ||
+        scannerIsCancelled;
+
+    final status = isCancelled ? 'cancelled' : ((data['status'] as String?) ?? 'approved');
+    final proposalStatus = isCancelled ? 'cancelled' : ((data['proposalStatus'] ?? data['proposal_status']) as String? ?? 'approved');
+
     return ScannerAssignmentModel(
       eventId: doc.id,
       eventTitle: data['title'] as String? ?? 'Unknown Event',
@@ -238,8 +317,10 @@ class ScannerAssignmentModel {
             scannerData['allowManualAttendance'] as bool? ?? false,
       },
       eventEndTime: eventEndTime,
-      // Default to 'approved' if missing so legacy/test events still show up
-      proposalStatus: data['proposalStatus'] as String? ?? 'approved',
+      proposalStatus: proposalStatus,
+      isCancelled: isCancelled,
+      status: status,
+      cancellationReason: cancellationReason,
       gracePeriodMinutes: gracePeriod,
       lateThresholdMinutes: lateThreshold,
       dataDownloaded: false,
@@ -263,6 +344,7 @@ class ScannerAssignmentModel {
 
     final venueStr = entity.eventFormat.isNotEmpty ? entity.eventFormat : 'Campus Venue';
     final parsedStartDate = parsedSessions.isNotEmpty ? parsedSessions.first['date'] as String? : null;
+    final isCancelled = entity.proposalStatus.toLowerCase() == 'cancelled';
 
     return ScannerAssignmentModel(
       eventId: entity.eventId,
@@ -278,6 +360,8 @@ class ScannerAssignmentModel {
           json.decode(entity.permissions) as Map<String, dynamic>,
       eventEndTime: DateTime.fromMillisecondsSinceEpoch(entity.eventEndTime),
       proposalStatus: entity.proposalStatus,
+      isCancelled: isCancelled,
+      status: isCancelled ? 'cancelled' : 'approved',
       gracePeriodMinutes: entity.gracePeriodMinutes,
       lateThresholdMinutes: lateThresh,
       dataDownloaded: entity.dataDownloaded == 1,
@@ -297,7 +381,7 @@ class ScannerAssignmentModel {
       officerUserId: drift.Value(officerUserId),
       permissions: drift.Value(json.encode(permissions)),
       eventEndTime: drift.Value(eventEndTime.millisecondsSinceEpoch),
-      proposalStatus: drift.Value(proposalStatus),
+      proposalStatus: drift.Value(isEffectivelyCancelled ? 'cancelled' : proposalStatus),
       gracePeriodMinutes: drift.Value(gracePeriodMinutes),
       dataDownloaded: drift.Value(dataDownloaded ? 1 : 0),
       downloadedAt: drift.Value(downloadedAt?.millisecondsSinceEpoch ?? 0),

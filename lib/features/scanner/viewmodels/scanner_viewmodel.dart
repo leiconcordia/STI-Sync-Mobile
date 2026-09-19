@@ -103,22 +103,33 @@ class ScannerViewModel extends StateNotifier<ScannerState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
 
+    // 1. Immediately load locally cached assignments from Drift for instant offline compatibility
+    _repo.getLocalAssignments().then((localList) {
+      if (localList.isNotEmpty && state.assignments.isEmpty) {
+        final sorted = List<ScannerAssignmentModel>.from(localList)
+          ..sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
+        state = state.copyWith(
+          assignments: sorted,
+          isLoading: false,
+        );
+      }
+    }).catchError((e) {
+      debugPrint('ScannerViewModel: Error reading local assignments: $e');
+    });
+
+    // 2. Watch live Firestore assignments
     _subscription = _repo
         .watchScannerAssignments(officerUserId)
         .listen(
       (assignments) async {
         debugPrint('ScannerViewModel: Received ${assignments.length} assignments from Firestore');
-        for (final a in assignments) {
-          debugPrint(' - Event: ${a.eventTitle}, isActive: ${a.isActive}, proposalStatus: ${a.proposalStatus}, canScan: ${a.canScan}');
-        }
 
-        // Persist all current assignments to Drift for offline access
+        // Persist all current assignments (including cancelled status) to Drift for offline use
         for (final assignment in assignments) {
           try {
             await _repo.saveAssignmentLocally(assignment);
           } catch (e) {
             debugPrint('ScannerViewModel: Failed to save to Drift: $e');
-            // Don't block UI update if local write fails
           }
         }
 
@@ -131,37 +142,48 @@ class ScannerViewModel extends StateNotifier<ScannerState> {
 
         // Fetch fresh local assignments to get the preserved dataDownloaded flags
         final localAssignments = await _repo.getLocalAssignments();
-        debugPrint('ScannerViewModel: Fetched ${localAssignments.length} local assignments');
 
-        // Only expose active (non-expired, approved) assignments
-        final active = assignments.where((a) {
-          debugPrint('ScannerViewModel: Checking if canScan -> ${a.eventId}: isActive=${a.isActive}, status=${a.proposalStatus}, canScan=${a.canScan}');
-          return a.canScan;
-        }).map((a) {
-          final local = localAssignments.firstWhere((l) => l.eventId == a.eventId, orElse: () => a);
-          return a.copyWith(
-            dataDownloaded: local.dataDownloaded,
-            downloadedAt: local.downloadedAt,
+        // Combine Firestore assignments and local assignments by eventId so no assigned/cached event is lost
+        final allMap = <String, ScannerAssignmentModel>{};
+        for (final local in localAssignments) {
+          allMap[local.eventId] = local;
+        }
+        for (final a in assignments) {
+          final local = allMap[a.eventId];
+          final isEffCancelled = a.isEffectivelyCancelled || (local?.isEffectivelyCancelled ?? false);
+          allMap[a.eventId] = a.copyWith(
+            dataDownloaded: local?.dataDownloaded ?? a.dataDownloaded,
+            downloadedAt: local?.downloadedAt ?? a.downloadedAt,
+            isCancelled: isEffCancelled,
+            status: isEffCancelled ? 'cancelled' : a.status,
+            proposalStatus: isEffCancelled ? 'cancelled' : a.proposalStatus,
+            cancellationReason: a.cancellationReason ?? local?.cancellationReason,
           );
-        }).toList();
+        }
 
-        debugPrint('ScannerViewModel: ${active.length} assignments are active/approved');
+        // Expose active events PLUS any cancelled events so the cancelled badge and disabled buttons are always visible
+        final displayAssignments = allMap.values
+            .where((a) => a.isActive || a.isEffectivelyCancelled)
+            .toList();
 
         // Sort by newest first (eventEndTime descending)
-        active.sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
-
-        debugPrint('ScannerViewModel: After filtering, ${active.length} assignments are active');
+        displayAssignments.sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
 
         state = state.copyWith(
-          assignments: active,
+          assignments: displayAssignments,
           isLoading: false,
           clearError: true,
         );
       },
-      onError: (Object error) {
+      onError: (Object error) async {
+        // Fallback to local assignments on network error / offline
+        final localAssignments = await _repo.getLocalAssignments();
+        final sorted = List<ScannerAssignmentModel>.from(localAssignments)
+          ..sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
         state = state.copyWith(
+          assignments: sorted,
           isLoading: false,
-          errorMessage: 'Failed to load scanner assignments: $error',
+          errorMessage: 'Offline mode: loaded cached assignments.',
         );
       },
     );

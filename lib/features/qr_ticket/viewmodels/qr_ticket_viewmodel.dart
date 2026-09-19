@@ -44,6 +44,28 @@ class QrTicketLocked extends QrTicketState {
       paymentStatus.toUpperCase() == 'RE_ENROLLMENT_REQUIRED';
 }
 
+class QrTicketCancelled extends QrTicketState {
+  final String eventTitle;
+  final String studentName;
+  final String studentId;
+  final String profilePhotoUrl;
+  final String courseInfo;
+  final String? cancellationReason;
+  final String? refundPolicy;
+  final DateTime? cancelledAt;
+
+  const QrTicketCancelled({
+    required this.eventTitle,
+    required this.studentName,
+    required this.studentId,
+    required this.profilePhotoUrl,
+    required this.courseInfo,
+    this.cancellationReason,
+    this.refundPolicy,
+    this.cancelledAt,
+  });
+}
+
 class QrTicketNoTicket extends QrTicketState {
   final QrTicketModel ticket;
   const QrTicketNoTicket(this.ticket);
@@ -105,6 +127,22 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
         );
         return;
       }
+
+      // Cancellation Gate Check (Highest Priority)
+      if (config.isCancelled) {
+        state = QrTicketCancelled(
+          eventTitle: config.title,
+          studentName: studentName,
+          studentId: studentIdNumber,
+          profilePhotoUrl: profilePhotoUrl,
+          courseInfo: courseInfo,
+          cancellationReason: config.cancellationReason,
+          refundPolicy: config.refundPolicy,
+          cancelledAt: config.cancelledAt,
+        );
+        return;
+      }
+
       if (!config.isTicketAvailable) {
         state = const QrTicketError(
           'QR tickets are not enabled for this event.',

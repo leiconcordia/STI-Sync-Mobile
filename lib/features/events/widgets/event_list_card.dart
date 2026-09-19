@@ -35,17 +35,45 @@ class EventListCard extends ConsumerWidget {
             height: 6,
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: event.isEffectivelyCancelled ? Colors.red.shade600 : AppColors.primary,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              event.title,
-              style: AppTextStyles.h2.copyWith(color: AppColors.primaryDark),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    event.title,
+                    style: AppTextStyles.h2.copyWith(
+                      color: event.isEffectivelyCancelled ? Colors.grey.shade800 : AppColors.primaryDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (event.isEffectivelyCancelled) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Text(
+                      'CANCELLED',
+                      style: TextStyle(
+                        color: Colors.red.shade800,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
 

@@ -65,9 +65,14 @@ final payablesRepositoryProvider = Provider<PayablesRepository>((ref) {
 
 final studentPayablesStreamProvider = StreamProvider<List<PayableModel>>((ref) {
   final authState = ref.watch(authViewModelProvider);
-  final uid = authState.student?.id ?? '';
-  if (uid.isEmpty) return Stream.value([]);
-  return ref.watch(payablesRepositoryProvider).watchStudentPayables(uid);
+  final student = authState.student;
+  final uid = student?.id ?? '';
+  final studentId = student?.studentId ?? '';
+  if (uid.isEmpty && studentId.isEmpty) return Stream.value([]);
+  return ref.watch(payablesRepositoryProvider).watchStudentPayables(
+        uid,
+        officialStudentId: studentId,
+      );
 });
 
 // Alias for backward compatibility across existing views

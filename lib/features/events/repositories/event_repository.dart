@@ -36,7 +36,7 @@ class EventRepository {
 
     final firestoreEventsStream = _firestore
         .collection(FirestorePaths.events)
-        .where('proposalStatus', isEqualTo: 'approved')
+        .where('proposalStatus', whereIn: ['approved', 'cancelled'])
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
