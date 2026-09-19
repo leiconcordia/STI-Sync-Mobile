@@ -14,8 +14,9 @@ class SchoolIdStep extends ConsumerWidget {
     final picker = ImagePicker();
     final xFile = await picker.pickImage(
       source: source,
-      imageQuality: 85, // Reduced from 90 for better upload reliability
-      maxWidth: 1024,   // Reduced from 1600 to prevent oversized uploads
+      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
     );
     if (xFile == null) return;
     
@@ -39,9 +40,48 @@ class SchoolIdStep extends ConsumerWidget {
         children: [
           const StepHeader(
             title: 'Upload School ID / COR',
-            subtitle: 'Take a clear photo of your official STI Student ID card.',
+            subtitle: 'Take a clear photo of the front of your STI Student ID card.',
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Return guidance banner if resubmitting
+          if (state.returnReason != null && state.returnReason!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.error, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Previous Review Note:',
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          state.returnReason!,
+                          style: const TextStyle(color: Colors.black87, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Capture target (Portrait Orientation).
           Center(
@@ -72,14 +112,14 @@ class SchoolIdStep extends ConsumerWidget {
                           Icon(Icons.badge_outlined, size: 54, color: AppColors.accentPurple),
                           SizedBox(height: 12),
                           Text(
-                            'Tap to photograph ID or COR',
+                            'Tap to photograph ID Front',
                             style: TextStyle(
                                 color: AppColors.accentPurple,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15),
                           ),
                           SizedBox(height: 4),
-                          Text('STI ID card front or Registration Form',
+                          Text('STI ID Front or Certificate of Registration',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.grey, fontSize: 12)),
                         ],
@@ -149,14 +189,20 @@ class SchoolIdStep extends ConsumerWidget {
                   children: [
                     Icon(Icons.info_outline, size: 18, color: Color(0xFFE0A100)),
                     SizedBox(width: 8),
-                    Text('Requirements',
+                    Text('STI ID Card Requirements',
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Color(0xFFE0A100))),
                   ],
                 ),
                 const SizedBox(height: 10),
-                ...['Full vertical portrait card visible', 'STI logo and name readable'].map(
+                ...[
+                  'Official STI ID Card Front or Certificate of Registration (COR)',
+                  'STI College Ormoc header & logo clearly visible',
+                  'Printed student name matches your registration name',
+                  'Portrait photo on card must be sharp and free of glare',
+                  'Place ID flat on a plain surface and keep all 4 corners in frame',
+                ].map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
@@ -197,66 +243,101 @@ class _IdPreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('What your Portrait ID should show',
+          const Text('STI Student ID Front Layout',
               style: TextStyle(
                   fontWeight: FontWeight.bold, color: AppColors.accentPurple)),
           const SizedBox(height: 14),
           Center(
             child: Container(
-              width: 140,
-              height: 180,
-              padding: const EdgeInsets.all(10),
+              width: 170,
+              height: 230,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)
+                      color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)
                 ],
               ),
               child: Column(
                 children: [
+                  // STI Header with yellow/blue
                   Container(
-                    height: 22,
+                    height: 28,
                     width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: AppColors.primaryDark,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('STI',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    height: 50,
-                    width: 50,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE7E7E7),
-                      shape: BoxShape.circle,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('STI',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFFFD100))),
+                        SizedBox(width: 4),
+                        Text('COLLEGE ORMOC',
+                            style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                      ],
                     ),
-                    child: const Icon(Icons.person, size: 34, color: Colors.grey),
                   ),
                   const SizedBox(height: 12),
+                  // Portrait Photo
                   Container(
-                    height: 6,
-                    width: 90,
+                    height: 64,
+                    width: 58,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD9D9D9),
+                      color: const Color(0xFFF0F0F0),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 10),
+                  // Name representation
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(3),
                     ),
+                    child: const Text(
+                      'STUDENT FULL NAME',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 5),
-                  Container(
-                    height: 6,
-                    width: 70,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD9D9D9),
-                      borderRadius: BorderRadius.circular(3),
+                  const Spacer(),
+                  // Semester sticker badge
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE08A),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFE0A100), width: 0.8),
+                      ),
+                      child: const Text(
+                        'SY 2026-27 1st Term',
+                        style: TextStyle(
+                          fontSize: 7,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7A5800),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -268,3 +349,4 @@ class _IdPreviewCard extends StatelessWidget {
     );
   }
 }
+

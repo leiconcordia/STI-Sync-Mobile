@@ -14,8 +14,9 @@ class ProfilePhotoStep extends ConsumerWidget {
     final picker = ImagePicker();
     final xFile = await picker.pickImage(
       source: source,
-      imageQuality: 85,
+      imageQuality: 80,
       maxWidth: 1024,
+      maxHeight: 1024,
     );
     if (xFile == null) return;
     ref.read(registrationViewModelProvider.notifier)
@@ -29,6 +30,9 @@ class ProfilePhotoStep extends ConsumerWidget {
     final hasPhoto = state.hasProfilePhoto;
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isSelfieIssue = state.returnReason != null &&
+        (state.returnReason!.toLowerCase().contains('selfie') ||
+            state.returnReason!.toLowerCase().contains('face'));
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset + 32),
@@ -37,10 +41,48 @@ class ProfilePhotoStep extends ConsumerWidget {
         children: [
           const StepHeader(
             title: 'Take Your Profile Photo',
-            subtitle: 'This photo is shown to officers during attendance '
-                'verification. Face must be clearly visible.',
+            subtitle: 'This selfie is used for biometric verification with your STI ID card. Face must be clearly visible.',
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+
+          // Return guidance banner if resubmitting with a face/selfie issue
+          if (isSelfieIssue)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.error, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Previous Review Note:',
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          state.returnReason!,
+                          style: const TextStyle(color: Colors.black87, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Circular capture target.
           Center(
@@ -109,12 +151,12 @@ class ProfilePhotoStep extends ConsumerWidget {
           const SizedBox(height: 20),
 
           const _RequirementsBox(
-            title: 'Photo Requirements',
+            title: 'Selfie Requirements',
             items: [
-              'Face clearly visible and centered',
-              'Good lighting, no shadows on face',
-              'No sunglasses, hats, or face coverings',
-              'Neutral expression, looking at camera',
+              'Face clearly visible, centered, and looking at camera',
+              'Good lighting with no strong backlights or shadows',
+              'No sunglasses, hats, caps, or face masks',
+              'Must match the portrait photo on your STI Student ID',
             ],
           ),
         ],

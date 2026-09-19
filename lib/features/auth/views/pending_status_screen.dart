@@ -34,8 +34,6 @@ class PendingStatusScreen extends ConsumerWidget {
     }
 
     final isReturned = student.status == 'RETURNED';
-    final isAiFlagged = student.rejectionReason != null &&
-        (student.rejectionReason!.contains('AI Flagged') || student.rejectionReason!.contains('AI'));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -52,7 +50,7 @@ class PendingStatusScreen extends ConsumerWidget {
                   bottomRight: Radius.circular(24),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
               child: Column(
                 children: [
                   Row(
@@ -83,17 +81,25 @@ class PendingStatusScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
                   
                   // Status Icon
-                  Icon(
-                    isReturned
-                        ? Icons.error_outline
-                        : (isAiFlagged ? Icons.warning_amber_rounded : Icons.access_time),
-                    color: isReturned
-                        ? AppColors.error
-                        : (isAiFlagged ? Colors.amber : AppColors.secondary),
-                    size: 64,
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: (isReturned ? AppColors.error : AppColors.secondary).withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isReturned
+                          ? Icons.assignment_return_outlined
+                          : Icons.hourglass_top_rounded,
+                      color: isReturned
+                          ? const Color(0xFFFF6B6B)
+                          : AppColors.secondary,
+                      size: 40,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   
@@ -101,11 +107,22 @@ class PendingStatusScreen extends ConsumerWidget {
                   Text(
                     isReturned
                         ? 'Application Returned'
-                        : (isAiFlagged ? 'AI Flagged for Review' : 'Account Under Review'),
+                        : 'Account Under Review',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 24,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isReturned
+                        ? 'Please update the requested document to proceed'
+                        : 'SAO staff will verify your registration within 1-2 days',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 13,
                     ),
                   ),
                 ],
@@ -138,25 +155,23 @@ class PendingStatusScreen extends ConsumerWidget {
                           _TimelineStep(
                             icon: isReturned
                                 ? Icons.cancel
-                                : (isAiFlagged ? Icons.warning_amber_rounded : Icons.access_time_filled),
+                                : Icons.access_time_filled,
                             iconColor: isReturned
                                 ? AppColors.error
-                                : (isAiFlagged ? Colors.amber.shade700 : AppColors.secondary),
+                                : AppColors.secondary,
                             title: isReturned
                                 ? 'Application Returned'
-                                : (isAiFlagged ? 'AI Verification Flagged' : 'SAO Review In Progress'),
+                                : 'SAO Review In Progress',
                             subtitle: isReturned
                                 ? 'Action required — see details below'
-                                : (isAiFlagged
-                                    ? 'Unclear text/photo. SAO Admin review required.'
-                                    : 'Usually 1–3 working days'),
+                                : 'Under manual inspection by SAO staff',
                             isLast: false,
                           ),
                           _TimelineStep(
                             icon: null, // Shows number '3'
                             iconColor: Colors.grey.shade400,
                             title: 'Account Activated',
-                            subtitle: 'Pending',
+                            subtitle: 'Pending verification',
                             isLast: true,
                           ),
                         ],
@@ -164,45 +179,13 @@ class PendingStatusScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Rejection or Flagged Reason Card
+                    // Categorized Rejection or Under Review Card
                     if (student.rejectionReason != null && student.rejectionReason!.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: (isReturned ? AppColors.error : Colors.amber.shade800).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: (isReturned ? AppColors.error : Colors.amber.shade800).withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  isReturned ? Icons.warning_amber_rounded : Icons.info_outline,
-                                  color: isReturned ? AppColors.error : Colors.amber.shade900,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  isReturned ? 'Reason for Return' : 'Verification Note',
-                                  style: TextStyle(
-                                    color: isReturned ? AppColors.error : Colors.amber.shade900,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              student.rejectionReason!,
-                              style: const TextStyle(color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                      ),
+                      _buildGuidanceCard(student.rejectionReason!, isReturned),
+
+                    // Full History of Revisions and Comments
+                    if (student.revisionHistory.isNotEmpty)
+                      _buildRevisionHistoryCard(student.revisionHistory),
                   ],
                 ),
               ),
@@ -217,30 +200,30 @@ class PendingStatusScreen extends ConsumerWidget {
                   if (isReturned)
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
+                      height: 54,
+                      child: ElevatedButton.icon(
                         onPressed: () => _handleRegisterAgain(context, ref, student),
+                        icon: const Icon(Icons.edit_document, size: 20),
+                        label: const Text(
+                          'Update & Resubmit',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryDark,
                           foregroundColor: Colors.white,
+                          elevation: 1,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(28),
                           ),
-                        ),
-                        child: const Text(
-                          'Register Again',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                       ),
                     )
                   else
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: 54,
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          // Note: The UI is already reactive to the stream.
-                          // This is mostly for user feel.
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Status is up to date.'),
@@ -265,11 +248,11 @@ class PendingStatusScreen extends ConsumerWidget {
                     ),
                   const SizedBox(height: 8),
                   if (!isReturned)
-                     const Text(
-                        'Last checked: just now',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                  const SizedBox(height: 16),
+                    const Text(
+                      'Last checked: just now',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  const SizedBox(height: 12),
                   TextButton(
                     onPressed: () => _handleLogOut(ref),
                     child: const Text(
@@ -282,6 +265,252 @@ class PendingStatusScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildGuidanceCard(String rawReason, bool isReturned) {
+    // Strip technical prefixes if legacy strings exist
+    final cleanReason = rawReason
+        .replaceAll(RegExp(r'^AI Verification Returned:\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^AI Flagged for Admin Review:\s*', caseSensitive: false), '')
+        .trim();
+
+    final lower = cleanReason.toLowerCase();
+    IconData icon = Icons.info_outline;
+    String header = isReturned ? 'Verification Note' : 'Review Status';
+    String actionTip = '';
+    Color themeColor = isReturned ? AppColors.error : AppColors.primaryDark;
+
+    if (lower.contains('blur') || lower.contains('glare') || lower.contains('focus') || lower.contains('illegible')) {
+      icon = Icons.camera_alt_outlined;
+      header = 'Photo is Blurry or Has Glare';
+      actionTip = 'Lay your ID flat on a table under clear lighting without camera flash glare, and ensure text is in sharp focus.';
+    } else if (lower.contains('sti') && (lower.contains('not') || lower.contains('unrecognized') || lower.contains('valid'))) {
+      icon = Icons.badge_outlined;
+      header = 'Document Not Recognized as STI ID';
+      actionTip = 'Please upload your official STI Student ID Card (Front) or STI Certificate of Registration (COR).';
+    } else if (lower.contains('name') && (lower.contains('match') || lower.contains('spelling') || lower.contains('different'))) {
+      icon = Icons.person_search_outlined;
+      header = 'Name Mismatch Detected';
+      actionTip = 'Make sure the first and last name entered during registration exactly match the name printed on your school ID.';
+    } else if (lower.contains('selfie') || lower.contains('face')) {
+      icon = Icons.face_retouching_natural_outlined;
+      header = 'Clear Selfie Required';
+      actionTip = 'Take a clear front-facing selfie in good light. Ensure your face is centered and remove caps, sunglasses, or masks.';
+    } else {
+      actionTip = isReturned
+          ? 'Please review your uploaded photos and ensure all information is clear and authentic.'
+          : 'Your registration has been submitted and is currently being verified by SAO staff.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: themeColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: themeColor.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: themeColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: themeColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  header,
+                  style: TextStyle(
+                    color: themeColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            cleanReason,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          if (actionTip.isNotEmpty && isReturned) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: themeColor.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lightbulb_outline, size: 16, color: Color(0xFFE0A100)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      actionTip,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRevisionHistoryCard(List<Map<String, dynamic>> history) {
+    if (history.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history_edu, size: 20, color: AppColors.primaryDark),
+              const SizedBox(width: 8),
+              Text(
+                'Revision History (${history.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, thickness: 0.8),
+          const SizedBox(height: 12),
+          ...history.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final item = entry.value;
+            final revNum = item['revisionNumber'] ?? (idx + 1);
+            final status = item['status']?.toString().toUpperCase() ?? 'RETURNED';
+            final reason = item['reason']?.toString() ?? 'No comment provided.';
+            final rawTime = item['timestamp']?.toString();
+            final reviewedBy = item['reviewedBy'] == 'AI_VERIFICATION'
+                ? 'AI Verification'
+                : 'Adviser / SAO Staff';
+
+            Color badgeColor;
+            if (status == 'ACTIVE') {
+              badgeColor = AppColors.success;
+            } else if (status == 'RETURNED') {
+              badgeColor = AppColors.error;
+            } else {
+              badgeColor = Colors.amber.shade800;
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: badgeColor, width: 1.2),
+                    ),
+                    child: Text(
+                      '$revNum',
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Revision #$revNum ($reviewedBy)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.primaryDark,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                status,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: badgeColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          reason,
+                          style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+                        ),
+                        if (rawTime != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            rawTime.contains('T') ? rawTime.split('T').first : rawTime,
+                            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

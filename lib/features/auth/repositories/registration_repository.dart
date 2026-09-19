@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../../../core/constants/firestore_paths.dart';
 import '../../../core/exceptions/app_exception.dart';
 import '../../../services/cloudinary_service.dart';
@@ -342,22 +343,47 @@ class RegistrationRepository {
         schoolIdFile: schoolIdFile,
         profilePhotoFile: profilePhotoFile,
         registeredName: registeredName,
+        registeredStudentId: data.studentId,
       );
 
       String finalStatus = 'PENDING';
       String? rejectionReason;
+      final revisionHistory = <Map<String, dynamic>>[];
+      int revisionCount = 0;
 
       if (aiResult.decision == AiDecision.autoApprove) {
         finalStatus = 'ACTIVE'; // AUTO-APPROVED BY AI!
+        rejectionReason = null;
+        revisionCount = 0;
       } else if (aiResult.decision == AiDecision.autoReject) {
-        // Instead of deleting the account, mark status as RETURNED with the AI comment
-        // so the student can edit their registration and upload new photos.
+        // Instead of deleting the account, mark status as RETURNED with the user-friendly guidance
+        // so the student can easily fix and upload the correct photo.
         finalStatus = 'RETURNED';
-        rejectionReason = 'AI Verification Returned: ${aiResult.reason}';
+        rejectionReason = aiResult.userFriendlyMessage.isNotEmpty
+            ? aiResult.userFriendlyMessage
+            : aiResult.reason;
+        revisionCount = 1;
+        revisionHistory.add({
+          'revisionNumber': 1,
+          'status': 'RETURNED',
+          'reason': rejectionReason,
+          'reviewedBy': 'AI_VERIFICATION',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
       } else {
         // MANUAL_ADMIN_REVIEW
         finalStatus = 'PENDING';
-        rejectionReason = 'AI Flagged for Admin Review: ${aiResult.reason}';
+        rejectionReason = aiResult.userFriendlyMessage.isNotEmpty
+            ? aiResult.userFriendlyMessage
+            : 'Your registration has been submitted for manual review by SAO staff.';
+        revisionCount = 1;
+        revisionHistory.add({
+          'revisionNumber': 1,
+          'status': 'PENDING',
+          'reason': rejectionReason,
+          'reviewedBy': 'AI_VERIFICATION',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
       }
 
       // 6. Write Firestore document
@@ -371,6 +397,8 @@ class RegistrationRepository {
             schoolIdPhotoUrl: schoolIdPhotoUrl,
             statusOverride: finalStatus,
             rejectionReasonOverride: rejectionReason,
+            revisionCountOverride: revisionCount,
+            revisionHistoryOverride: revisionHistory,
           ));
 
       onProgress?.call(1.0, 'Done!');
@@ -450,6 +478,49 @@ class RegistrationRepository {
     // 4. Run AI Verification on resubmit (ALWAYS triggers on resubmit)
     String finalStatus = 'PENDING';
     String? rejectionReason;
+    final List<Map<String, dynamic>> revisionHistory = [];
+
+    // Fetch existing revision history from Firestore
+    try {
+      final docSnap = await _firestore.collection(FirestorePaths.students).doc(uid).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        final rawHistory = data?['revisionHistory'] as List<dynamic>?;
+        if (rawHistory != null && rawHistory.isNotEmpty) {
+          revisionHistory.addAll(
+            rawHistory.map((item) => Map<String, dynamic>.from(item as Map)),
+          );
+        }
+
+        final existingRejection = data?['rejectionReason'] as String?;
+        final currentDocStatus = (data?['status'] as String? ?? '').toUpperCase();
+
+        if (revisionHistory.isEmpty && ((existingRejection != null && existingRejection.isNotEmpty) || currentDocStatus == 'RETURNED')) {
+          // Backward compatibility for existing rejected registrations without history
+          revisionHistory.add({
+            'revisionNumber': 1,
+            'status': currentDocStatus.isNotEmpty ? currentDocStatus : 'RETURNED',
+            'reason': (existingRejection != null && existingRejection.isNotEmpty)
+                ? existingRejection
+                : 'Returned for revision by Adviser / SAO Staff.',
+            'reviewedBy': 'Adviser / SAO Staff',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+        } else if (revisionHistory.isNotEmpty && existingRejection != null && existingRejection.isNotEmpty) {
+          // If the adviser reviewed and commented on the last revision, attribute it to the adviser
+          final last = revisionHistory.last;
+          if (last['reason'] != existingRejection || last['status'] != 'RETURNED') {
+            last['status'] = 'RETURNED';
+            last['reason'] = existingRejection;
+            last['reviewedBy'] = 'Adviser / SAO Staff';
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching existing revision history: $e');
+    }
+
+    final currentRevisionNumber = revisionHistory.length + 1;
 
     try {
       File? targetProfileFile = profilePhotoFile;
@@ -458,38 +529,90 @@ class RegistrationRepository {
       // If profile photo wasn't changed, download existing Cloudinary URL for AI comparison
       if (targetProfileFile == null && profilePhotoUrl.isNotEmpty) {
         onProgress?.call(0.6, 'Preparing profile photo for AI check…');
+        debugPrint('Downloading existing profile photo from Cloudinary for AI check: $profilePhotoUrl');
         targetProfileFile = await _fileFromUrl(profilePhotoUrl, 'temp_profile_$uid.jpg');
       }
 
       // If school ID photo wasn't changed, download existing Cloudinary URL for AI comparison
       if (targetSchoolIdFile == null && schoolIdPhotoUrl.isNotEmpty) {
         onProgress?.call(0.7, 'Preparing school ID photo for AI check…');
+        debugPrint('Downloading existing school ID from Cloudinary for AI check: $schoolIdPhotoUrl');
         targetSchoolIdFile = await _fileFromUrl(schoolIdPhotoUrl, 'temp_school_id_$uid.jpg');
       }
+
+      debugPrint('=== RESUBMIT AI REVALIDATION CHECK ===');
+      debugPrint('targetProfileFile: ${targetProfileFile?.path} (exists: ${targetProfileFile?.existsSync()})');
+      debugPrint('targetSchoolIdFile: ${targetSchoolIdFile?.path} (exists: ${targetSchoolIdFile?.existsSync()})');
 
       if (targetProfileFile != null && targetSchoolIdFile != null) {
         onProgress?.call(0.78, 'Re-running AI Verification…');
         final registeredName = '${data.firstName} ${data.lastName}'.trim();
+        debugPrint('Invoking AI verifyStudentIdentity on resubmit for "$registeredName"...');
         final aiResult = await _aiService.verifyStudentIdentity(
           schoolIdFile: targetSchoolIdFile,
           profilePhotoFile: targetProfileFile,
           registeredName: registeredName,
+          registeredStudentId: data.studentId,
         );
+
+        debugPrint('Resubmit AI result: decision=${aiResult.decision}, error=${aiResult.errorCode}, reason=${aiResult.reason}');
 
         if (aiResult.decision == AiDecision.autoApprove) {
           finalStatus = 'ACTIVE';
+          rejectionReason = null;
+          revisionHistory.add({
+            'revisionNumber': currentRevisionNumber,
+            'status': 'ACTIVE',
+            'reason': 'Official STI ID Card and student identity approved by AI.',
+            'reviewedBy': 'AI_VERIFICATION',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
         } else if (aiResult.decision == AiDecision.autoReject) {
           finalStatus = 'RETURNED';
-          rejectionReason = 'AI Verification Returned: ${aiResult.reason}';
+          rejectionReason = aiResult.userFriendlyMessage.isNotEmpty
+              ? aiResult.userFriendlyMessage
+              : aiResult.reason;
+          revisionHistory.add({
+            'revisionNumber': currentRevisionNumber,
+            'status': 'RETURNED',
+            'reason': rejectionReason,
+            'reviewedBy': 'AI_VERIFICATION',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
         } else {
           finalStatus = 'PENDING';
-          rejectionReason = 'AI Flagged for Admin Review: ${aiResult.reason}';
+          rejectionReason = aiResult.userFriendlyMessage.isNotEmpty
+              ? aiResult.userFriendlyMessage
+              : 'Your registration has been submitted for manual review by SAO staff.';
+          revisionHistory.add({
+            'revisionNumber': currentRevisionNumber,
+            'status': 'PENDING',
+            'reason': rejectionReason,
+            'reviewedBy': 'AI_VERIFICATION',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
         }
+      } else {
+        debugPrint('⚠️ Resubmit: One or both files missing for AI check (profile=$targetProfileFile, id=$targetSchoolIdFile)');
+        revisionHistory.add({
+          'revisionNumber': currentRevisionNumber,
+          'status': 'PENDING',
+          'reason': 'Submitted for manual review by SAO staff.',
+          'reviewedBy': 'SYSTEM',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
       }
-    } catch (e) {
-      debugPrint('AI Verification exception on resubmit: $e');
+    } catch (e, stack) {
+      debugPrint('AI Verification exception on resubmit: $e\n$stack');
       finalStatus = 'PENDING';
-      rejectionReason = 'AI Flagged for Admin Review: $e';
+      rejectionReason = 'Your registration has been submitted for manual review by SAO staff.';
+      revisionHistory.add({
+        'revisionNumber': currentRevisionNumber,
+        'status': 'PENDING',
+        'reason': rejectionReason,
+        'reviewedBy': 'SYSTEM',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
     }
 
     // 5. Update Firestore document
@@ -503,18 +626,30 @@ class RegistrationRepository {
           schoolIdPhotoUrl: schoolIdPhotoUrl,
           statusOverride: finalStatus,
           rejectionReasonOverride: rejectionReason,
+          revisionCountOverride: revisionHistory.length,
+          revisionHistoryOverride: revisionHistory,
         ));
 
     onProgress?.call(1.0, 'Done!');
     return finalStatus;
   }
 
-  /// Downloads a remote image URL to a local temporary File.
-  Future<File> _fileFromUrl(String url, String filename) async {
-    final response = await http.get(Uri.parse(url));
-    final tempDir = Directory.systemTemp;
-    final file = File('${tempDir.path}/$filename');
-    await file.writeAsBytes(response.bodyBytes);
-    return file;
+  /// Downloads a remote image URL to a local temporary File using application cache directory.
+  Future<File?> _fileFromUrl(String url, String filename) async {
+    try {
+      if (url.isEmpty) return null;
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        await file.writeAsBytes(response.bodyBytes);
+        return file;
+      } else {
+        debugPrint('Failed to download image from $url: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error in _fileFromUrl for $url: $e');
+    }
+    return null;
   }
 }

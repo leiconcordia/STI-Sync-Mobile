@@ -31,6 +31,8 @@ class StudentModel {
   final String registrationSource; // "SELF_REGISTER" | "MANUAL"
   final String addedBy;          // "self" for self-registration
   final String? rejectionReason; // Set by admin on RETURNED status only
+  final int revisionCount;       // Number of revisions / retries
+  final List<Map<String, dynamic>> revisionHistory; // Full history of comments & decisions
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -60,6 +62,8 @@ class StudentModel {
     required this.registrationSource,
     required this.addedBy,
     this.rejectionReason,
+    this.revisionCount = 0,
+    this.revisionHistory = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -110,6 +114,8 @@ class StudentModel {
     String? registrationSource,
     String? addedBy,
     String? rejectionReason,
+    int? revisionCount,
+    List<Map<String, dynamic>>? revisionHistory,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -139,14 +145,46 @@ class StudentModel {
       registrationSource: registrationSource ?? this.registrationSource,
       addedBy: addedBy ?? this.addedBy,
       rejectionReason: rejectionReason ?? this.rejectionReason,
+      revisionCount: revisionCount ?? this.revisionCount,
+      revisionHistory: revisionHistory ?? this.revisionHistory,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-
   factory StudentModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
+    final rawHistory = d['revisionHistory'] as List<dynamic>?;
+    final parsedHistory = rawHistory != null
+        ? rawHistory.map((item) => Map<String, dynamic>.from(item as Map)).toList()
+        : <Map<String, dynamic>>[];
+
+    final rejectionReason = d['rejectionReason'] as String?;
+    final docStatus = (d['status'] as String? ?? 'PENDING').trim().toUpperCase();
+
+    // If there is no history yet but rejectionReason or RETURNED exists, initialize Revision #1
+    if (parsedHistory.isEmpty && ((rejectionReason != null && rejectionReason.isNotEmpty) || docStatus == 'RETURNED')) {
+      parsedHistory.add({
+        'revisionNumber': 1,
+        'status': docStatus == 'RETURNED' ? 'RETURNED' : 'PENDING',
+        'reason': (rejectionReason != null && rejectionReason.isNotEmpty)
+            ? rejectionReason
+            : 'Returned for revision by Adviser / SAO Staff.',
+        'reviewedBy': 'Adviser / SAO Staff',
+        'timestamp': d['updatedAt'] is Timestamp
+            ? (d['updatedAt'] as Timestamp).toDate().toIso8601String()
+            : DateTime.now().toIso8601String(),
+      });
+    } else if (parsedHistory.isNotEmpty && docStatus == 'RETURNED' && rejectionReason != null && rejectionReason.isNotEmpty) {
+      // If adviser marked RETURNED and provided/updated a comment, reflect it on the latest revision
+      final last = parsedHistory.last;
+      if (last['reason'] != rejectionReason || last['status'] != 'RETURNED') {
+        last['status'] = 'RETURNED';
+        last['reason'] = rejectionReason;
+        last['reviewedBy'] = 'Adviser / SAO Staff';
+      }
+    }
+
     return StudentModel(
       id: doc.id,
       authUid: d['authUid'] as String? ?? doc.id,
@@ -169,10 +207,12 @@ class StudentModel {
       email: d['email'] as String? ?? '',
       profilePhotoUrl: d['profilePhotoUrl'] as String? ?? '',
       schoolIdPhotoUrl: d['schoolIdPhotoUrl'] as String? ?? '',
-      status: (d['status'] as String? ?? 'PENDING').trim().toUpperCase(),
+      status: docStatus,
       registrationSource: d['registrationSource'] as String? ?? '',
       addedBy: d['addedBy'] as String? ?? '',
-      rejectionReason: d['rejectionReason'] as String?,
+      rejectionReason: rejectionReason,
+      revisionCount: (d['revisionCount'] as num?)?.toInt() ?? parsedHistory.length,
+      revisionHistory: parsedHistory,
       createdAt: d['createdAt'] is Timestamp
           ? (d['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -208,6 +248,8 @@ class StudentModel {
         'registrationSource': registrationSource,
         'addedBy': addedBy,
         if (rejectionReason != null) 'rejectionReason': rejectionReason,
+        'revisionCount': revisionCount,
+        'revisionHistory': revisionHistory,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -220,6 +262,8 @@ class StudentModel {
     required String schoolIdPhotoUrl,
     String? statusOverride,
     String? rejectionReasonOverride,
+    int? revisionCountOverride,
+    List<Map<String, dynamic>>? revisionHistoryOverride,
   }) {
     return {
       'id': uid,
@@ -248,6 +292,8 @@ class StudentModel {
       'addedBy': addedBy,
       if (rejectionReasonOverride != null || rejectionReason != null)
         'rejectionReason': rejectionReasonOverride ?? rejectionReason,
+      'revisionCount': revisionCountOverride ?? revisionCount,
+      'revisionHistory': revisionHistoryOverride ?? revisionHistory,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sti_sync/features/auth/models/student_model.dart';
 import 'package:sti_sync/features/auth/viewmodels/registration_viewmodel.dart';
 import 'package:sti_sync/services/gemini_ai_verification_service.dart';
 
@@ -246,26 +247,89 @@ void main() {
       expect(result.faceMatchConfidence, 0.94);
     });
 
-    test('AiVerificationResult parses AUTO_REJECT correctly', () {
+    test('AiVerificationResult parses errorCode and userFriendlyMessage correctly', () {
       final json = {
-        'isActualStiId': false,
-        'isBlurry': false,
+        'isActualStiId': true,
+        'isBlurry': true,
         'isSelfieValidFace': true,
-        'nameMatches': false,
-        'extractedName': '',
+        'nameMatches': true,
+        'extractedName': 'Juan Dela Cruz',
         'idPhotoFaceDescription': '',
         'selfiePhotoFaceDescription': '',
         'comparisonAnalysis': '',
         'isSamePerson': false,
-        'facialDiscrepancies': 'Not an STI document',
+        'facialDiscrepancies': '',
         'faceMatchConfidence': 0.0,
         'decision': 'AUTO_REJECT',
-        'reason': 'Uploaded document is not an official STI Student ID card.',
+        'reason': 'Uploaded document is blurry.',
+        'errorCode': 'BLURRY_OR_GLARE',
+        'userFriendlyMessage': 'Photo is blurry or glare was detected. Please place your ID flat under good lighting.',
       };
 
       final result = AiVerificationResult.fromJson(json);
-      expect(result.isActualStiId, isFalse);
-      expect(result.decision, AiDecision.autoReject);
+      expect(result.isBlurry, isTrue);
+      expect(result.errorCode, 'BLURRY_OR_GLARE');
+      expect(result.userFriendlyMessage, contains('Photo is blurry'));
+    });
+
+    test('RegistrationState stores and clears returnReason correctly', () {
+      const stateWithReturn = RegistrationState(
+        returnReason: 'Photo is blurry or glare was detected.',
+      );
+      expect(stateWithReturn.returnReason, 'Photo is blurry or glare was detected.');
+    });
+
+    test('StudentModel revisionCount and revisionHistory track accurately', () {
+      final history = [
+        {
+          'revisionNumber': 1,
+          'status': 'RETURNED',
+          'reason': 'Profile photo inaccurate',
+          'reviewedBy': 'AI_VERIFICATION',
+        },
+        {
+          'revisionNumber': 2,
+          'status': 'RETURNED',
+          'reason': 'Name mismatch on ID',
+          'reviewedBy': 'ADVISER',
+        },
+      ];
+
+      final student = StudentModel(
+        id: 'u1',
+        authUid: 'u1',
+        lastName: 'Concordia',
+        firstName: 'Lei',
+        middleName: '',
+        studentId: '02000123456',
+        dateOfBirth: '2005-01-01',
+        sex: 'Male',
+        contactNumber: '9123456789',
+        courseId: 'c1',
+        courseName: 'BSIT',
+        courseCode: 'BSIT',
+        departmentId: 'd1',
+        departmentName: 'IT',
+        yearLevel: '1st Year',
+        section: 'BSIT101',
+        schoolYear: '2026-2027',
+        semester: '1st Semester',
+        email: 'test@example.com',
+        profilePhotoUrl: '',
+        schoolIdPhotoUrl: '',
+        status: 'RETURNED',
+        registrationSource: 'SELF_REGISTER',
+        addedBy: 'self',
+        revisionCount: 2,
+        revisionHistory: history,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      expect(student.revisionCount, 2);
+      expect(student.revisionHistory.length, 2);
+      expect(student.revisionHistory[0]['reason'], 'Profile photo inaccurate');
+      expect(student.revisionHistory[1]['reviewedBy'], 'ADVISER');
     });
   });
 }

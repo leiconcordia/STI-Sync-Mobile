@@ -59,6 +59,7 @@ class RegistrationState {
 
   // Submission
   final String? existingUid; // If non-null, this is a resubmit
+  final String? returnReason; // Note or rejection reason from previous submission
   final bool isSubmitting;
   final double submitProgress;
   final String submitProgressLabel;
@@ -100,6 +101,7 @@ class RegistrationState {
     this.existingSchoolIdUrl,
     this.confirmedAccuracy = false,
     this.existingUid,
+    this.returnReason,
     this.isSubmitting = false,
     this.submitProgress = 0,
     this.submitProgressLabel = '',
@@ -323,6 +325,8 @@ class RegistrationState {
     String? existingSchoolIdUrl,
     bool? confirmedAccuracy,
     String? existingUid,
+    String? returnReason,
+    bool clearReturnReason = false,
     bool? isSubmitting,
     double? submitProgress,
     String? submitProgressLabel,
@@ -367,6 +371,7 @@ class RegistrationState {
       existingSchoolIdUrl: existingSchoolIdUrl ?? this.existingSchoolIdUrl,
       confirmedAccuracy: confirmedAccuracy ?? this.confirmedAccuracy,
       existingUid: existingUid ?? this.existingUid,
+      returnReason: clearReturnReason ? null : (returnReason ?? this.returnReason),
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submitProgress: submitProgress ?? this.submitProgress,
       submitProgressLabel: submitProgressLabel ?? this.submitProgressLabel,
@@ -721,6 +726,7 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
       email: student.email,
       existingProfilePhotoUrl: student.profilePhotoUrl,
       existingSchoolIdUrl: student.schoolIdPhotoUrl,
+      returnReason: student.rejectionReason,
       currentStep: 0,
     );
     
