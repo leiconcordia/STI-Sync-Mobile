@@ -110,8 +110,22 @@ class OfflineAttendanceRepository {
         eventEndTime: Value(eventEndTime.millisecondsSinceEpoch),
         proposalStatus: Value(eventData['proposalStatus'] as String? ?? 'approved'),
         gracePeriodMinutes: Value(gracePeriod),
-        dataDownloaded: const Value(1),
-        downloadedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        dataDownloaded: Value(existingAssignment.dataDownloaded),
+        downloadedAt: Value(existingAssignment.downloadedAt),
+      ));
+    } else {
+      await _scannerDao.saveAssignment(ScannerAssignmentsCompanion(
+        eventId: Value(eventId),
+        eventTitle: Value(event.title),
+        eventFormat: Value(venue),
+        sessions: Value(json.encode(sessions)),
+        officerUserId: const Value(''),
+        permissions: const Value('{}'),
+        eventEndTime: Value(eventEndTime.millisecondsSinceEpoch),
+        proposalStatus: Value(eventData['proposalStatus'] as String? ?? 'approved'),
+        gracePeriodMinutes: Value(gracePeriod),
+        dataDownloaded: const Value(0),
+        downloadedAt: const Value(0),
       ));
     }
 
@@ -297,25 +311,46 @@ class OfflineAttendanceRepository {
   }
 
 
+  Future<T> _retryOnLocked<T>(Future<T> Function() action, {int maxAttempts = 3}) async {
+    int attempts = 0;
+    while (true) {
+      try {
+        attempts++;
+        return await action();
+      } catch (e) {
+        final errStr = e.toString().toLowerCase();
+        final isLocked = errStr.contains('database is locked') || errStr.contains('busy');
+        if (isLocked && attempts < maxAttempts) {
+          debugPrint('OfflineAttendanceRepository: Database locked, retrying ($attempts/$maxAttempts)...');
+          await Future.delayed(Duration(milliseconds: 150 * attempts));
+          continue;
+        }
+        rethrow;
+      }
+    }
+  }
+
   Future<void> _finalizeDownload(
     String eventId,
     List<CachedParticipantsCompanion> participants,
     List<CachedPayablesCompanion> payables,
   ) async {
-    // Purge existing data for this event to avoid stale records
-    await _participantsDao.purgeEventParticipants(eventId);
-    await _payablesDao.purgeEventPayables(eventId);
+    await _retryOnLocked(() async {
+      // Purge existing data for this event to avoid stale records
+      await _participantsDao.purgeEventParticipants(eventId);
+      await _payablesDao.purgeEventPayables(eventId);
 
-    // Insert fresh data
-    if (participants.isNotEmpty) {
-      await _participantsDao.upsertParticipants(participants);
-    }
-    for (final p in payables) {
-      await _payablesDao.upsertPayable(p);
-    }
+      // Insert fresh data using batch operations
+      if (participants.isNotEmpty) {
+        await _participantsDao.upsertParticipants(participants);
+      }
+      if (payables.isNotEmpty) {
+        await _payablesDao.batchUpsertPayables(payables);
+      }
 
-    // Mark as downloaded
-    await _scannerDao.markDataDownloaded(eventId);
+      // Mark as downloaded
+      await _scannerDao.markDataDownloaded(eventId);
+    });
 
     // Fetch existing cloud attendance and flagged attendance records into local SQLite
     await fetchAndCacheRemoteAttendance(eventId);
@@ -339,7 +374,9 @@ class OfflineAttendanceRepository {
 
       // 0. Delete all previously-synced records for this event so that
       //    records deleted from Firestore are also removed locally.
-      await attendanceDao.deleteSyncedForEvent(eventId);
+      await _retryOnLocked(() => attendanceDao.deleteSyncedForEvent(eventId));
+
+      final List<OfflineAttendanceCompanion> recordsToUpsert = [];
 
       // 1. Fetch normal attendance subcollection
       final attendanceSnap = await _firestore
@@ -362,7 +399,7 @@ class OfflineAttendanceRepository {
           scannedAtMs = scannedAtTs;
         }
 
-        final companion = OfflineAttendanceCompanion(
+        recordsToUpsert.add(OfflineAttendanceCompanion(
           localId: Value(localId),
           eventId: Value(eventId),
           sessionId: Value(data['sessionId'] as String? ?? ''),
@@ -380,9 +417,7 @@ class OfflineAttendanceRepository {
           flagReason: Value(data['flagReason'] as String?),
           flagNote: Value(data['flagNote'] as String?),
           isManual: Value(data['isManual'] == true ? 1 : 0),
-        );
-
-        await attendanceDao.upsertOfflineRecord(companion);
+        ));
       }
 
       // 2. Fetch flagged attendance subcollection
@@ -406,7 +441,7 @@ class OfflineAttendanceRepository {
           scannedAtMs = scannedAtTs;
         }
 
-        final companion = OfflineAttendanceCompanion(
+        recordsToUpsert.add(OfflineAttendanceCompanion(
           localId: Value(localId),
           eventId: Value(eventId),
           sessionId: Value(data['sessionId'] as String? ?? ''),
@@ -424,9 +459,11 @@ class OfflineAttendanceRepository {
           flagReason: Value(data['flagReason'] as String?),
           flagNote: Value(data['flagNote'] as String?),
           isManual: Value(data['isManual'] == true ? 1 : 0),
-        );
+        ));
+      }
 
-        await attendanceDao.upsertOfflineRecord(companion);
+      if (recordsToUpsert.isNotEmpty) {
+        await _retryOnLocked(() => attendanceDao.batchUpsertOfflineRecords(recordsToUpsert));
       }
     } catch (e) {
       debugPrint('OfflineAttendanceRepository: Error fetching remote attendance: $e');

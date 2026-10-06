@@ -52,7 +52,7 @@ class DuesListView extends ConsumerWidget {
         return Column(
           children: dues.map((due) => Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
-            child: _buildDuesCard(context, due, myOrgs),
+            child: _buildDuesCard(context, ref, due, myOrgs),
           )).toList(),
         );
       },
@@ -76,8 +76,11 @@ class DuesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildDuesCard(BuildContext context, PayableModel due, List<dynamic> myOrgs) {
+  Widget _buildDuesCard(BuildContext context, WidgetRef ref, PayableModel due, List<dynamic> myOrgs) {
     final bool isCampus = due.isCampusWide;
+    final event = due.eventId != null ? ref.watch(eventDetailProvider(due.eventId!)).valueOrNull : null;
+    final bool isArchivedEvent = due.isArchived || (event?.isArchived == true);
+
     String orgName = 'Organization';
     if (due.organizationName?.isNotEmpty == true) {
       orgName = due.organizationName!;
@@ -183,21 +186,52 @@ class DuesListView extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isArchivedEvent) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF64748B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF64748B).withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.archive_outlined, size: 11, color: Color(0xFF64748B)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Archived Event',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -377,6 +411,30 @@ class DuesListView extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         'Event cancelled. ${formatCurrency((due.refundDue ?? 0) > 0 ? due.refundDue! : paid)} is due back to you. Visit the organization treasurer or SAO office to claim your refund.',
+                        style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (isArchivedEvent && !due.isCleared) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Event concluded. Outstanding balance must be settled at the Cashier / Officer for semester clearance.',
                         style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.w500),
                       ),
                     ),

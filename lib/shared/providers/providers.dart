@@ -6,10 +6,13 @@ import '../../core/firebase/firebase_service.dart';
 import '../../features/auth/models/student_model.dart';
 import '../../features/auth/repositories/auth_repository.dart';
 import '../../features/auth/repositories/registration_repository.dart';
+import '../../features/auth/repositories/profile_completion_repository.dart';
 import '../../features/auth/viewmodels/auth_viewmodel.dart';
 import '../../features/auth/viewmodels/registration_viewmodel.dart';
+import '../../features/auth/viewmodels/profile_completion_viewmodel.dart';
 import '../../services/cloudinary_service.dart';
 import '../../features/sync/services/connectivity_service.dart';
+export '../../features/sync/services/connectivity_service.dart';
 import '../../features/sync/services/sync_service.dart';
 import '../../features/sync/services/event_cleanup_service.dart';
 import '../../features/events/repositories/event_repository.dart';
@@ -27,6 +30,12 @@ import '../../features/announcements/models/announcement_model.dart';
 import '../../features/announcements/repositories/announcements_repository.dart';
 import '../../features/semester/models/semester_model.dart';
 import '../../features/semester/repositories/semester_repository.dart';
+import '../../features/certificates/models/issued_certificate_model.dart';
+import '../../features/certificates/models/certificate_template_model.dart';
+import '../../features/certificates/repositories/certificate_repository.dart';
+import '../../features/certificates/viewmodels/certificate_viewmodel.dart';
+import '../../features/profile/models/student_attendance_record.dart';
+import '../../features/profile/repositories/student_attendance_repository.dart';
 import '../../core/local/app_database.dart';
 
 /// Semester feature
@@ -143,8 +152,12 @@ final organizationRepositoryProvider = Provider<OrganizationRepository>((ref) {
 final myOrganizationsProvider = StreamProvider<List<OrganizationMemberModel>>((ref) {
   final authState = ref.watch(authViewModelProvider);
   final uid = authState.student?.id ?? '';
-  if (uid.isEmpty) return Stream.value([]);
-  return ref.watch(organizationRepositoryProvider).watchStudentOrganizations(uid);
+  final studentIdNumber = authState.student?.studentId ?? '';
+  if (uid.isEmpty && studentIdNumber.isEmpty) return Stream.value([]);
+  return ref.watch(organizationRepositoryProvider).watchStudentOrganizations(
+        uid,
+        studentIdNumber: studentIdNumber,
+      );
 });
 
 /// Events feature
@@ -177,7 +190,15 @@ final eventsStreamProvider = StreamProvider<List<EventModel>>((ref) {
 });
 
 final activeSemesterModelProvider = StreamProvider<SemesterModel?>((ref) {
-  return ref.watch(semesterRepositoryProvider).watchActiveSemester();
+  final student = ref.watch(authViewModelProvider).student;
+  final isShs = student?.isShs;
+  return ref.watch(semesterRepositoryProvider).watchActiveSemester(isShs: isShs).map((sem) {
+    if (sem == null) return null;
+    if (isShs != null) {
+      return sem.forCohort(isShs: isShs);
+    }
+    return sem;
+  });
 });
 
 final activeSemesterProvider = StreamProvider<String>((ref) {
@@ -236,6 +257,23 @@ final registrationRepositoryProvider = Provider<RegistrationRepository>((ref) {
 final registrationViewModelProvider =
     StateNotifierProvider<RegistrationViewModel, RegistrationState>(
   (ref) => RegistrationViewModel(ref.watch(registrationRepositoryProvider)),
+);
+
+/// First-Login Profile Completion feature
+final profileCompletionRepositoryProvider =
+    Provider<ProfileCompletionRepository>((ref) {
+  return ProfileCompletionRepository(
+    ref.watch(authProvider),
+    ref.watch(firestoreProvider),
+    ref.watch(cloudinaryServiceProvider),
+  );
+});
+
+final profileCompletionViewModelProvider =
+    StateNotifierProvider<ProfileCompletionViewModel, ProfileCompletionState>(
+  (ref) => ProfileCompletionViewModel(
+    ref.watch(profileCompletionRepositoryProvider),
+  ),
 );
 
 enum EventFilterCategory { all, schoolSao, myOrgs, completed }
@@ -394,7 +432,10 @@ final actualParticipantCountProvider =
 
 final connectivityStatusProvider = StreamProvider<bool>((ref) {
   final service = ref.watch(connectivityServiceProvider);
-  return service.connectivityStream;
+  return () async* {
+    yield service.isOnline;
+    yield* service.connectivityStream;
+  }();
 });
 
 /// QR Ticket feature
@@ -433,22 +474,32 @@ final scannerRepositoryProvider = Provider<ScannerRepository>((ref) {
 final scannerViewModelProvider =
     StateNotifierProvider<ScannerViewModel, ScannerState>(
   (ref) {
+    final db = ref.watch(appDatabaseProvider);
     final viewModel = ScannerViewModel(
       ref.watch(scannerRepositoryProvider),
       ref.watch(offlineAttendanceRepositoryProvider),
+      db.attendanceDao,
+      ref.watch(eventCleanupServiceProvider),
+      ref.watch(syncServiceProvider),
     );
 
-    // Automatically load assignments when the user logs in
+    // Initial check: if already authenticated, immediately load assignments
+    final currentStudentId = ref.watch(authViewModelProvider).student?.id;
+    if (currentStudentId != null && currentStudentId.isNotEmpty) {
+      viewModel.loadAssignments(currentStudentId);
+    }
+
+    // Automatically reload assignments when the authenticated student changes, or clear on logout
     ref.listen<String?>(
       authViewModelProvider.select((state) => state.student?.id),
       (previous, next) {
         if (next != null && next.isNotEmpty && next != previous) {
-          // Delay the state modification to avoid modifying the provider
-          // while the widget tree is still building.
-          Future.microtask(() => viewModel.loadAssignments(next));
+          viewModel.clear();
+          viewModel.loadAssignments(next);
+        } else if (next == null || next.isEmpty) {
+          viewModel.clear();
         }
       },
-      fireImmediately: true,
     );
 
     return viewModel;
@@ -456,8 +507,8 @@ final scannerViewModelProvider =
 );
 
 /// Convenience stream: resolves the current user UID and streams active
-/// scanner assignments. Watches authViewModelProvider so it re-subscribes
-/// if the user logs in/out.
+/// scanner assignments (or assignments that have unsynced attendance needing upload).
+/// Watches authViewModelProvider so it re-subscribes if the user logs in/out.
 final activeScannerAssignmentsProvider = StreamProvider(
   (ref) {
     final authState = ref.watch(authViewModelProvider);
@@ -467,7 +518,7 @@ final activeScannerAssignmentsProvider = StreamProvider(
     }
     return ref.watch(scannerRepositoryProvider).watchScannerAssignments(uid).map(
       (assignments) {
-        final active = assignments.where((a) => a.canScan).toList();
+        final active = assignments.where((a) => a.shouldDisplay).toList();
         active.sort((a, b) => b.eventEndTime.compareTo(a.eventEndTime));
         return active;
       },
@@ -506,3 +557,47 @@ final eventCleanupServiceProvider = Provider<EventCleanupService>((ref) {
   ref.onDispose(() => service.dispose());
   return service;
 });
+
+/// Certificates feature
+final certificateRepositoryProvider = Provider<CertificateRepository>((ref) {
+  return CertificateRepository(ref.watch(firestoreProvider));
+});
+
+final myCertificatesStreamProvider = StreamProvider<List<IssuedCertificateModel>>((ref) {
+  final authState = ref.watch(authViewModelProvider);
+  final student = authState.student;
+  if (student == null) {
+    return Stream.value([]);
+  }
+  return ref.watch(certificateRepositoryProvider).streamMyCertificates(
+    studentId: student.studentId,
+    authUid: student.id,
+  );
+});
+
+final certificateTemplateProvider = FutureProvider.family<CertificateTemplateModel?, String>((ref, templateId) {
+  return ref.watch(certificateRepositoryProvider).getTemplateById(templateId);
+});
+
+final certificateViewModelProvider = StateNotifierProvider<CertificateViewModel, CertificateDownloadState>((ref) {
+  return CertificateViewModel(ref.watch(certificateRepositoryProvider));
+});
+
+/// Student Attendance History feature
+final studentAttendanceRepositoryProvider = Provider<StudentAttendanceRepository>((ref) {
+  return StudentAttendanceRepository(ref.watch(firestoreProvider));
+});
+
+final myAttendanceHistoryStreamProvider = StreamProvider<List<StudentAttendanceRecord>>((ref) {
+  final authState = ref.watch(authViewModelProvider);
+  final student = authState.student;
+  if (student == null) {
+    return Stream.value([]);
+  }
+  return ref.watch(studentAttendanceRepositoryProvider).streamStudentAttendance(
+    studentId: student.studentId,
+    authUid: student.id,
+  );
+});
+
+

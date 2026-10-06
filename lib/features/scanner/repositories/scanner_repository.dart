@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/scanner_assignment_model.dart';
 import '../../../core/local/daos/scanner_dao.dart';
+import '../../../core/local/daos/attendance_dao.dart';
 import '../../../core/constants/firestore_paths.dart';
 
 /// Repository for all scanner-related Firestore and local database operations.
@@ -72,32 +73,20 @@ class ScannerRepository {
         queryStreams,
         (memberSnapshots) {
           final memberIds = <String>{};
-          final orgIds = <String>{};
-          final studentIds = Set<String>.from(initialStudentIds);
 
           for (final snap in memberSnapshots) {
             for (final doc in snap.docs) {
               memberIds.add(doc.id);
-              final data = doc.data() as Map<String, dynamic>? ?? {};
-              final orgId = (data['organizationId'] as String?) ??
-                  (data['organization_id'] as String?);
-              if (orgId != null && orgId.isNotEmpty) orgIds.add(orgId);
-
-              final sId = (data['studentId'] as String?) ??
-                  (data['student_id'] as String?);
-              if (sId != null && sId.isNotEmpty) studentIds.add(sId);
             }
           }
 
           return {
             'memberIds': memberIds.toList(),
-            'orgIds': orgIds.toList(),
-            'studentIds': studentIds.toList(),
+            'studentIds': initialStudentIds.toList(),
           };
         },
       ).switchMap((meta) {
         final memberIds = meta['memberIds'] as List<String>;
-        final orgIds = meta['orgIds'] as List<String>;
         final studentIds = meta['studentIds'] as List<String>;
 
         final officerStreams = <Stream<QuerySnapshot>>[];
@@ -131,36 +120,15 @@ class ScannerRepository {
             );
             officerStreams.add(
               _firestore
-                  .collection(FirestorePaths.organizationOfficers)
-                  .where('memberId', whereIn: chunk)
-                  .snapshots(),
+                .collection(FirestorePaths.organizationOfficers)
+                .where('memberId', whereIn: chunk)
+                .snapshots(),
             );
             officerStreams.add(
               _firestore
-                  .collection(FirestorePaths.organizationOfficers)
-                  .where('member_id', whereIn: chunk)
-                  .snapshots(),
-            );
-          }
-        }
-
-        if (orgIds.isNotEmpty) {
-          for (var i = 0; i < orgIds.length; i += 10) {
-            final chunk = orgIds.sublist(
-              i,
-              i + 10 > orgIds.length ? orgIds.length : i + 10,
-            );
-            officerStreams.add(
-              _firestore
-                  .collection(FirestorePaths.organizationOfficers)
-                  .where('organizationId', whereIn: chunk)
-                  .snapshots(),
-            );
-            officerStreams.add(
-              _firestore
-                  .collection(FirestorePaths.organizationOfficers)
-                  .where('organization_id', whereIn: chunk)
-                  .snapshots(),
+                .collection(FirestorePaths.organizationOfficers)
+                .where('member_id', whereIn: chunk)
+                .snapshots(),
             );
           }
         }
@@ -171,7 +139,7 @@ class ScannerRepository {
             final officerDocIds = <String>{};
 
             // Include student's official STI student numbers & Auth UIDs
-            for (final sId in studentIds) {
+            for (final sId in initialStudentIds) {
               if (sId.isNotEmpty) officerDocIds.add(sId);
             }
 
@@ -192,17 +160,6 @@ class ScannerRepository {
                     (data['officer_id'] as String?);
                 if (officerId != null && officerId.isNotEmpty) {
                   officerDocIds.add(officerId);
-                }
-
-                final studentId = (data['studentId'] as String?) ??
-                    (data['student_id'] as String?);
-                if (studentId != null && studentId.isNotEmpty) {
-                  officerDocIds.add(studentId);
-                }
-
-                final studentAuthUid = data['studentAuthUid'] as String?;
-                if (studentAuthUid != null && studentAuthUid.isNotEmpty) {
-                  officerDocIds.add(studentAuthUid);
                 }
               }
             }
@@ -278,10 +235,23 @@ class ScannerRepository {
     await _scannerDao.saveAssignment(assignment.toCompanion());
   }
 
-  /// Returns all scanner assignments cached locally in Drift.
-  Future<List<ScannerAssignmentModel>> getLocalAssignments() async {
-    final entities = await _scannerDao.getAllAssignments();
+  /// Returns scanner assignments cached locally in Drift.
+  /// If [officerUserId] is provided, only assignments for that officer are returned.
+  Future<List<ScannerAssignmentModel>> getLocalAssignments([String? officerUserId]) async {
+    final entities = officerUserId != null && officerUserId.isNotEmpty
+        ? await _scannerDao.getAssignmentsForOfficer(officerUserId)
+        : await _scannerDao.getAllAssignments();
     return entities.map(ScannerAssignmentModel.fromDrift).toList();
+  }
+
+  /// Clears all locally cached scanner assignments from Drift.
+  Future<void> clearLocalAssignments() async {
+    await _scannerDao.clearAllAssignments();
+  }
+
+  /// Deletes a specific scanner assignment from Drift.
+  Future<void> deleteLocalAssignment(String eventId) async {
+    await _scannerDao.deleteAssignment(eventId);
   }
 
   /// Returns true if the event's last session end time is in the past.
@@ -311,7 +281,20 @@ class ScannerRepository {
       final dataMap = data;
 
       final sessions = dataMap['sessions'] as List<dynamic>? ?? [];
-      if (sessions.isEmpty) return true;
+      if (sessions.isEmpty) {
+        final rootDate = (dataMap['date'] as String?)?.trim() ??
+            (dataMap['startDate'] as String?)?.trim();
+        if (rootDate != null && rootDate.isNotEmpty) {
+          final rootEndTime = (dataMap['endTime'] as String?)?.trim() ?? '23:59';
+          try {
+            final dt = DateTime.parse('${rootDate}T$rootEndTime:00');
+            return DateTime.now().isAfter(dt.add(const Duration(hours: 12)));
+          } catch (_) {
+            return false;
+          }
+        }
+        return false;
+      }
 
       DateTime? latestEndTime;
       for (final session in sessions) {
@@ -335,22 +318,29 @@ class ScannerRepository {
     }
   }
 
-  /// Deletes all locally cached assignments whose events have ended.
-  ///
-  /// Should be called after each Firestore stream emission to keep the local
-  /// cache clean. Calls `EventCleanupService.purgeEventData()` for each
-  /// expired event once that service is implemented.
-  Future<void> removeExpiredAssignments() async {
+  /// Safely cleans up locally cached assignments that have been officially concluded by Admin,
+  /// provided they have ZERO unsynced offline attendance records remaining.
+  Future<void> cleanConcludedAssignments(AttendanceDao attendanceDao) async {
     final assignments = await _scannerDao.getAllAssignments();
 
     for (final assignment in assignments) {
       // Do not delete cancelled assignments so their cancelled status stays visible to officers
       if (assignment.proposalStatus.toLowerCase().contains('cancel')) continue;
-      final hasEnded = await isEventEnded(assignment.eventId);
-      if (hasEnded) {
+
+      // Strict Guard: Check if there are pending unsynced records in SQLite
+      final pending = await attendanceDao.getPendingSyncsForEvent(assignment.eventId);
+      if (pending.isNotEmpty) {
+        debugPrint(
+          'ScannerRepository: Retaining concluded assignment ${assignment.eventId} '
+          'due to ${pending.length} unsynced attendance records.',
+        );
+        continue;
+      }
+
+      // Only clean up if the event status is officially marked completed / concluded
+      if (assignment.proposalStatus.toLowerCase() == 'completed') {
+        debugPrint('ScannerRepository: Cleaning up verified synced concluded assignment ${assignment.eventId}');
         await _scannerDao.deleteAssignment(assignment.eventId);
-        // TODO: EventCleanupService.purgeEventData(assignment.eventId)
-        // — deletes cached_participants and offline_attendance rows for this event
       }
     }
   }

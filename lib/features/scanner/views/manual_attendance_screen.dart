@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/local/app_database.dart';
 import '../../../shared/providers/providers.dart';
+import '../models/scanner_assignment_model.dart';
+import '../utils/session_timing_evaluator.dart';
 
 /// Screen for manually recording attendance when QR scanning is not possible.
 ///
@@ -138,6 +140,34 @@ class _ManualAttendanceScreenState
       return;
     }
 
+    if (_gateType == 'Time-In' && !_canCheckIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            !(_assignment?.canCheckIn ?? false)
+                ? 'Permission Denied: You do not have permission to record Time-In.'
+                : 'Cannot record Time-In: ${_timeInTiming.message}',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_gateType == 'Time-Out' && !_canCheckOut) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            !(_assignment?.canCheckOut ?? false)
+                ? 'Permission Denied: You do not have permission to record Time-Out.'
+                : 'Cannot record Time-Out: ${_timeOutTiming.message}',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (_isUnknownAttendee && _nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -203,6 +233,10 @@ class _ManualAttendanceScreenState
 
       final localId = 'manual_${studentId.isNotEmpty ? studentId : studentName.hashCode}_${sessionId}_${_gateType}_$now';
 
+      final scanStatus = _gateType == 'Time-In'
+          ? (_timeInTiming.attendanceStatus ?? 'Present')
+          : 'Present';
+
       final record = OfflineAttendanceCompanion(
         localId: drift.Value(localId),
         eventId: drift.Value(widget.eventId),
@@ -215,7 +249,7 @@ class _ManualAttendanceScreenState
         scannedAt: drift.Value(now),
         synced: const drift.Value(0),
         conflictResolved: const drift.Value(0),
-        status: const drift.Value('Present'),
+        status: drift.Value(scanStatus),
         isFlagged: const drift.Value(1),
         flagReason: drift.Value(_flagReason),
         flagNote: drift.Value(
@@ -258,43 +292,103 @@ class _ManualAttendanceScreenState
     }
   }
 
-  // ─── Permissions ────────────────────────────────────────────────────────
+  // ─── Permissions & Timing ──────────────────────────────────────────────
 
-  Map<String, dynamic> get _permissions {
+  ScannerAssignmentModel? get _assignment {
     final scannerState = ref.read(scannerViewModelProvider);
-    final assignment = scannerState.assignments.firstWhere(
-      (a) => a.eventId == widget.eventId,
-      orElse: () => scannerState.assignments.first,
-    );
-    return assignment.permissions;
+    for (final a in scannerState.assignments) {
+      if (a.eventId == widget.eventId) return a;
+    }
+    return null;
   }
 
-  bool get _canCheckIn =>
-      _permissions['fullAccess'] == true ||
-      _permissions['canCheckIn'] == true;
-
-  bool get _canCheckOut {
+  Map<String, dynamic> get _activeSession {
+    final assignment = _assignment;
+    if (assignment == null) return {};
     final scannerState = ref.read(scannerViewModelProvider);
-    final assignment = scannerState.assignments.firstWhere(
-      (a) => a.eventId == widget.eventId,
-      orElse: () => scannerState.assignments.first,
-    );
     final activeSessionId = scannerState.selectedSessionId ??
         (assignment.sessions.isNotEmpty ? assignment.sessions.first['id'] as String? : null);
-    final activeSession = assignment.sessions.firstWhere(
+    return assignment.sessions.firstWhere(
       (s) => s['id'] == activeSessionId,
       orElse: () => assignment.sessions.isNotEmpty ? assignment.sessions.first : {},
     );
-    final bool sessionHasTimeOut = activeSession['hasTimeOut'] == true;
-    final permissionCheckOut = _permissions['fullAccess'] == true ||
-        _permissions['canCheckOut'] == true;
-    return permissionCheckOut && sessionHasTimeOut;
+  }
+
+  GateTimingResult get _timeInTiming => SessionTimingEvaluator.evaluateTimeIn(
+        _activeSession,
+        fallbackGrace: _assignment?.gracePeriodMinutes,
+        fallbackLateThreshold: _assignment?.lateThresholdMinutes,
+      );
+
+  GateTimingResult get _timeOutTiming => SessionTimingEvaluator.evaluateTimeOut(
+        _activeSession,
+        fallbackLateThreshold: _assignment?.lateThresholdMinutes,
+      );
+
+  bool get _canCheckIn =>
+      (_assignment?.canCheckIn ?? false) && _timeInTiming.isOpen;
+
+  bool get _canCheckOut {
+    final assignment = _assignment;
+    if (assignment == null) return false;
+    final bool sessionHasTimeOut = _activeSession['hasTimeOut'] == true;
+    return assignment.canCheckOut && sessionHasTimeOut && _timeOutTiming.isOpen;
   }
 
   // ─── Build ──────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final assignment = _assignment;
+    if (assignment != null && !assignment.allowManualAttendance) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          title: const Text('Manual Attendance'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                const Text(
+                  'Permission Denied',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You do not have permission to record manual or flagged attendance for this event.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => context.pop(),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -695,6 +789,29 @@ class _ManualAttendanceScreenState
   }
 
   Widget _buildGateTypeSelector() {
+    if (!_canCheckIn && !_canCheckOut) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.amber.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.lock_clock, color: Colors.amber.shade800, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Gate attendance is currently locked outside active scan windows or due to scanner permissions.',
+                style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Row(
       children: [
         if (_canCheckIn)

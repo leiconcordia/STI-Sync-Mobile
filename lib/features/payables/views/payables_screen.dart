@@ -28,8 +28,13 @@ class _PayablesScreenState extends ConsumerState<PayablesScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
+          color: AppColors.primary,
           onRefresh: () async {
+            await ref.read(connectivityServiceProvider).checkConnectivity();
             ref.invalidate(studentPayablesStreamProvider);
+            ref.invalidate(payablesSummaryProvider);
+            ref.invalidate(activeSemesterProvider);
+            ref.invalidate(activeSemesterModelProvider);
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),

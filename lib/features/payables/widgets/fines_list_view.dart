@@ -121,7 +121,7 @@ class FinesListView extends ConsumerWidget {
             const SizedBox(height: 16),
             ...fines.map((fine) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
-              child: _buildFineCard(context, fine, myOrgs),
+              child: _buildFineCard(context, ref, fine, myOrgs),
             )),
           ],
         );
@@ -146,8 +146,11 @@ class FinesListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildFineCard(BuildContext context, PayableModel fine, List<dynamic> myOrgs) {
+  Widget _buildFineCard(BuildContext context, WidgetRef ref, PayableModel fine, List<dynamic> myOrgs) {
     final bool isCampus = fine.isCampusWide;
+    final event = fine.eventId != null ? ref.watch(eventDetailProvider(fine.eventId!)).valueOrNull : null;
+    final bool isArchivedEvent = fine.isArchived || (event?.isArchived == true);
+
     String orgName = 'Organization';
     if (fine.organizationName?.isNotEmpty == true) {
       orgName = fine.organizationName!;
@@ -231,19 +234,50 @@ class FinesListView extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: fineStatusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    fineStatusText,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: fineStatusColor,
-                      fontWeight: FontWeight.bold,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isArchivedEvent) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF64748B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF64748B).withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.archive_outlined, size: 11, color: Color(0xFF64748B)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Archived Event',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: fineStatusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        fineStatusText,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: fineStatusColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -287,6 +321,30 @@ class FinesListView extends ConsumerWidget {
                 ),
               ],
             ),
+            if (isArchivedEvent && !fine.isCleared) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Event concluded. Outstanding balance must be settled at the Cashier / Officer for semester clearance.',
+                        style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Divider(color: Colors.grey.shade200, height: 1),
             const SizedBox(height: 8),

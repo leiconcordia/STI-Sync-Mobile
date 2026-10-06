@@ -34,16 +34,37 @@ class EventRepository {
                 .map((doc) => doc.exists ? StudentModel.fromFirestore(doc) : null)
             : Stream.value(null));
 
-    final firestoreEventsStream = _firestore
-        .collection(FirestorePaths.events)
-        .where('proposalStatus', whereIn: ['approved', 'cancelled'])
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((doc) => EventModel.fromFirestore(doc)).toList());
+    Stream<List<EventModel>> streamFromCollection(String collectionName) {
+      return _firestore
+          .collection(collectionName)
+          .snapshots()
+          .map((snap) => snap.docs
+              .map((doc) => EventModel.fromFirestore(doc))
+              .where((event) => event.isPublished)
+              .toList())
+          .onErrorReturn(<EventModel>[]);
+    }
+
+    final firestoreEventsStream = Rx.combineLatest2<List<EventModel>, List<EventModel>, List<EventModel>>(
+      streamFromCollection(FirestorePaths.activities),
+      streamFromCollection(FirestorePaths.events),
+      (activities, events) {
+        final map = <String, EventModel>{};
+        for (final e in events) {
+          map[e.id] = e;
+        }
+        for (final a in activities) {
+          map[a.id] = a;
+        }
+        return map.values.toList();
+      },
+    );
 
     final localEventsStream =
         _appDatabase.eventsDao.watchAllEvents().map((cachedList) {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
       return cachedList
+          .where((cached) => cached.expiresAt >= nowMs)
           .map((cached) {
             try {
               return EventModel.fromMap(
@@ -53,6 +74,21 @@ class EventRepository {
             }
           })
           .whereType<EventModel>()
+          .where((event) => event.isPublished)
+          .where((event) {
+            final pStatus = event.proposalStatus.toLowerCase();
+            final sStatus = event.status.toLowerCase();
+            final isValid = pStatus == 'approved' ||
+                pStatus == 'cancelled' ||
+                pStatus == 'completed' ||
+                pStatus == 'ongoing' ||
+                sStatus == 'approved' ||
+                sStatus == 'cancelled' ||
+                sStatus == 'completed' ||
+                sStatus == 'ongoing' ||
+                event.isCancelled;
+            return isValid;
+          })
           .toList();
     });
 
@@ -69,6 +105,11 @@ class EventRepository {
         if (currentStudent == null) return [];
 
         final filtered = events.where((event) {
+          // Exclude soft-deleted events completely
+          if (event.isDeleted) {
+            return false;
+          }
+
           // 1. Scheduled visibility window check (Show in feed & Visible From)
           if (!event.isVisibleNow()) {
             return false;
@@ -86,7 +127,7 @@ class EventRepository {
         return filtered;
       },
     ).doOnData((events) {
-      _cacheEventsSilently(events);
+      _cacheEventsSilently(events, pruneStale: _connectivityService.isOnline);
       if (_connectivityService.isOnline && effectiveStudentId.isNotEmpty) {
         _cacheTicketStatesSilently(effectiveStudentId, events);
       }
@@ -125,12 +166,25 @@ class EventRepository {
     String eventId, {
     String? studentId,
   }) {
-    final remote = _firestore
+    final remoteActivities = _firestore
+        .collection(FirestorePaths.activities)
+        .doc(eventId)
+        .snapshots()
+        .map((doc) => doc.exists ? EventModel.fromFirestore(doc) : null)
+        .onErrorReturn(null);
+
+    final remoteEvents = _firestore
         .collection(FirestorePaths.events)
         .doc(eventId)
         .snapshots()
         .map((doc) => doc.exists ? EventModel.fromFirestore(doc) : null)
-        .doOnData((event) {
+        .onErrorReturn(null);
+
+    final remote = Rx.combineLatest2<EventModel?, EventModel?, EventModel?>(
+      remoteActivities,
+      remoteEvents,
+      (act, evt) => act ?? evt,
+    ).doOnData((event) {
       if (event != null) _cacheEventsSilently([event]);
     });
 
@@ -211,8 +265,12 @@ class EventRepository {
     }
   }
 
-  Future<void> _cacheEventsSilently(List<EventModel> events) async {
+  Future<void> _cacheEventsSilently(
+    List<EventModel> events, {
+    bool pruneStale = false,
+  }) async {
     try {
+      final validIds = events.map((e) => e.id).toSet();
       final companions = events.map((event) {
         int expiresAt = DateTime.now().millisecondsSinceEpoch +
             const Duration(hours: 24).inMilliseconds;
@@ -236,8 +294,20 @@ class EventRepository {
         );
       }).toList();
 
-      await _appDatabase.batch((batch) {
-        batch.insertAllOnConflictUpdate(_appDatabase.cachedEvents, companions);
+      await _appDatabase.transaction(() async {
+        if (pruneStale) {
+          final allLocal = await _appDatabase.eventsDao.getAllEvents();
+          for (final local in allLocal) {
+            if (!validIds.contains(local.id)) {
+              await (_appDatabase.delete(_appDatabase.cachedEvents)
+                    ..where((t) => t.id.equals(local.id)))
+                  .go();
+            }
+          }
+        }
+        await _appDatabase.batch((batch) {
+          batch.insertAllOnConflictUpdate(_appDatabase.cachedEvents, companions);
+        });
       });
     } catch (_) {
       // Ignore background caching errors

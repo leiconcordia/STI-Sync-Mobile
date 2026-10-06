@@ -18,17 +18,44 @@ class DashboardHeader extends ConsumerWidget {
         ? 'Good morning,'
         : (hour < 18 ? 'Good afternoon,' : 'Good evening,');
     final String firstName = (student?.firstName.isNotEmpty == true)
-        ? student!.firstName
+        ? (student?.firstName ?? 'Student')
         : 'Student';
 
     final activeSemesterAsync = ref.watch(activeSemesterProvider);
-    final String semesterDisplay = activeSemesterAsync.maybeWhen(
-      data: (sem) => sem.isNotEmpty
-          ? sem
-          : '${student?.semester.isNotEmpty == true ? student!.semester : "2nd Semester"} - A.Y. ${student?.schoolYear.isNotEmpty == true ? student!.schoolYear : "2025–2026"}',
-      orElse: () =>
-          '${student?.semester.isNotEmpty == true ? student!.semester : "2nd Semester"} - A.Y. ${student?.schoolYear.isNotEmpty == true ? student!.schoolYear : "2025–2026"}',
-    );
+    final bool isShs = student?.isShs == true;
+
+    // Resolve raw active semester string
+    String rawSemester = activeSemesterAsync.valueOrNull ?? '';
+    if (rawSemester.isEmpty) {
+      rawSemester = student?.semester ?? '';
+    }
+
+    // Strictly enforce cohort: College = Semester (never Trimester), SHS = Trimester (never Semester)
+    String dedicatedSemester;
+    if (isShs) {
+      if (rawSemester.toLowerCase().contains('semester')) {
+        dedicatedSemester = rawSemester.replaceAll(RegExp(r'Semester', caseSensitive: false), 'Trimester');
+      } else if (rawSemester.isNotEmpty) {
+        dedicatedSemester = rawSemester;
+      } else {
+        dedicatedSemester = '1st Trimester';
+      }
+    } else {
+      // College student: MUST be Semester, strictly NO Trimester
+      if (rawSemester.toLowerCase().contains('trimester')) {
+        dedicatedSemester = rawSemester.replaceAll(RegExp(r'Trimester', caseSensitive: false), 'Semester');
+      } else if (rawSemester.isNotEmpty) {
+        dedicatedSemester = rawSemester;
+      } else {
+        dedicatedSemester = '2nd Semester';
+      }
+    }
+
+    // Ensure Academic Year is present
+    final String defaultSy = student?.schoolYear.isNotEmpty == true ? (student?.schoolYear ?? '2026-2027') : '2026-2027';
+    final String semesterDisplay = dedicatedSemester.contains('A.Y.') || dedicatedSemester.contains('202')
+        ? dedicatedSemester
+        : '$dedicatedSemester · A.Y. $defaultSy';
 
     final String photoUrl = student?.profilePhotoUrl ?? '';
     final String initials = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'S';

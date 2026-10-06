@@ -1,6 +1,7 @@
 class FirestorePaths {
   static const String students = 'students';
   static const String events = 'events';
+  static const String activities = 'activities';
   static const String eventSessions = 'event_sessions';
   static const String attendance = 'attendance';
   static const String flaggedAttendance = 'flagged_attendance';
@@ -11,6 +12,8 @@ class FirestorePaths {
   static const String payables = 'payables';
   static const String announcements = 'announcements';
   static const String certificates = 'certificates';
+  static const String certificatesIssued = 'certificates_issued';
+  static const String certificateTemplates = 'certificate_templates';
   static const String organizations = 'organizations';
   static const String organizationOfficers = 'organization_officers';
   static const String organizationMembers = 'organization_members';

@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../../core/theme/app_colors.dart';
+import 'package:sti_sync/core/theme/app_colors.dart';
 
-/// Standard outlined text field used across registration steps.
-///
-/// Matches the login screen field styling (12px radius, navy focus border)
-/// so the whole auth flow looks consistent.
-class RegistrationTextField extends StatelessWidget {
+/// Styled input field for profile completion.
+class CompletionTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final IconData? icon;
   final TextInputType? keyboardType;
   final bool obscureText;
   final Widget? suffixIcon;
+  final Widget? prefix;
   final ValueChanged<String>? onChanged;
   final List<TextInputFormatter>? inputFormatters;
   final int? maxLength;
   final bool hideCounter;
+  final bool readOnly;
 
-  const RegistrationTextField({
+  const CompletionTextField({
     super.key,
     required this.controller,
     required this.hint,
@@ -26,10 +25,12 @@ class RegistrationTextField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.suffixIcon,
+    this.prefix,
     this.onChanged,
     this.inputFormatters,
     this.maxLength,
     this.hideCounter = true,
+    this.readOnly = false,
   });
 
   @override
@@ -38,6 +39,7 @@ class RegistrationTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      readOnly: readOnly,
       onChanged: onChanged,
       inputFormatters: inputFormatters,
       maxLength: maxLength,
@@ -45,6 +47,7 @@ class RegistrationTextField extends StatelessWidget {
         hintText: hint,
         counterText: hideCounter ? '' : null,
         prefixIcon: icon == null ? null : Icon(icon, color: Colors.grey),
+        prefix: prefix,
         suffixIcon: suffixIcon,
         contentPadding:
             const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
@@ -65,7 +68,7 @@ class RegistrationTextField extends StatelessWidget {
   }
 }
 
-/// Large bold title + grey subtitle pair shown at the top of every step.
+/// Large bold title + grey subtitle pair.
 class StepHeader extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -80,7 +83,7 @@ class StepHeader extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 26,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: AppColors.primaryDark,
           ),
@@ -88,26 +91,27 @@ class StepHeader extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           subtitle,
-          style: const TextStyle(fontSize: 15, color: Colors.grey, height: 1.4),
+          style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
         ),
       ],
     );
   }
 }
 
-/// Small grey field label (e.g. "Course *", "Sex *").
+/// Field label with bold typography.
 class FieldLabel extends StatelessWidget {
   final String text;
-  const FieldLabel(this.text, {super.key});
+
+  const FieldLabel({super.key, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       text,
       style: const TextStyle(
-        fontSize: 14,
-        color: AppColors.textSecondary,
-        fontWeight: FontWeight.w500,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.primaryDark,
       ),
     );
   }

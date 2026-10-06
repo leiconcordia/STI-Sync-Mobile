@@ -17,7 +17,7 @@ class ConnectivityService {
     _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) async {
       final isConnected = _hasConnection(results);
       if (isConnected) {
-        _isOnline = await _pingCloudinary();
+        _isOnline = await _pingInternet();
       } else {
         _isOnline = false;
       }
@@ -37,13 +37,35 @@ class ConnectivityService {
         r == ConnectivityResult.ethernet);
   }
 
-  Future<bool> _pingCloudinary() async {
+  Future<bool> _pingInternet() async {
     try {
-      final response = await http.head(Uri.parse('https://api.cloudinary.com')).timeout(const Duration(seconds: 3));
-      return response.statusCode > 0;
-    } catch (_) {
-      return false;
-    }
+      final response = await http
+          .get(Uri.parse('https://www.google.com/generate_204'))
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode >= 200 && response.statusCode < 400) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http
+          .head(Uri.parse('https://api.cloudinary.com'))
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode > 0) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http
+          .head(Uri.parse('https://1.1.1.1'))
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode > 0) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
   }
 
   bool get isOnline => _isOnline;
@@ -53,7 +75,7 @@ class ConnectivityService {
   Future<bool> checkConnectivity() async {
     final results = await _connectivity.checkConnectivity();
     if (_hasConnection(results)) {
-      _isOnline = await _pingCloudinary();
+      _isOnline = await _pingInternet();
     } else {
       _isOnline = false;
     }

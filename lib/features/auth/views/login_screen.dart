@@ -35,12 +35,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // Listen for auth state changes and redirect upon successful login
     ref.listen(authViewModelProvider, (previous, next) {
       if (next.isAuthenticated) {
-        final currentStudent = next.pendingStudent ?? next.student;
+        final currentStudent = next.student;
         if (currentStudent != null) {
-          final statusUpper = currentStudent.status.trim().toUpperCase();
-          if (statusUpper == 'PENDING' || statusUpper == 'RETURNED') {
-            context.goNamed('pendingStatus');
-          } else if (statusUpper == 'ACTIVE') {
+          if (!currentStudent.isProfileComplete || currentStudent.requiresPasswordChange) {
+            context.goNamed('completeProfile');
+          } else {
             context.goNamed('dashboard');
           }
         }
@@ -129,13 +128,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
               // Student ID or Email Field
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(
-                  hintText: 'Student ID or Email',
+                  hintText: '11-Digit Student ID or Email',
                   prefixIcon: const Icon(Icons.badge_outlined, color: Colors.grey),
                   contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                   border: OutlineInputBorder(
@@ -185,23 +184,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 12),
               
-              // Forgot Password
-              Align(
-                alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () {
-                    // TODO: Forgot password logic
-                  },
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: purpleAccent,
-                      fontWeight: FontWeight.w600,
+              // Initial default password guide callout
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F6FA),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: navyColor.withValues(alpha: 0.15)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.lightbulb_outline, size: 18, color: navyColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: RichText(
+                        text: const TextSpan(
+                          style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.35),
+                          children: [
+                            TextSpan(
+                              text: 'First time login? ',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: navyColor),
+                            ),
+                            TextSpan(
+                              text: 'Your default password is: Capitalized Last Name + Last 6 digits of Student No. (e.g. ',
+                            ),
+                            TextSpan(
+                              text: 'Ablen496332',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            TextSpan(text: ').'),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 28),
 
               // Log In Button
               SizedBox(
@@ -265,39 +285,90 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               
               const Divider(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-              // Footer
+              // Footer: Help & Enrollee Guide
               Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                child: TextButton.icon(
+                  onPressed: () => _showLoginHelp(context),
+                  icon: const Icon(Icons.help_outline, size: 16, color: purpleAccent),
+                  label: const Text(
+                    'Need Help or Account Access Info?',
+                    style: TextStyle(
+                      color: purpleAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        ref.read(registrationViewModelProvider.notifier).reset();
-                        context.pushNamed('register');
-                      },
-                      child: const Text(
-                        'Create Account',
-                        style: TextStyle(
-                          color: purpleAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showLoginHelp(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'STI Sync Account Help',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF001D4A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '• All enrolled students are provisioned by the Registrar.\n'
+              '• Log in using your official 11-digit Student ID as your username.\n'
+              '• Use your initial password: Caps(LastName) + Last 6 digits of Student No.\n'
+              '• Once logged in, you will be prompted to set your private password and complete your profile.',
+              style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: const Text(
+                'Late Enrollees: If your account is not yet active, please visit the Student Affairs Office (SAO) or Registrar.',
+                style: TextStyle(fontSize: 12, color: Colors.black87),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF001D4A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                child: const Text('Close', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
         ),
       ),
     );

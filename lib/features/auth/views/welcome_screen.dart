@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../shared/providers/providers.dart';
+import 'package:sti_sync/core/theme/app_colors.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -96,7 +95,7 @@ class WelcomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Sign in or create your account to get started.',
+                    'Sign in to access your student portal and events.',
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey,
@@ -133,15 +132,12 @@ class WelcomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Create Account Button
+                  // First Time Logging In Guide Button
                   SizedBox(
                     width: double.infinity,
                     height: 60,
                     child: OutlinedButton(
-                      onPressed: () {
-                        ref.read(registrationViewModelProvider.notifier).reset();
-                        context.pushNamed('register');
-                      },
+                      onPressed: () => _showFirstTimeGuide(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF001D4A),
                         side: const BorderSide(color: Color(0xFF001D4A), width: 1.5),
@@ -152,11 +148,11 @@ class WelcomeScreen extends ConsumerWidget {
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.person_add_alt_1_outlined),
+                          Icon(Icons.help_outline_rounded),
                           SizedBox(width: 12),
                           Text(
-                            'Create Account',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            'First Time Logging In?',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -166,7 +162,7 @@ class WelcomeScreen extends ConsumerWidget {
                   const Spacer(),
                   const Center(
                     child: Text(
-                      'Already have an account? Tap Log In above.',
+                      'Enrolled students are pre-registered by the Registrar.',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ),
@@ -180,6 +176,203 @@ class WelcomeScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFirstTimeGuide(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (_, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8EEF5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.school, color: Color(0xFF001D4A), size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'First-Time Student Guide',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF001D4A),
+                          ),
+                        ),
+                        Text(
+                          'How to log in to your STI Sync account',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildGuideCard(
+                step: '1',
+                title: 'Official Registrar Provisioning',
+                description:
+                    'All officially enrolled students already have accounts created from the Registrar enrollment lists. You do not need to register from scratch.',
+                icon: Icons.assignment_turned_in_outlined,
+              ),
+              const SizedBox(height: 14),
+              _buildGuideCard(
+                step: '2',
+                title: 'Your Login Credentials',
+                description:
+                    '• Username: Your 11-digit Student ID (e.g. 02000496332)\n• Initial Password: First letter capitalized of Last Name + last 6 digits of Student No. (e.g. Ablen496332)',
+                icon: Icons.key_outlined,
+                highlight: true,
+              ),
+              const SizedBox(height: 14),
+              _buildGuideCard(
+                step: '3',
+                title: 'First-Login Profile Setup',
+                description:
+                    'On your first login, you will immediately set your permanent private password, personal email, and profile photos.',
+                icon: Icons.security_outlined,
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Late enrollee or account not found? Please visit the Student Affairs Office (SAO) or Registrar to have your record added.',
+                        style: TextStyle(fontSize: 12, color: Colors.black87),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.pushNamed('login');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF001D4A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  child: const Text(
+                    'Proceed to Log In',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildGuideCard({
+    required String step,
+    required String title,
+    required String description,
+    required IconData icon,
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: highlight ? const Color(0xFFF3F6FA) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: highlight ? const Color(0xFF001D4A).withValues(alpha: 0.3) : Colors.grey.shade300,
+          width: highlight ? 1.5 : 1.0,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xFF001D4A),
+            child: Text(
+              step,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF001D4A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                ),
+              ],
             ),
           ),
         ],

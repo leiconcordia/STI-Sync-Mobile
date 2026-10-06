@@ -75,9 +75,10 @@ class MainShellScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Read live scanner state to decide whether to show the scanner tab
+    // Read live scanner state & stream to decide whether to show the scanner tab
     final scannerState = ref.watch(scannerViewModelProvider);
-    final showScanner = scannerState.hasActiveAssignments;
+    final activeAssignments = ref.watch(activeScannerAssignmentsProvider).valueOrNull ?? [];
+    final showScanner = scannerState.hasActiveAssignments || activeAssignments.isNotEmpty;
 
     // Read unsettled obligations badge count
     final financeBadgeCount = ref.watch(unreadPayablesBadgeProvider);

@@ -92,12 +92,10 @@ class EventCleanupService {
     return true;
   }
 
-  /// Checks all local scanner assignments and purges data for expired events.
-  ///
-  /// An event is considered expired when `now > eventEndTime + 12 hours`.
-  /// If expired, it verifies that all attendance is synced before purging.
-  Future<void> checkAndPurgeExpiredEvents() async {
-    debugPrint('EventCleanupService: Checking for expired events...');
+  /// Checks all local scanner assignments and purges data for Admin-concluded events
+  /// whose attendance records are 100% verified synced.
+  Future<void> checkAndPurgeConcludedEvents() async {
+    debugPrint('EventCleanupService: Checking for concluded events...');
 
     final assignments = await _scannerDao.getAllAssignments();
     if (assignments.isEmpty) {
@@ -105,37 +103,32 @@ class EventCleanupService {
       return;
     }
 
-    final now = DateTime.now();
-
     for (final assignment in assignments) {
-      final endTime = DateTime.fromMillisecondsSinceEpoch(assignment.eventEndTime);
-      final expiryTime = endTime.add(const Duration(hours: 12));
-
-      if (now.isAfter(expiryTime)) {
+      final isConcluded = assignment.proposalStatus.toLowerCase() == 'completed';
+      if (isConcluded) {
         debugPrint(
-          'EventCleanupService: Event ${assignment.eventId} '
-          '("${assignment.eventTitle}") passed 12h post-event window ($expiryTime) — evaluating sync status...',
+          'EventCleanupService: Concluded event ${assignment.eventId} '
+          '("${assignment.eventTitle}") found — checking sync status for cleanup...',
         );
         await purgeEventData(assignment.eventId);
       }
     }
 
-    debugPrint('EventCleanupService: Expired event check complete');
+    debugPrint('EventCleanupService: Concluded event check complete');
   }
 
-  /// Starts a periodic timer that checks for and purges expired events
-  /// every 30 minutes while the app is open.
-  ///
-  /// Also runs an immediate check on startup.
+  /// Starts a periodic timer that checks for and purges concluded events
+  /// whose offline attendance records have been verified synced.
+  /// Runs every 30 minutes while the app is open.
   void startPeriodicCheck() {
-    // Run immediately on startup
-    checkAndPurgeExpiredEvents();
+    // Run check on startup
+    checkAndPurgeConcludedEvents();
 
     // Then every 30 minutes
     _periodicTimer?.cancel();
     _periodicTimer = Timer.periodic(
       const Duration(minutes: 30),
-      (_) => checkAndPurgeExpiredEvents(),
+      (_) => checkAndPurgeConcludedEvents(),
     );
     debugPrint('EventCleanupService: Periodic cleanup started (every 30 min)');
   }

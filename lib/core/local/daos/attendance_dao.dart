@@ -16,6 +16,13 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
     return into(offlineAttendance).insertOnConflictUpdate(record);
   }
 
+  Future<void> batchUpsertOfflineRecords(List<OfflineAttendanceCompanion> records) {
+    if (records.isEmpty) return Future.value();
+    return batch((b) {
+      b.insertAllOnConflictUpdate(offlineAttendance, records);
+    });
+  }
+
   Future<List<OfflineAttendanceData>> getPendingSyncs() {
     return (select(offlineAttendance)..where((t) => t.synced.equals(0))).get();
   }
@@ -43,9 +50,9 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
     required String eventId,
     required String sessionId,
     required String gateType,
-  }) {
+  }) async {
     final isTimeIn = gateType == 'Time-In' || gateType == 'time_in';
-    return (select(offlineAttendance)
+    final list = await (select(offlineAttendance)
           ..where((t) {
             Expression<bool> idPredicate = t.studentId.equals(studentId);
             if (studentNumber != null && studentNumber.isNotEmpty) {
@@ -60,8 +67,10 @@ class AttendanceDao extends DatabaseAccessor<AppDatabase> with _$AttendanceDaoMi
                 : const Constant(true);
 
             return t.eventId.equals(eventId) & sessionPredicate & idPredicate & gatePredicate;
-          }))
-        .getSingleOrNull();
+          })
+          ..limit(1))
+        .get();
+    return list.firstOrNull;
   }
 
   Future<List<OfflineAttendanceData>> getAllForSession(String sessionId) {

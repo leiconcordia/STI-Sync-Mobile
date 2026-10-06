@@ -6,6 +6,7 @@ import 'package:sti_sync/core/utils/date_formatter.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/scanner/models/scanner_assignment_model.dart';
+import 'package:sti_sync/features/sync/models/sync_status_model.dart';
 
 class ScannerDownloadScreen extends ConsumerWidget {
   const ScannerDownloadScreen({super.key});
@@ -13,7 +14,8 @@ class ScannerDownloadScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(scannerViewModelProvider);
-    final assignments = state.assignments;
+    final activeAssignments = ref.watch(activeScannerAssignmentsProvider).valueOrNull ?? [];
+    final assignments = state.assignments.isNotEmpty ? state.assignments : activeAssignments;
     final isOnline = ref.watch(connectivityStatusProvider).valueOrNull ?? false;
 
     return Scaffold(
@@ -54,56 +56,76 @@ class ScannerDownloadScreen extends ConsumerWidget {
                 ),
               ),
             Expanded(
-              child: assignments.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(28),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.08),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.qr_code_scanner_rounded,
-                                size: 64,
-                                color: AppColors.primary,
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () async {
+                  await ref.read(connectivityServiceProvider).checkConnectivity();
+                  final student = ref.read(authViewModelProvider).student;
+                  if (student != null) {
+                    ref.read(scannerViewModelProvider.notifier).loadAssignments(student.id);
+                  }
+                  ref.invalidate(activeScannerAssignmentsProvider);
+                },
+                child: assignments.isEmpty
+                    ? LayoutBuilder(
+                        builder: (context, constraints) => SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(32.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(28),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.08),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.qr_code_scanner_rounded,
+                                        size: 64,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text(
+                                      'No Active Gate Duty',
+                                      style: AppTextStyles.h1.copyWith(
+                                        color: AppColors.primaryDark,
+                                        fontSize: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'You are currently not assigned as an event scanner. Duty assignments will appear here automatically when created by SAO admins. Swipe down to refresh.',
+                                      textAlign: TextAlign.center,
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: AppColors.textSecondary,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            Text(
-                              'No Active Gate Duty',
-                              style: AppTextStyles.h1.copyWith(
-                                color: AppColors.primaryDark,
-                                fontSize: 22,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'You are currently not assigned as an event scanner. Duty assignments will appear here automatically when created by SAO admins.',
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
+                      )
+                    : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        itemCount: assignments.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          return _AssignmentCard(
+                            assignment: assignments[index],
+                          );
+                        },
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      itemCount: assignments.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        return _AssignmentCard(
-                          assignment: assignments[index],
-                        );
-                      },
-                    ),
+              ),
             ),
           ],
         ),
@@ -159,11 +181,19 @@ class _AssignmentCard extends ConsumerWidget {
             ? liveEvent.cancellationReason!
             : 'Gate duty assignments and QR check-ins are revoked for this event.');
 
+    final bool needsUpload = assignment.requiresAttendanceUploadNotice;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isCancelled ? Colors.red.shade200 : Colors.grey.shade200),
+        border: Border.all(
+          color: isCancelled
+              ? Colors.red.shade200
+              : needsUpload
+                  ? Colors.amber.shade400
+                  : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -182,9 +212,11 @@ class _AssignmentCard extends ConsumerWidget {
               gradient: LinearGradient(
                 colors: isCancelled
                     ? [const Color(0xFF991B1B), const Color(0xFF7F1D1D)]
-                    : hasData 
-                        ? [AppColors.primaryDark, const Color(0xFF1E3A8A)]
-                        : [const Color(0xFF1E293B), const Color(0xFF334155)],
+                    : needsUpload
+                        ? [const Color(0xFF78350F), const Color(0xFF92400E)]
+                        : hasData 
+                            ? [AppColors.primaryDark, const Color(0xFF1E3A8A)]
+                            : [const Color(0xFF1E293B), const Color(0xFF334155)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -199,15 +231,19 @@ class _AssignmentCard extends ConsumerWidget {
                 Row(
                   children: [
                     Icon(
-                      isCancelled ? Icons.cancel_outlined : Icons.shield_outlined,
-                      color: isCancelled ? Colors.white : AppColors.secondary,
+                      isCancelled
+                          ? Icons.cancel_outlined
+                          : (needsUpload ? Icons.cloud_upload_outlined : Icons.shield_outlined),
+                      color: isCancelled ? Colors.white : (needsUpload ? Colors.amber.shade300 : AppColors.secondary),
                       size: 16,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isCancelled ? 'CANCELLED EVENT' : 'GATE DUTY ASSIGNMENT',
+                      isCancelled
+                          ? 'CANCELLED EVENT'
+                          : (needsUpload ? 'EVENT CONCLUDED' : 'GATE DUTY ASSIGNMENT'),
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: isCancelled ? Colors.white : AppColors.secondary,
+                        color: isCancelled ? Colors.white : (needsUpload ? Colors.amber.shade300 : AppColors.secondary),
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.8,
                         fontSize: 10,
@@ -220,9 +256,11 @@ class _AssignmentCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: isCancelled
                         ? Colors.red.shade800
-                        : hasData 
-                            ? AppColors.success
-                            : AppColors.secondary,
+                        : needsUpload
+                            ? Colors.amber.shade700
+                            : hasData 
+                                ? AppColors.success
+                                : AppColors.secondary,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -230,17 +268,17 @@ class _AssignmentCard extends ConsumerWidget {
                       Icon(
                         isCancelled
                             ? Icons.block
-                            : hasData ? Icons.check_circle : Icons.downloading_rounded,
+                            : (needsUpload ? Icons.cloud_upload_rounded : (hasData ? Icons.check_circle : Icons.downloading_rounded)),
                         size: 11,
-                        color: isCancelled || hasData ? Colors.white : AppColors.primaryDark,
+                        color: isCancelled || hasData || needsUpload ? Colors.white : AppColors.primaryDark,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         isCancelled
                             ? 'DUTY VOIDED'
-                            : hasData ? 'ROSTER READY' : 'DOWNLOAD NEEDED',
+                            : (needsUpload ? 'UPLOAD REQUIRED' : (hasData ? 'ROSTER READY' : 'DOWNLOAD NEEDED')),
                         style: TextStyle(
-                          color: isCancelled || hasData ? Colors.white : AppColors.primaryDark,
+                          color: isCancelled || hasData || needsUpload ? Colors.white : AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
                           fontSize: 9,
                         ),
@@ -397,6 +435,13 @@ class _AssignmentCard extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    // Permission Badges (3 Checkboxes)
+                    if (assignment.canCheckIn)
+                      _buildPermChip(Icons.login, 'Time-In', AppColors.success),
+                    if (assignment.canCheckOut)
+                      _buildPermChip(Icons.logout, 'Time-Out', const Color(0xFF0284C7)),
+                    if (assignment.allowManualAttendance)
+                      _buildPermChip(Icons.edit_note, 'Manual/Flagged', Colors.amber.shade800),
                   ],
                 ),
 
@@ -404,7 +449,6 @@ class _AssignmentCard extends ConsumerWidget {
                 const Divider(height: 1),
                 const SizedBox(height: 16),
 
-                // Status & Action buttons
                 if (isCancelled)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -437,6 +481,56 @@ class _AssignmentCard extends ConsumerWidget {
                                 style: TextStyle(
                                   color: Colors.red.shade800,
                                   fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (needsUpload)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.cloud_upload_rounded, color: Colors.amber.shade900, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Upload your attendance: Event has been concluded',
+                                style: TextStyle(
+                                  color: const Color(0xFF451A03),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  height: 1.3,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${assignment.pendingSyncCount} attendance log(s) recorded offline. Scanning is closed. Upload your records now to finalize and clean up scanner duty.',
+                                style: TextStyle(
+                                  color: Colors.amber.shade900,
+                                  fontSize: 11,
+                                  height: 1.3,
                                 ),
                               ),
                             ],
@@ -538,6 +632,73 @@ class _AssignmentCard extends ConsumerWidget {
                               fontSize: 13,
                               color: Colors.grey.shade500,
                             ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (needsUpload) ...[
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          context.push('/scanner/${assignment.eventId}/logs');
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primaryDark,
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.list_alt_rounded, size: 16),
+                        label: const Text('View Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isOnline
+                              ? () async {
+                                  final result = await ref
+                                      .read(scannerViewModelProvider.notifier)
+                                      .uploadAttendanceAndCleanup(assignment.eventId);
+                                  if (context.mounted) {
+                                    if (result.type == SyncResultType.success) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Uploaded ${result.uploadedCount} record(s)! Scanner cache cleaned up.'),
+                                          backgroundColor: AppColors.success,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    } else if (result.type == SyncResultType.hasConflicts) {
+                                      context.push('/scanner/sync-conflicts', extra: result.conflicts);
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(result.errorMessage ?? 'Upload failed'),
+                                          backgroundColor: AppColors.error,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isOnline ? Colors.amber.shade700 : Colors.grey.shade300,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+                          label: Text(
+                            isOnline ? 'Upload Attendance Now' : 'Connect to Sync',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ),
                       ),
@@ -683,6 +844,32 @@ class _AssignmentCard extends ConsumerWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPermChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

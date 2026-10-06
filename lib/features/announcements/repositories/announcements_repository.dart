@@ -30,9 +30,19 @@ class AnnouncementsRepository {
 
       final studentDeptId = student.departmentId.trim().toLowerCase();
       final studentDeptName = student.departmentName.trim().toLowerCase();
+      final studentCourseCode = student.courseCode.trim().toLowerCase();
+      final studentCourseName = student.courseName.trim().toLowerCase();
       final studentYearStr = student.yearLevel.trim().toLowerCase();
 
       final filtered = allAnnouncements.where((a) {
+        // 0. Author check (author always sees their own announcement)
+        if (a.authorUid.isNotEmpty &&
+            (a.authorUid == student.id ||
+             a.authorUid == student.authUid ||
+             a.authorUid == student.studentId)) {
+          return true;
+        }
+
         // 1. Campus-wide or all-orgs broadcast
         if (a.audience == 'campus-wide' || a.audience == 'all-organizations') {
           return true;
@@ -45,15 +55,26 @@ class AnnouncementsRepository {
         }
 
         // 3. Authoring Org check (officer's own org)
-        if (a.organizationId != null && studentOrgIds.contains(a.organizationId)) {
+        if (a.organizationId != null && 
+            a.organizationId!.isNotEmpty && 
+            studentOrgIds.contains(a.organizationId)) {
           return true;
         }
 
-        // 4. Target Departments check
+        // 4. Target Departments check (handles both Department Names and Course Codes like BSIT)
         if (a.targetDepartments.isNotEmpty) {
           final matchesDept = a.targetDepartments.any((dept) {
             final d = dept.trim().toLowerCase();
-            return d == studentDeptId || d == studentDeptName;
+            return d == studentDeptId ||
+                d == studentDeptName ||
+                (studentCourseCode.isNotEmpty &&
+                    (d == studentCourseCode ||
+                     studentCourseCode.contains(d) ||
+                     d.contains(studentCourseCode))) ||
+                (studentCourseName.isNotEmpty &&
+                    (d == studentCourseName ||
+                     studentCourseName.contains(d) ||
+                     d.contains(studentCourseName)));
           });
           if (matchesDept) return true;
         }

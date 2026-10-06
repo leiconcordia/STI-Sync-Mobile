@@ -66,6 +66,7 @@ class RegistrationState {
   final String? submitError;
   final bool submitSuccess;
   final String finalStatus; // 'ACTIVE' (AI Auto-Approve) | 'PENDING' (Admin Review)
+  final bool isValidatingAsync;
   final List<String> debugLog;
 
   const RegistrationState({
@@ -108,6 +109,7 @@ class RegistrationState {
     this.submitError,
     this.submitSuccess = false,
     this.finalStatus = 'PENDING',
+    this.isValidatingAsync = false,
     this.debugLog = const [],
   });
 
@@ -334,6 +336,7 @@ class RegistrationState {
     bool clearSubmitError = false,
     bool? submitSuccess,
     String? finalStatus,
+    bool? isValidatingAsync,
     List<String>? debugLog,
   }) {
     return RegistrationState(
@@ -378,6 +381,7 @@ class RegistrationState {
       submitError: clearSubmitError ? null : (submitError ?? this.submitError),
       submitSuccess: submitSuccess ?? this.submitSuccess,
       finalStatus: finalStatus ?? this.finalStatus,
+      isValidatingAsync: isValidatingAsync ?? this.isValidatingAsync,
       debugLog: debugLog ?? this.debugLog,
     );
   }
@@ -501,34 +505,46 @@ class RegistrationViewModel extends StateNotifier<RegistrationState> {
     final s = state;
     final excludeUid = s.existingUid; // If non-null, this is a resubmit for a RETURNED application
 
-    switch (stepIndex) {
-      case 0:
-        // Check student ID uniqueness ignoring self
-        if (await _repo.isStudentIdTaken(s.studentId.trim(), excludeUid: excludeUid)) {
-          return 'A student with this Student ID already exists.';
-        }
-        // Check duplicate First Name + Last Name + Date of Birth ignoring self
-        if (s.dateOfBirth != null) {
-          final dob = s.dateOfBirth!;
-          final dobStr =
-              '${dob.year}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
-          if (await _repo.isNameAndDobTaken(
-            firstName: s.firstName.trim(),
-            lastName: s.lastName.trim(),
-            dob: dobStr,
-            excludeUid: excludeUid,
-          )) {
-            return 'This user already exists. A student record with the same name and date of birth is already registered.';
+    state = state.copyWith(isValidatingAsync: true);
+    try {
+      switch (stepIndex) {
+        case 0:
+          // 1. Check student ID uniqueness ignoring self
+          if (await _repo.isStudentIdTaken(s.studentId.trim(), excludeUid: excludeUid)) {
+            return 'A student with this Student ID already exists.';
           }
-        }
-        return null;
-      case 2:
-        if (await _repo.isEmailTaken(s.email.trim(), excludeUid: excludeUid)) {
-          return 'This email address is already registered to another account.';
-        }
-        return null;
-      default:
-        return null;
+          // 2. Check mobile number uniqueness ignoring self
+          final cleanContact = s.contactNumber.replaceAll(RegExp(r'\D'), '');
+          if (cleanContact.isNotEmpty) {
+            if (await _repo.isContactNumberTaken(cleanContact, excludeUid: excludeUid)) {
+              return 'This contact number is already registered to another student.';
+            }
+          }
+          // 3. Check duplicate First Name + Last Name + Date of Birth ignoring self
+          if (s.dateOfBirth != null) {
+            final dob = s.dateOfBirth!;
+            final dobStr =
+                '${dob.year}-${dob.month.toString().padLeft(2, '0')}-${dob.day.toString().padLeft(2, '0')}';
+            if (await _repo.isNameAndDobTaken(
+              firstName: s.firstName.trim(),
+              lastName: s.lastName.trim(),
+              dob: dobStr,
+              excludeUid: excludeUid,
+            )) {
+              return 'This user already exists. A student record with the same name and date of birth is already registered.';
+            }
+          }
+          return null;
+        case 2:
+          if (await _repo.isEmailTaken(s.email.trim(), excludeUid: excludeUid)) {
+            return 'This email address is already registered to another account.';
+          }
+          return null;
+        default:
+          return null;
+      }
+    } finally {
+      state = state.copyWith(isValidatingAsync: false);
     }
   }
 

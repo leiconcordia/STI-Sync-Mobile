@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/profile/widgets/profile_header.dart';
@@ -242,7 +243,135 @@ class ProfileScreen extends ConsumerWidget {
                         );
                       },
                     ),
+
+                    // Certificates & Credentials Card
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final certsAsync = ref.watch(myCertificatesStreamProvider);
+                        final count = certsAsync.asData?.value.length ?? 0;
+
+                        return ProfileInfoCard(
+                          title: 'Certificates & Credentials',
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5A100),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          children: [
+                            InkWell(
+                              onTap: () => context.push('/certificates'),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.workspace_premium_outlined, color: Color(0xFFE5A100), size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'View Earned Certificates',
+                                            style: TextStyle(
+                                              color: AppColors.primaryDark,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            count > 0
+                                                ? '$count verified certificate${count > 1 ? 's' : ''} ready to download'
+                                                : 'No event certificates issued yet',
+                                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_right, color: Colors.grey),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     
+                    // Attendance & Event History Card
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final historyAsync = ref.watch(myAttendanceHistoryStreamProvider);
+                        final count = historyAsync.asData?.value.length ?? 0;
+
+                        return ProfileInfoCard(
+                          title: 'Attendance & Clearance History',
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          children: [
+                            InkWell(
+                              onTap: () => context.push('/attendance-history'),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.history_edu_outlined, color: AppColors.primary, size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'View Attendance Records',
+                                            style: TextStyle(
+                                              color: AppColors.primaryDark,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            count > 0
+                                                ? '$count recorded event check-in${count > 1 ? 's' : ''}'
+                                                : 'View event check-ins grouped by semester',
+                                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_right, color: Colors.grey),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
                     ProfileDangerCard(
                       onLogOut: () {
                         ref.read(authViewModelProvider.notifier).logout();

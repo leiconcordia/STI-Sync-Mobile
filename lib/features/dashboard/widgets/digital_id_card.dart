@@ -74,7 +74,7 @@ class DigitalIdCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'STI STUDENT PASS',
+                        'STI STUDENT I.D',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: Colors.white70,
                           fontWeight: FontWeight.bold,

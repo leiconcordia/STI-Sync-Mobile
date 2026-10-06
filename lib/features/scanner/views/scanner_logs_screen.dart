@@ -51,9 +51,21 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
       if (!mounted) return;
 
       if (result.type == SyncResultType.success) {
+        // Check if event is concluded and all records are synced for this event
+        final remaining = await ref.read(appDatabaseProvider).attendanceDao.getPendingSyncsForEvent(widget.eventId);
+        if (remaining.isEmpty) {
+          final assignments = ref.read(scannerViewModelProvider).assignments;
+          final target = assignments.where((a) => a.eventId == widget.eventId).firstOrNull;
+          if (target != null && target.isConcluded) {
+            await ref.read(eventCleanupServiceProvider).purgeEventData(widget.eventId);
+            await ref.read(scannerViewModelProvider.notifier).refreshAssignments();
+          }
+        }
+
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Synced ${result.uploadedCount} records'),
+            content: Text('Synced ${result.uploadedCount} records. Scanner cache updated!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -243,19 +255,31 @@ class _ScannerLogsScreenState extends ConsumerState<ScannerLogsScreen> {
   // ─── Pending Banner ──────────────────────────────────────────────────────
 
   Widget _buildPendingBanner(int count) {
+    final assignments = ref.watch(scannerViewModelProvider).assignments;
+    final assignment = assignments.where((a) => a.eventId == widget.eventId).firstOrNull;
+    final isConcluded = assignment?.isConcluded ?? false;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: Colors.amber.shade50,
       child: Row(
         children: [
-          Icon(Icons.sync_problem, color: Colors.amber.shade700, size: 20),
+          Icon(
+            isConcluded ? Icons.cloud_upload_rounded : Icons.sync_problem,
+            color: Colors.amber.shade800,
+            size: 20,
+          ),
           const SizedBox(width: 8),
-          Text(
-            '$count unsynced record${count == 1 ? '' : 's'} pending upload',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.amber.shade800,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              isConcluded
+                  ? 'Upload your attendance: Event has been concluded ($count pending)'
+                  : '$count unsynced record${count == 1 ? '' : 's'} pending upload',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: Colors.amber.shade900,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],

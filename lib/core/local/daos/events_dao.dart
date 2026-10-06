@@ -12,14 +12,20 @@ class EventsDao extends DatabaseAccessor<AppDatabase> with _$EventsDaoMixin {
     return into(cachedEvents).insertOnConflictUpdate(event);
   }
 
-  Future<CachedEvent?> getEvent(String eventId) {
-    return (select(cachedEvents)..where((t) => t.id.equals(eventId)))
-        .getSingleOrNull();
+  Future<CachedEvent?> getEvent(String eventId) async {
+    final list = await (select(cachedEvents)
+          ..where((t) => t.id.equals(eventId))
+          ..limit(1))
+        .get();
+    return list.firstOrNull;
   }
 
   Stream<CachedEvent?> watchEvent(String eventId) {
-    return (select(cachedEvents)..where((t) => t.id.equals(eventId)))
-        .watchSingleOrNull();
+    return (select(cachedEvents)
+          ..where((t) => t.id.equals(eventId))
+          ..limit(1))
+        .watch()
+        .map((list) => list.firstOrNull);
   }
 
   Future<List<CachedEvent>> getAllEvents() {

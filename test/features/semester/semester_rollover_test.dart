@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sti_sync/features/auth/models/student_model.dart';
 import 'package:sti_sync/features/semester/models/semester_model.dart';
-import 'package:sti_sync/features/semester/viewmodels/re_enrollment_viewmodel.dart';
 import 'package:sti_sync/features/qr_ticket/viewmodels/qr_ticket_viewmodel.dart';
 
 void main() {
@@ -47,7 +46,7 @@ void main() {
     test('SemesterModel parses fields and handles active/display state', () {
       expect(activeSemester.isActive, true);
       expect(activeSemester.displayName, '2nd Semester · A.Y. 2026-2027');
-      expect(activeSemester.formattedDeadline, 'Aug 31 2026');
+      expect(activeSemester.formattedDeadline, 'Aug, 31 2026');
 
       final fromMap = SemesterModel.fromMap({
         'name': '1st Semester',
@@ -90,25 +89,30 @@ void main() {
       expect(pendingInitialApproval.isPendingReEnrollment(activeSemester), false);
     });
 
-    test('ReEnrollmentState default year levels and copyWith', () {
-      expect(ReEnrollmentViewModel.yearLevels.length, 4);
-      expect(ReEnrollmentViewModel.yearLevels, contains('1st Year'));
-      expect(ReEnrollmentViewModel.yearLevels, contains('4th Year'));
-
-      const state = ReEnrollmentState();
-      expect(state.selectedYearLevel, '1st Year');
-      expect(state.isConfirmed, false);
-      expect(state.isSubmitting, false);
-
-      final updated = state.copyWith(
-        selectedYearLevel: '3rd Year',
-        selectedSection: 'BSIT 3101',
-        isConfirmed: true,
+    test('isPendingReEnrollment tolerates formatting differences between web and mobile', () {
+      // AY with 'A.Y.' prefix vs plain year
+      final enrolledWithAy = baseStudent.copyWith(
+        schoolYear: 'A.Y. 2026-2027',
+        semester: '2nd Semester',
       );
-      expect(updated.selectedYearLevel, '3rd Year');
-      expect(updated.selectedSection, 'BSIT 3101');
-      expect(updated.isConfirmed, true);
+      expect(enrolledWithAy.isPendingReEnrollment(activeSemester), false);
+
+      // AY with spaces around hyphen
+      final enrolledWithSpacedAy = baseStudent.copyWith(
+        schoolYear: '2026 - 2027',
+        semester: '2nd Semester',
+      );
+      expect(enrolledWithSpacedAy.isPendingReEnrollment(activeSemester), false);
+
+      // Semester with term index match ('2nd' vs '2nd Semester')
+      final enrolledShortTerm = baseStudent.copyWith(
+        schoolYear: '2026-2027',
+        semester: '2nd',
+      );
+      expect(enrolledShortTerm.isPendingReEnrollment(activeSemester), false);
     });
+
+
 
     test('QrTicketLocked identifies re-enrollment requirement correctly', () {
       const lockedPayment = QrTicketLocked(
@@ -134,6 +138,63 @@ void main() {
       );
       expect(lockedReEnrollment.isReEnrollmentRequired, true);
       expect(lockedReEnrollment.lockReason, isNotNull);
+    });
+
+    test('College Semester vs SHS Trimester: Student and Semester model level distinction', () {
+      // College student & semester
+      expect(baseStudent.isCollege, isTrue);
+      expect(baseStudent.isShs, isFalse);
+      expect(activeSemester.isCollege, isTrue);
+      expect(activeSemester.isShs, isFalse);
+
+      // SHS student & trimester
+      final shsStudent = baseStudent.copyWith(
+        courseCode: 'STEM',
+        courseName: 'Science, Technology, Engineering, and Math',
+        yearLevel: 'Grade 11',
+        section: 'STEM 11-A',
+        semester: '1st Trimester',
+        academicLevel: 'SHS',
+      );
+      expect(shsStudent.isShs, isTrue);
+      expect(shsStudent.isCollege, isFalse);
+
+      final shsTrimester = SemesterModel(
+        id: 'sem_shs_2nd_tri',
+        academicYear: '2026-2027',
+        semester: '2nd Trimester',
+        academicLevel: 'SHS',
+        status: 'ACTIVE',
+        isCurrent: true,
+      );
+      expect(shsTrimester.isShs, isTrue);
+      expect(shsTrimester.isCollege, isFalse);
+
+      // Isolation: College student is NOT pending re-enrollment when an SHS trimester updates
+      expect(baseStudent.isPendingReEnrollment(shsTrimester), isFalse);
+
+      // Isolation: SHS student is NOT pending re-enrollment when a College semester updates
+      expect(shsStudent.isPendingReEnrollment(activeSemester), isFalse);
+
+      // Matching cohort: SHS student is pending re-enrollment when their own trimester updates (1st vs 2nd)
+      expect(shsStudent.isPendingReEnrollment(shsTrimester), isTrue);
+
+      // College BSIT student with legacy semester string '2nd Trimester' still evaluates to College
+      final legacyStudent = baseStudent.copyWith(semester: '2nd Trimester');
+      expect(legacyStudent.isCollege, isTrue);
+      expect(legacyStudent.isShs, isFalse);
+
+      // SemesterModel.forCohort adapts Trimester to Semester for College
+      final adaptedForCollege = shsTrimester.forCohort(isShs: false);
+      expect(adaptedForCollege.semester, '2nd Semester');
+      expect(adaptedForCollege.isCollege, isTrue);
+      expect(adaptedForCollege.displayName, '2nd Semester · A.Y. 2026-2027');
+
+      // SemesterModel.forCohort adapts Semester to Trimester for SHS
+      final adaptedForShs = activeSemester.forCohort(isShs: true);
+      expect(adaptedForShs.semester, '2nd Trimester');
+      expect(adaptedForShs.isShs, isTrue);
+      expect(adaptedForShs.displayName, '2nd Trimester · A.Y. 2026-2027');
     });
   });
 }

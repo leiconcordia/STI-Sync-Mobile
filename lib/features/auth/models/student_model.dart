@@ -23,7 +23,8 @@ class StudentModel {
   final String yearLevel;        // "1st Year".."4th Year"
   final String section;
   final String schoolYear;       // e.g. "2026-2027"
-  final String semester;         // "1st Semester" | "2nd Semester"
+  final String semester;         // "1st Semester" | "2nd Semester" | "1st Trimester"
+  final String? academicLevel;   // "Tertiary" / "COLLEGE" | "SHS"
   final String email;
   final String profilePhotoUrl;  // Cloudinary secure_url, "" if none
   final String schoolIdPhotoUrl; // Cloudinary secure_url, "" if none
@@ -33,6 +34,9 @@ class StudentModel {
   final String? rejectionReason; // Set by admin on RETURNED status only
   final int revisionCount;       // Number of revisions / retries
   final List<Map<String, dynamic>> revisionHistory; // Full history of comments & decisions
+  final bool isProfileComplete;  // True if first-login onboarding is finished
+  final bool requiresPasswordChange; // True if student is on default temporary password
+  final String? defaultPassword; // Default temporary password if still on first-time onboarding
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -55,6 +59,7 @@ class StudentModel {
     required this.section,
     required this.schoolYear,
     required this.semester,
+    this.academicLevel,
     required this.email,
     required this.profilePhotoUrl,
     required this.schoolIdPhotoUrl,
@@ -64,9 +69,140 @@ class StudentModel {
     this.rejectionReason,
     this.revisionCount = 0,
     this.revisionHistory = const [],
+    this.isProfileComplete = true,
+    this.requiresPasswordChange = false,
+    this.defaultPassword,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// True if the student is College / Tertiary.
+  bool get isCollege {
+    if (academicLevel != null && academicLevel!.trim().isNotEmpty) {
+      final lvl = academicLevel!.trim().toUpperCase();
+      if (lvl == 'TERTIARY' || lvl == 'COLLEGE') return true;
+      if (lvl == 'SHS' || lvl.contains('SENIOR')) return false;
+    }
+    final y = yearLevel.trim().toUpperCase();
+    if (y.contains('YEAR') ||
+        y.contains('1ST') ||
+        y.contains('2ND') ||
+        y.contains('3RD') ||
+        y.contains('4TH') ||
+        y.contains('5TH')) {
+      if (!y.contains('GRADE') && !y.contains('G11') && !y.contains('G12')) {
+        return true;
+      }
+    }
+    final c = courseCode.trim().toUpperCase();
+    if (c == 'BSIT' ||
+        c == 'BSCS' ||
+        c == 'BSIS' ||
+        c == 'ACT' ||
+        c == 'DIT' ||
+        c == 'BSBA' ||
+        c == 'BSHM' ||
+        c == 'BSTM' ||
+        c == 'BSCPE' ||
+        c == 'BSA' ||
+        c == 'BSAIS' ||
+        c == 'BSED') {
+      return true;
+    }
+    final d = departmentId.trim().toUpperCase();
+    final dn = departmentName.trim().toUpperCase();
+    if (d.contains('COLLEGE') ||
+        dn.contains('COLLEGE') ||
+        d.contains('TERTIARY') ||
+        dn.contains('TERTIARY') ||
+        d.contains('IT') ||
+        dn.contains('ICT')) {
+      return true;
+    }
+    return !isShs;
+  }
+
+  /// True if the student is Senior High School (Grade 11/12 or SHS strands).
+  bool get isShs {
+    if (academicLevel != null && academicLevel!.trim().isNotEmpty) {
+      final lvl = academicLevel!.trim().toUpperCase();
+      if (lvl == 'SHS' || lvl.contains('SENIOR')) return true;
+      if (lvl == 'TERTIARY' || lvl == 'COLLEGE') return false;
+    }
+    final y = yearLevel.trim().toUpperCase();
+    if (y.contains('GRADE') ||
+        y.contains('G11') ||
+        y.contains('G12') ||
+        y == '11' ||
+        y == '12') {
+      return true;
+    }
+    final c = courseCode.trim().toUpperCase();
+    final n = courseName.trim().toUpperCase();
+    final d = departmentId.trim().toUpperCase();
+    final dn = departmentName.trim().toUpperCase();
+    if (c.contains('STEM') ||
+        c.contains('ABM') ||
+        c.contains('HUMSS') ||
+        c.contains('TVL') ||
+        c.contains('GAS') ||
+        n.contains('SENIOR HIGH') ||
+        d.contains('SHS') ||
+        dn.contains('SHS')) {
+      return true;
+    }
+    // If yearLevel or courseCode indicates College, definitely NOT SHS
+    if (y.contains('YEAR') ||
+        c == 'BSIT' ||
+        c == 'BSCS' ||
+        c == 'BSIS' ||
+        c == 'ACT' ||
+        c == 'DIT' ||
+        c == 'BSBA' ||
+        c == 'BSHM' ||
+        c == 'BSTM' ||
+        c == 'BSCPE' ||
+        c == 'BSA') {
+      return false;
+    }
+    return false;
+  }
+
+  /// Returns the standardized academic level ('COLLEGE' vs 'SHS').
+  String get standardizedAcademicLevel => isShs ? 'SHS' : 'COLLEGE';
+
+  /// Evaluates whether two academic year strings represent the same school year
+  /// (e.g. 'A.Y. 2026-2027' vs '2026-2027' or '2026 - 2027').
+  static bool areAcademicYearsEquivalent(String sy1, String sy2) {
+    final clean1 = sy1.replaceAll(RegExp(r'[^0-9]'), '');
+    final clean2 = sy2.replaceAll(RegExp(r'[^0-9]'), '');
+    if (clean1.isNotEmpty && clean2.isNotEmpty) {
+      return clean1 == clean2;
+    }
+    return sy1.trim().toLowerCase() == sy2.trim().toLowerCase();
+  }
+
+  /// Evaluates whether two semester strings represent the same term index
+  /// (e.g. '2nd Semester' vs '2nd Trimester' vs '2nd').
+  static bool areSemestersEquivalent(String sem1, String sem2) {
+    if (sem1.trim().toLowerCase() == sem2.trim().toLowerCase()) return true;
+
+    int? extractTerm(String s) {
+      final lower = s.toLowerCase();
+      if (lower.contains('1st') || lower.contains('first') || RegExp(r'\b1\b').hasMatch(lower)) return 1;
+      if (lower.contains('2nd') || lower.contains('second') || RegExp(r'\b2\b').hasMatch(lower)) return 2;
+      if (lower.contains('3rd') || lower.contains('third') || RegExp(r'\b3\b').hasMatch(lower)) return 3;
+      if (lower.contains('summer')) return 4;
+      return null;
+    }
+
+    final t1 = extractTerm(sem1);
+    final t2 = extractTerm(sem2);
+    if (t1 != null && t2 != null) {
+      return t1 == t2;
+    }
+    return false;
+  }
 
   /// Evaluates whether the student must complete in-app semester re-enrollment.
   bool isPendingReEnrollment(SemesterModel? activeSemester) {
@@ -76,10 +212,14 @@ class StudentModel {
     if (activeSemester == null) return false;
     if (!activeSemester.isActive) return false;
 
-    final syMismatch = activeSemester.academicYear.isNotEmpty &&
-        schoolYear.trim().toLowerCase() != activeSemester.academicYear.trim().toLowerCase();
-    final semMismatch = activeSemester.semester.isNotEmpty &&
-        semester.trim().toLowerCase() != activeSemester.semester.trim().toLowerCase();
+    // Evaluate only against the active semester dedicated to the student's academic level
+    if (isShs && !activeSemester.isShs) return false;
+    if (isCollege && !activeSemester.isCollege) return false;
+
+    final syMismatch = activeSemester.academicYear.trim().isNotEmpty &&
+        !areAcademicYearsEquivalent(schoolYear, activeSemester.academicYear);
+    final semMismatch = activeSemester.semester.trim().isNotEmpty &&
+        !areSemestersEquivalent(semester, activeSemester.semester);
 
     return syMismatch || semMismatch;
   }
@@ -107,6 +247,7 @@ class StudentModel {
     String? section,
     String? schoolYear,
     String? semester,
+    String? academicLevel,
     String? email,
     String? profilePhotoUrl,
     String? schoolIdPhotoUrl,
@@ -116,6 +257,9 @@ class StudentModel {
     String? rejectionReason,
     int? revisionCount,
     List<Map<String, dynamic>>? revisionHistory,
+    bool? isProfileComplete,
+    bool? requiresPasswordChange,
+    String? defaultPassword,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -138,6 +282,7 @@ class StudentModel {
       section: section ?? this.section,
       schoolYear: schoolYear ?? this.schoolYear,
       semester: semester ?? this.semester,
+      academicLevel: academicLevel ?? this.academicLevel,
       email: email ?? this.email,
       profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
       schoolIdPhotoUrl: schoolIdPhotoUrl ?? this.schoolIdPhotoUrl,
@@ -147,6 +292,9 @@ class StudentModel {
       rejectionReason: rejectionReason ?? this.rejectionReason,
       revisionCount: revisionCount ?? this.revisionCount,
       revisionHistory: revisionHistory ?? this.revisionHistory,
+      isProfileComplete: isProfileComplete ?? this.isProfileComplete,
+      requiresPasswordChange: requiresPasswordChange ?? this.requiresPasswordChange,
+      defaultPassword: defaultPassword ?? this.defaultPassword,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -204,6 +352,7 @@ class StudentModel {
       section: d['section'] as String? ?? '',
       schoolYear: d['schoolYear'] as String? ?? '',
       semester: d['semester'] as String? ?? '',
+      academicLevel: d['academicLevel'] as String?,
       email: d['email'] as String? ?? '',
       profilePhotoUrl: d['profilePhotoUrl'] as String? ?? '',
       schoolIdPhotoUrl: d['schoolIdPhotoUrl'] as String? ?? '',
@@ -213,6 +362,9 @@ class StudentModel {
       rejectionReason: rejectionReason,
       revisionCount: (d['revisionCount'] as num?)?.toInt() ?? parsedHistory.length,
       revisionHistory: parsedHistory,
+      isProfileComplete: d['isProfileComplete'] as bool? ?? true,
+      requiresPasswordChange: d['requiresPasswordChange'] as bool? ?? false,
+      defaultPassword: d['defaultPassword'] as String?,
       createdAt: d['createdAt'] is Timestamp
           ? (d['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -241,15 +393,19 @@ class StudentModel {
         'section': section,
         'schoolYear': schoolYear,
         'semester': semester,
+        if (academicLevel != null) 'academicLevel': academicLevel,
         'email': email,
         'profilePhotoUrl': profilePhotoUrl,
         'schoolIdPhotoUrl': schoolIdPhotoUrl,
         'status': status,
+        if (defaultPassword != null) 'defaultPassword': defaultPassword,
         'registrationSource': registrationSource,
         'addedBy': addedBy,
         if (rejectionReason != null) 'rejectionReason': rejectionReason,
         'revisionCount': revisionCount,
         'revisionHistory': revisionHistory,
+        'isProfileComplete': isProfileComplete,
+        'requiresPasswordChange': requiresPasswordChange,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -264,6 +420,8 @@ class StudentModel {
     String? rejectionReasonOverride,
     int? revisionCountOverride,
     List<Map<String, dynamic>>? revisionHistoryOverride,
+    bool? isProfileCompleteOverride,
+    bool? requiresPasswordChangeOverride,
   }) {
     return {
       'id': uid,
@@ -284,6 +442,7 @@ class StudentModel {
       'section': section,
       'schoolYear': schoolYear,
       'semester': semester,
+      if (academicLevel != null) 'academicLevel': academicLevel,
       'email': email,
       'profilePhotoUrl': profilePhotoUrl,
       'schoolIdPhotoUrl': schoolIdPhotoUrl,
@@ -294,6 +453,8 @@ class StudentModel {
         'rejectionReason': rejectionReasonOverride ?? rejectionReason,
       'revisionCount': revisionCountOverride ?? revisionCount,
       'revisionHistory': revisionHistoryOverride ?? revisionHistory,
+      'isProfileComplete': isProfileCompleteOverride ?? isProfileComplete,
+      'requiresPasswordChange': requiresPasswordChangeOverride ?? requiresPasswordChange,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };

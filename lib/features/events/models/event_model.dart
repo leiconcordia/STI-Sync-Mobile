@@ -3,6 +3,17 @@ import 'dart:convert';
 import '../../auth/models/student_model.dart';
 import '../../../core/utils/date_formatter.dart';
 
+enum EventLifecycleState {
+  draft,
+  pending,
+  approved,
+  ongoing,
+  completed,
+  cancelled,
+  archived,
+  deleted,
+}
+
 enum MobileEventDisplayStatus {
   upcoming,
   ongoing,
@@ -17,10 +28,13 @@ class EventModel {
   final String? tagline;
   final String description;
   final List<String> objectives;
+  final List<String> mechanics;
+  final List<String> organizers;
   final String? bannerImageUrl;
   final String? thumbnailUrl;
 
   final bool isVisible;
+  final bool isPublished;
   final DateTime? visibilityStart;
 
   final String eventTypeId;
@@ -32,13 +46,19 @@ class EventModel {
 
   final String semesterId;
   final String schoolYear;
+  final String? semester;
   final String? targetAcademicLevel;
+  final String? date;
+  final String? startTime;
+  final String? endTime;
+  final String? venueName;
 
   final List<EventSessionModel> sessions;
   final String venueId;
   final String? customVenueName;
   final String eventFormat;
 
+  final bool allStudents;
   final String targetAudienceScope;
   final List<String> targetCourses;
   final List<String> targetYearLevels;
@@ -74,7 +94,7 @@ class EventModel {
   final String scannerActivationCode;
   final List<String> scannerUserIds;
 
-  // ─── Lifecycle & Cancellation ───
+  // ─── Lifecycle & Closing States ───
   final String status;
   final String proposalStatus;
   final bool isCancelled;
@@ -83,6 +103,14 @@ class EventModel {
   final String? cancelledByName;
   final String? cancellationReason;
   final String? refundPolicy; // 'refund_cash' | 'credit_next_event' | 'no_fees_collected'
+
+  final bool isArchived;
+  final bool isDeleted;
+  final DateTime? completedAt;
+  final String? completedBy;
+  final DateTime? archivedAt;
+  final String? archivedBy;
+  final bool attendanceLocked;
 
   final String createdBy;
   final DateTime createdAt;
@@ -95,9 +123,12 @@ class EventModel {
     this.tagline,
     required this.description,
     required this.objectives,
+    this.mechanics = const [],
+    this.organizers = const [],
     this.bannerImageUrl,
     this.thumbnailUrl,
     this.isVisible = true,
+    this.isPublished = false,
     this.visibilityStart,
     required this.eventTypeId,
     this.customEventTypeName,
@@ -107,11 +138,17 @@ class EventModel {
     required this.hostingOrgId,
     required this.semesterId,
     required this.schoolYear,
+    this.semester,
     this.targetAcademicLevel,
+    this.date,
+    this.startTime,
+    this.endTime,
+    this.venueName,
     required this.sessions,
     required this.venueId,
     this.customVenueName,
     required this.eventFormat,
+    this.allStudents = true,
     this.targetAudienceScope = 'all',
     this.targetCourses = const [],
     required this.targetYearLevels,
@@ -145,10 +182,63 @@ class EventModel {
     this.cancelledByName,
     this.cancellationReason,
     this.refundPolicy,
+    this.isArchived = false,
+    this.isDeleted = false,
+    this.completedAt,
+    this.completedBy,
+    this.archivedAt,
+    this.archivedBy,
+    this.attendanceLocked = false,
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// True if the event has been officially completed
+  bool get isCompleted =>
+      status.toLowerCase() == 'completed' ||
+      proposalStatus.toLowerCase() == 'completed' ||
+      completedAt != null;
+
+  /// Visual lifecycle state helper per Section 4.1
+  EventLifecycleState get lifecycleState {
+    if (isDeleted) return EventLifecycleState.deleted;
+    if (isArchived) return EventLifecycleState.archived;
+    if (isEffectivelyCancelled) return EventLifecycleState.cancelled;
+    if (isCompleted) return EventLifecycleState.completed;
+    if (status.toLowerCase() == 'ongoing' || mobileStatus == MobileEventDisplayStatus.ongoing) {
+      return EventLifecycleState.ongoing;
+    }
+    if (status.toLowerCase() == 'approved' || proposalStatus.toLowerCase() == 'approved') {
+      return EventLifecycleState.approved;
+    }
+    if (proposalStatus.toLowerCase() == 'pending') {
+      return EventLifecycleState.pending;
+    }
+    return EventLifecycleState.draft;
+  }
+
+  /// Whether this event has attendance scanners assigned or an activation PIN configured.
+  bool get hasScanners =>
+      scannerUserIds.isNotEmpty ||
+      (scannerActivationCode.trim().isNotEmpty &&
+          scannerActivationCode.trim() != '0');
+
+  /// Whether the event requires student attendance tracking and gate scanning.
+  /// If the event does not require scanners (no scanners or PIN assigned),
+  /// or if attendance/tickets are explicitly disabled, attendance scanning is not required.
+  bool get requiresAttendance =>
+      attendanceEnabled != false &&
+      enableQRTickets != false &&
+      hasScanners;
+
+  /// Whether the student QR ticket is active for gate scanning per Section 4.1
+  bool get isGatePassValid {
+    if (isDeleted || isArchived || isCompleted || isEffectivelyCancelled || !requiresAttendance) {
+      return false;
+    }
+    return true;
+  }
 
   /// True if the event has been officially cancelled (evaluates isCancelled, status, proposalStatus, and cancellationReason).
   bool get isEffectivelyCancelled =>
@@ -166,7 +256,7 @@ class EventModel {
     if (isEffectivelyCancelled) {
       return MobileEventDisplayStatus.cancelled;
     }
-    if (status.toLowerCase() == 'completed' || proposalStatus.toLowerCase() == 'completed') {
+    if (isCompleted) {
       return MobileEventDisplayStatus.completed;
     }
     if (sessions.isEmpty) return MobileEventDisplayStatus.upcoming;
@@ -207,62 +297,88 @@ class EventModel {
 
   /// Checks if the event is set to visible and has reached its scheduled visibility start date/time.
   bool isVisibleNow([DateTime? now]) {
+    if (isDeleted) return false;
     if (!isVisible) return false;
     if (visibilityStart == null) return true;
     final current = now ?? DateTime.now();
     return current.isAfter(visibilityStart!) || current.isAtSameMomentAs(visibilityStart!);
   }
 
-  /// Determines if a given [StudentModel] matches all target audience criteria for this event.
+  /// Determines if a given [StudentModel] matches the progressive hierarchical target audience criteria for this event.
   bool isStudentEligible(StudentModel? student, {List<String> studentOrgIds = const []}) {
     if (student == null) return false;
 
-    // 1. Check Proposal Status & Cancellation (must be approved, or cancelled if previously approved)
+    // 0. Manual Publishing Check: Event must be published manually & visible
+    if (!isPublished || !isVisible) {
+      return false;
+    }
+
+    // 1. Check Proposal Status & Cancellation (must be approved, ongoing, completed, or cancelled)
     final pStatus = proposalStatus.toLowerCase();
     final sStatus = status.toLowerCase();
     final isValidLifecycle = pStatus == 'approved' ||
+        pStatus == 'published' ||
         pStatus == 'cancelled' ||
+        pStatus == 'completed' ||
+        pStatus == 'ongoing' ||
+        pStatus == 'activated' ||
+        pStatus == 'approved_president' ||
+        sStatus == 'approved' ||
+        sStatus == 'published' ||
         sStatus == 'cancelled' ||
+        sStatus == 'completed' ||
+        sStatus == 'ongoing' ||
+        sStatus == 'activated' ||
         isCancelled;
-    if (proposalStatus.isNotEmpty && !isValidLifecycle) {
+    if (!isValidLifecycle) {
       return false;
     }
 
     // 2. Audience Scope & Club Membership
-    if (targetAudienceScope == 'members') {
+    if (targetAudienceScope.toLowerCase() == 'members') {
       if (hostingOrgId.isNotEmpty && !studentOrgIds.contains(hostingOrgId)) {
         return false;
       }
     }
 
-    // 3. Academic Level (SHS vs COLLEGE vs BOTH)
-    if (targetAcademicLevel != null &&
-        targetAcademicLevel!.isNotEmpty &&
-        targetAcademicLevel!.toUpperCase() != 'BOTH') {
-      final isShs = _isShsCohort(student);
-      if (targetAcademicLevel!.toUpperCase() == 'SHS' && !isShs) {
+    // 3. Level 1: "ALL STUDENTS" Rule
+    // If allStudents is true or scope is 'all' with no academic level restrictions,
+    // and no specific year levels, courses, or sections are specified, then EVERYONE can view.
+    final bool hasLevelRestriction = targetAcademicLevel != null &&
+        targetAcademicLevel!.trim().isNotEmpty &&
+        targetAcademicLevel!.toUpperCase() != 'BOTH' &&
+        !(targetAcademicLevel!.toUpperCase().contains('SHS') && targetAcademicLevel!.toUpperCase().contains('COLLEGE'));
+
+    final bool isAllStudentsExplicit = allStudents ||
+        (targetAudienceScope.toLowerCase() == 'all' && !hasLevelRestriction);
+
+    // If marked for All Students with no deeper restrictions, instantly eligible!
+    if (isAllStudentsExplicit && targetYearLevels.isEmpty && targetCourses.isEmpty && targetSections.isEmpty) {
+      return true;
+    }
+
+    // 4. Level 2: Academic Division (SHS vs COLLEGE)
+    final isShs = _isShsCohort(student);
+    if (hasLevelRestriction) {
+      final lvl = targetAcademicLevel!.toUpperCase().trim();
+      if (lvl == 'SHS' && !isShs) {
         return false;
       }
-      if (targetAcademicLevel!.toUpperCase() == 'COLLEGE' && isShs) {
+      if (lvl == 'COLLEGE' && isShs) {
         return false;
       }
     }
 
-    // 4. Target Courses / Allowed Courses
-    if (targetCourses.isNotEmpty) {
-      final sCourseId = student.courseId.trim().toLowerCase();
-      final sCourseCode = student.courseCode.trim().toLowerCase();
-      final sCourseName = student.courseName.trim().toLowerCase();
-
-      final matchesCourse = targetCourses.any((target) {
-        final t = target.trim().toLowerCase();
-        return t == sCourseId || t == sCourseCode || t == sCourseName;
-      });
-
-      if (!matchesCourse) return false;
+    // If only the Academic Level is constrained (e.g. SHS only, or College only),
+    // and NO deeper year levels, courses/strands, or sections are restricted:
+    // AUTOMATICALLY all students in that academic level qualify!
+    if (targetYearLevels.isEmpty && targetCourses.isEmpty && targetSections.isEmpty) {
+      return true;
     }
 
-    // 5. Target Year Levels
+    // 5. Level 3: Target Year Levels (e.g. Grade 11, 1st Year)
+    // If targetYearLevels is NOT empty, verify student's year matches.
+    // If empty -> wild-card (all year levels in this academic level qualify).
     if (targetYearLevels.isNotEmpty) {
       final sYear = student.yearLevel.trim().toLowerCase();
       final sYearDigits = sYear.replaceAll(RegExp(r'[^0-9]'), '');
@@ -270,35 +386,91 @@ class EventModel {
       final matchesYear = targetYearLevels.any((target) {
         final t = target.trim().toLowerCase();
         if (t == sYear) return true;
+
         final tDigits = t.replaceAll(RegExp(r'[^0-9]'), '');
-        return sYearDigits.isNotEmpty && sYearDigits == tDigits;
+        if (sYearDigits.isNotEmpty && tDigits.isNotEmpty && sYearDigits == tDigits) {
+          return true;
+        }
+
+        // Match Grade 11 / G11 / 11
+        if ((t.contains('11') || t.contains('g11')) && (sYear.contains('11') || sYear.contains('g11'))) {
+          return true;
+        }
+        // Match Grade 12 / G12 / 12
+        if ((t.contains('12') || t.contains('g12')) && (sYear.contains('12') || sYear.contains('g12'))) {
+          return true;
+        }
+        // Match 1st Year / 1
+        if (t.contains('1st') && (sYear.contains('1st') || sYear == '1')) return true;
+        if (t.contains('2nd') && (sYear.contains('2nd') || sYear == '2')) return true;
+        if (t.contains('3rd') && (sYear.contains('3rd') || sYear == '3')) return true;
+        if (t.contains('4th') && (sYear.contains('4th') || sYear == '4')) return true;
+
+        return false;
       });
 
       if (!matchesYear) return false;
     }
 
-    // 6. Target Sections
+    // If year level matched (or was wildcard) and NO deeper courses/strands or sections are specified:
+    // ALL students of that year level qualify!
+    if (targetCourses.isEmpty && targetSections.isEmpty) {
+      return true;
+    }
+
+    // 6. Level 4: Target Courses / Strands
+    // If targetCourses is NOT empty, verify student's course matches.
+    // If empty -> wild-card (all strands/courses qualify).
+    if (targetCourses.isNotEmpty) {
+      // Backward compatibility: If an event has a bloated array containing all known courses,
+      // or if targetCourses includes 'all' / 'all students', treat as wildcard
+      final bool isBroadCourseList = targetCourses.any((c) {
+        final lower = c.trim().toLowerCase();
+        return lower == 'all' || lower.contains('all students') || lower.contains('campus-wide');
+      });
+
+      if (!isBroadCourseList) {
+        final sCourseId = student.courseId.trim().toLowerCase();
+        final sCourseCode = student.courseCode.trim().toLowerCase();
+        final sCourseName = student.courseName.trim().toLowerCase();
+
+        final matchesCourse = targetCourses.any((target) {
+          final t = target.trim().toLowerCase();
+          return t == sCourseId ||
+              t == sCourseCode ||
+              t == sCourseName ||
+              (sCourseCode.isNotEmpty && t.contains(sCourseCode)) ||
+              (sCourseName.isNotEmpty && (t.contains(sCourseName) || sCourseName.contains(t)));
+        });
+
+        if (!matchesCourse) return false;
+      }
+    }
+
+    // If course/strand matched (or was wildcard) and NO sections are specified:
+    // ALL students of that strand qualify!
+    if (targetSections.isEmpty) {
+      return true;
+    }
+
+    // 7. Level 5: Target Sections (Optional finest filter)
+    // If targetSections is NOT empty, verify student's section matches.
+    // If empty -> wild-card (all sections qualify).
     if (targetSections.isNotEmpty) {
       final sSection = student.section.trim().toLowerCase();
+      final sSectionClean = sSection.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
       final matchesSection = targetSections.any((target) {
         final t = target.trim().toLowerCase();
-        return t == sSection;
+        if (t == sSection) return true;
+        final tClean = t.replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (sSectionClean.isNotEmpty && tClean.isNotEmpty && sSectionClean == tClean) {
+          return true;
+        }
+        return sSection.contains(t) || t.contains(sSection);
       });
 
       if (!matchesSection) return false;
-    }
-
-    // 7. Target Departments
-    if (targetDepartmentIds.isNotEmpty) {
-      final sDeptId = student.departmentId.trim().toLowerCase();
-      final sDeptName = student.departmentName.trim().toLowerCase();
-
-      final matchesDept = targetDepartmentIds.any((target) {
-        final t = target.trim().toLowerCase();
-        return t == sDeptId || t == sDeptName;
-      });
-
-      if (!matchesDept) return false;
     }
 
     return true;
@@ -364,6 +536,11 @@ class EventModel {
       }
       if (earliest != null) return earliest;
     }
+    if (date != null && date!.trim().isNotEmpty) {
+      final time = startTime != null && startTime!.trim().isNotEmpty ? startTime!.trim() : '00:00';
+      final dt = DateTime.tryParse('$date $time:00') ?? DateTime.tryParse(date!);
+      if (dt != null) return dt;
+    }
     return createdAt;
   }
 
@@ -372,11 +549,17 @@ class EventModel {
     if (sessions.isNotEmpty && sessions.first.date.trim().isNotEmpty) {
       return formatAppDate(sessions.first.date, fallback: sessions.first.date);
     }
+    if (date != null && date!.trim().isNotEmpty) {
+      return formatAppDate(date!, fallback: date!);
+    }
     return formatAppDate(createdAt, fallback: 'No schedule yet');
   }
 
   /// Returns true if this event will occur today or in the future (filters out past events).
   bool isUpcomingOrOngoing([DateTime? now]) {
+    if (isDeleted || isArchived || isCompleted || isEffectivelyCancelled) {
+      return false;
+    }
     final current = now ?? DateTime.now();
     final startOfToday = DateTime(current.year, current.month, current.day);
 
@@ -393,15 +576,20 @@ class EventModel {
           }
         }
       }
-      // All sessions are strictly before today (past event)
       return false;
     }
 
+    // An approved published activity with no sessions scheduled yet is active/upcoming.
+    // The proposal date is only an administrative reference date, not a concluded session.
     return true;
   }
 
-  /// Returns true if this event is in the past (completed before today).
-  bool isPast([DateTime? now]) => !isUpcomingOrOngoing(now);
+  /// Returns true if this event is in the past (completed before today, or marked completed).
+  bool isPast([DateTime? now]) {
+    if (isDeleted) return false;
+    if (isCompleted) return true;
+    return !isUpcomingOrOngoing(now);
+  }
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -410,6 +598,15 @@ class EventModel {
 
   factory EventModel.fromMap(String docId, Map<String, dynamic> data) {
     final bool rawVisible = (data['isVisible'] ?? data['visibleToStudents']) as bool? ?? true;
+    final bool rawPublished = data['isPublished'] == true ||
+        data['is_published'] == true ||
+        (data['status'] as String?)?.toLowerCase() == 'published' ||
+        (data['lifecycleStatus'] as String?)?.toLowerCase() == 'published' ||
+        (data['proposalStatus'] as String?)?.toLowerCase() == 'published' ||
+        (data['status'] as String?)?.toLowerCase() == 'approved' ||
+        (data['proposalStatus'] as String?)?.toLowerCase() == 'approved' ||
+        (data['proposalStatus'] as String?)?.toLowerCase() == 'approved_president' ||
+        (data['proposalStatus'] as String?)?.toLowerCase() == 'activated';
 
     DateTime? parsedVisibilityStart;
     final rawVisStart = data['visibilityStart'];
@@ -419,39 +616,96 @@ class EventModel {
       parsedVisibilityStart = DateTime.tryParse(rawVisStart.trim());
     }
 
+    DateTime? parseFlexibleDate(dynamic raw) {
+      if (raw == null) return null;
+      if (raw is Timestamp) return raw.toDate();
+      if (raw is String && raw.trim().isNotEmpty) return DateTime.tryParse(raw.trim());
+      if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+      return null;
+    }
+
+    final bool isArchived = data['isArchived'] == true || data['is_archived'] == true;
+    final bool isDeleted = data['isDeleted'] == true || data['is_deleted'] == true;
+    final String? statusRaw = data['status'] as String? ?? data['eventStatus'] as String? ?? data['event_status'] as String?;
+    final bool attendanceLocked = data['attendanceLocked'] == true ||
+        data['attendance_locked'] == true ||
+        statusRaw?.toLowerCase() == 'completed' ||
+        (data['proposalStatus'] as String?)?.toLowerCase() == 'completed';
+
     return EventModel(
       id: docId,
-      referenceId: data['referenceId'] as String? ?? '',
+      referenceId: data['referenceId'] as String? ?? data['referenceNo'] as String? ?? '',
       title: data['title'] as String? ?? '',
       tagline: data['tagline'] as String?,
       description: data['description'] as String? ?? '',
       objectives: List<String>.from(data['objectives'] ?? []),
+      mechanics: List<String>.from(data['mechanics'] ?? []),
+      organizers: List<String>.from(data['organizers'] ?? []),
       bannerImageUrl: data['bannerImageUrl'] as String?,
       thumbnailUrl: data['thumbnailUrl'] as String?,
       isVisible: rawVisible,
+      isPublished: rawPublished,
       visibilityStart: parsedVisibilityStart,
       eventTypeId: data['eventTypeId'] as String? ?? '',
       customEventTypeName: data['customEventTypeName'] as String?,
       customEventTypeColor: data['customEventTypeColor'] as String?,
       eventCategoryId: data['eventCategoryId'] as String? ?? '',
       customEventCategoryName: data['customEventCategoryName'] as String?,
-      hostingOrgId: data['hostingOrgId'] as String? ?? '',
+      hostingOrgId: (data['hostingOrgId'] ?? data['organizationId'] ?? data['orgId']) as String? ?? '',
       semesterId: data['semesterId'] as String? ?? '',
       schoolYear: data['schoolYear'] as String? ?? '',
-      targetAcademicLevel: data['targetAcademicLevel'] as String?,
+      semester: data['semester'] as String?,
+      targetAcademicLevel: (data['targetAcademicLevel'] ?? (data['targetAudience'] is Map ? (data['targetAudience']['academicLevels'] as List?)?.join('/') : null)) as String?,
+      date: (data['date'] ?? data['eventDate'] ?? data['startDate']) as String?,
+      startTime: data['startTime'] as String?,
+      endTime: data['endTime'] as String?,
+      venueName: (data['venueName'] ?? data['customVenueName']) as String?,
       sessions: (data['sessions'] as List<dynamic>?)
               ?.map((s) => EventSessionModel.fromMap(s as Map<String, dynamic>))
               .toList() ??
           [],
       venueId: data['venueId'] as String? ?? '',
-      customVenueName: data['customVenueName'] as String?,
+      customVenueName: (data['customVenueName'] ?? data['venueName']) as String?,
       eventFormat: data['eventFormat'] as String? ?? '',
+      allStudents: data['allStudents'] == true ||
+          (data['targetAudience'] is Map && data['targetAudience']['allStudents'] == true) ||
+          data['targetAudienceScope'] == 'all' ||
+          (data['targetAudience'] is Map && data['targetAudience']['scope'] == 'all'),
       targetAudienceScope: data['targetAudienceScope'] as String? ?? 'all',
-      targetCourses: List<String>.from(data['targetCourses'] ?? data['allowedCourses'] ?? []),
-      targetYearLevels: List<String>.from(data['targetYearLevels'] ?? []),
-      targetSections: List<String>.from(data['targetSections'] ?? []),
-      targetDepartmentIds: List<String>.from(data['targetDepartmentIds'] ?? []),
-      expectedParticipantCount: data['expectedParticipantCount'] as int? ?? 0,
+      targetCourses: () {
+        final raw = data['targetCourses'] ??
+            data['allowedCourses'] ??
+            (data['targetAudience'] is Map ? data['targetAudience']['courseCodes'] : null);
+        if (raw is List) {
+          return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        }
+        return <String>[];
+      }(),
+      targetYearLevels: () {
+        final raw = data['targetYearLevels'] ??
+            (data['targetAudience'] is Map ? data['targetAudience']['yearLevels'] : null);
+        if (raw is List) {
+          return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        }
+        return <String>[];
+      }(),
+      targetSections: () {
+        final raw = data['targetSections'] ??
+            (data['targetAudience'] is Map ? data['targetAudience']['sections'] : null);
+        if (raw is List) {
+          return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        }
+        return <String>[];
+      }(),
+      targetDepartmentIds: () {
+        final raw = data['targetDepartmentIds'] ??
+            (data['targetAudience'] is Map ? data['targetAudience']['departmentIds'] : null);
+        if (raw is List) {
+          return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        }
+        return <String>[];
+      }(),
+      expectedParticipantCount: (data['expectedParticipantCount'] ?? (data['targetAudience'] is Map ? data['targetAudience']['estimatedAttendance'] : null)) as int? ?? 0,
       attendanceEnabled: data['attendanceEnabled'] as bool? ?? true,
       minAttendancePercent: (data['minAttendancePercent'] as num?)?.toDouble(),
       lateThresholdMinutes: data['lateThresholdMinutes'] as int?,
@@ -463,7 +717,7 @@ class EventModel {
       studentPayablesEnabled: data['studentPayablesEnabled'] as bool? ?? false,
       suggestedFeePerStudent:
           (data['suggestedFeePerStudent'] as num?)?.toDouble(),
-      adminFeeOverride: (data['adminFeeOverride'] as num?)?.toDouble(),
+      adminFeeOverride: ((data['adminFeeOverride'] ?? data['feeAmount'] ?? data['fee'] ?? data['suggestedFeePerStudent']) as num?)?.toDouble(),
       totalExpectedCollection:
           (data['totalExpectedCollection'] as num?)?.toDouble(),
       budgetItems: (data['budgetItems'] as List<dynamic>?)
@@ -476,10 +730,43 @@ class EventModel {
       enableQRTickets: data['enableQRTickets'] as bool? ?? true,
       mandatoryAttendance: data['mandatoryAttendance'] as bool? ?? false,
       lockAfterApproval: data['lockAfterApproval'] as bool? ?? false,
-      scannerActivationCode: data['scannerActivationCode'] as String? ?? '',
+      scannerActivationCode: (data['scannerActivationCode'] ?? data['scannerPinCode']) as String? ?? '',
 
-      scannerUserIds: List<String>.from(data['scannerUserIds'] ?? []),
-      status: (data['status'] as String? ?? data['eventStatus'] as String? ?? data['event_status'] as String?) ??
+      scannerUserIds: () {
+        final rawUserIds = data['scannerUserIds'];
+        if (rawUserIds is List && rawUserIds.isNotEmpty) {
+          final list = rawUserIds
+              .map((e) => e?.toString().trim() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (list.isNotEmpty) return list;
+        }
+        final rawScanners = data['scanners'];
+        if (rawScanners is List && rawScanners.isNotEmpty) {
+          final list = <String>[];
+          for (final s in rawScanners) {
+            if (s is Map) {
+              final uid = s['officerUserId'] ?? s['userId'] ?? s['id'] ?? s['officerName'];
+              if (uid != null && uid.toString().trim().isNotEmpty) {
+                list.add(uid.toString().trim());
+              }
+            } else if (s != null && s.toString().trim().isNotEmpty) {
+              list.add(s.toString().trim());
+            }
+          }
+          if (list.isNotEmpty) return list;
+        }
+        final rawStaff = data['scannerStaffNames'];
+        if (rawStaff is List && rawStaff.isNotEmpty) {
+          final list = rawStaff
+              .map((e) => e?.toString().trim() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (list.isNotEmpty) return list;
+        }
+        return <String>[];
+      }(),
+      status: statusRaw ??
           ((data['isCancelled'] == true ||
                   data['is_cancelled'] == true ||
                   data['isCanceled'] == true ||
@@ -539,6 +826,13 @@ class EventModel {
       cancelledByName: (data['cancelledByName'] ?? data['cancelled_by_name'] ?? data['canceledByName'] ?? data['canceled_by_name']) as String?,
       cancellationReason: (data['cancellationReason'] ?? data['cancellation_reason'] ?? data['canceledReason'] ?? data['canceled_reason'] ?? data['reason']) as String?,
       refundPolicy: data['refundPolicy'] as String?,
+      isArchived: isArchived,
+      isDeleted: isDeleted,
+      completedAt: parseFlexibleDate(data['completedAt'] ?? data['completed_at']),
+      completedBy: (data['completedBy'] ?? data['completed_by']) as String?,
+      archivedAt: parseFlexibleDate(data['archivedAt'] ?? data['archived_at']),
+      archivedBy: (data['archivedBy'] ?? data['archived_by']) as String?,
+      attendanceLocked: attendanceLocked,
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
@@ -560,6 +854,8 @@ class EventModel {
       'tagline': tagline,
       'description': description,
       'objectives': objectives,
+      'mechanics': mechanics,
+      'organizers': organizers,
       'bannerImageUrl': bannerImageUrl,
       'thumbnailUrl': thumbnailUrl,
       'isVisible': isVisible,
@@ -573,11 +869,13 @@ class EventModel {
       'hostingOrgId': hostingOrgId,
       'semesterId': semesterId,
       'schoolYear': schoolYear,
+      'semester': semester,
       'targetAcademicLevel': targetAcademicLevel,
       'sessions': sessions.map((s) => s.toMap()).toList(),
       'venueId': venueId,
       'customVenueName': customVenueName,
       'eventFormat': eventFormat,
+      'allStudents': allStudents,
       'targetAudienceScope': targetAudienceScope,
       'targetCourses': targetCourses,
       'targetYearLevels': targetYearLevels,
@@ -611,6 +909,13 @@ class EventModel {
       'cancelledByName': cancelledByName,
       'cancellationReason': cancellationReason,
       'refundPolicy': refundPolicy,
+      'isArchived': isArchived,
+      'isDeleted': isDeleted,
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'completedBy': completedBy,
+      'archivedAt': archivedAt != null ? Timestamp.fromDate(archivedAt!) : null,
+      'archivedBy': archivedBy,
+      'attendanceLocked': attendanceLocked,
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -624,6 +929,12 @@ class EventModel {
     map['visibilityStart'] = visibilityStart?.toIso8601String();
     if (cancelledAt != null) {
       map['cancelledAt'] = cancelledAt!.toIso8601String();
+    }
+    if (completedAt != null) {
+      map['completedAt'] = completedAt!.toIso8601String();
+    }
+    if (archivedAt != null) {
+      map['archivedAt'] = archivedAt!.toIso8601String();
     }
     return json.encode(map);
   }
@@ -682,6 +993,8 @@ class EventSessionModel {
   final bool hasTimeOut;
   final String? timeOutOpen;
   final String? timeOutClose;
+  final bool isLateEnabled;
+  final String? markLateAfter;
 
   const EventSessionModel({
     required this.id,
@@ -694,12 +1007,14 @@ class EventSessionModel {
     required this.hasTimeOut,
     this.timeOutOpen,
     this.timeOutClose,
+    this.isLateEnabled = false,
+    this.markLateAfter,
   });
 
   factory EventSessionModel.fromMap(Map<String, dynamic> map) {
     return EventSessionModel(
       id: map['id'] as String? ?? '',
-      title: map['title'] as String? ?? '',
+      title: (map['title'] ?? map['name'] ?? map['sessionName']) as String? ?? '',
       date: map['date'] as String? ?? '',
       startTime: map['startTime'] as String? ?? '',
       endTime: map['endTime'] as String? ?? '',
@@ -708,6 +1023,8 @@ class EventSessionModel {
       hasTimeOut: map['hasTimeOut'] as bool? ?? false,
       timeOutOpen: map['timeOutOpen'] as String?,
       timeOutClose: map['timeOutClose'] as String?,
+      isLateEnabled: map['isLateEnabled'] as bool? ?? false,
+      markLateAfter: map['markLateAfter'] as String?,
     );
   }
 
@@ -715,6 +1032,7 @@ class EventSessionModel {
     return {
       'id': id,
       'title': title,
+      'name': title,
       'date': date,
       'startTime': startTime,
       'endTime': endTime,
@@ -723,6 +1041,8 @@ class EventSessionModel {
       'hasTimeOut': hasTimeOut,
       'timeOutOpen': timeOutOpen,
       'timeOutClose': timeOutClose,
+      'isLateEnabled': isLateEnabled,
+      'markLateAfter': markLateAfter,
     };
   }
 }

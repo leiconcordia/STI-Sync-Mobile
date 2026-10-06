@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
@@ -13,6 +13,13 @@ class JoinOrganizationSheet extends ConsumerStatefulWidget {
       _JoinOrganizationSheetState();
 }
 
+enum OrgFilter {
+  allEligible,
+  myDepartment,
+  crossDepartmental,
+  all,
+}
+
 class _JoinOrganizationSheetState
     extends ConsumerState<JoinOrganizationSheet> {
   final TextEditingController _searchController = TextEditingController();
@@ -22,6 +29,7 @@ class _JoinOrganizationSheetState
   String? _selectedOrgId;
   String _searchQuery = '';
   String? _errorMessage;
+  OrgFilter _selectedFilter = OrgFilter.allEligible;
 
   @override
   void initState() {
@@ -83,6 +91,23 @@ class _JoinOrganizationSheetState
       return;
     }
 
+    final selectedOrg = _organizations.firstWhere(
+      (o) => o.id == _selectedOrgId,
+      orElse: () => _organizations.first,
+    );
+
+    if (!selectedOrg.isStudentEligible(student.departmentId, student.departmentName)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This organization is restricted to ${selectedOrg.departmentName.isNotEmpty ? selectedOrg.departmentName : "departmental"} students.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -106,9 +131,10 @@ class _JoinOrganizationSheetState
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
+        final errorMsg = e.toString().replaceAll('Exception:', '').trim();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send join request: $e'),
+            content: Text(errorMsg.isNotEmpty ? errorMsg : 'Failed to send join request: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -123,14 +149,30 @@ class _JoinOrganizationSheetState
     final studentDeptName = student?.departmentName;
 
     final filteredOrgs = _organizations.where((org) {
-      if (_searchQuery.trim().isEmpty) return true;
-      final q = _searchQuery.trim().toLowerCase();
-      return org.name.toLowerCase().contains(q) ||
-          org.acronym.toLowerCase().contains(q);
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        final matchesSearch = org.name.toLowerCase().contains(q) ||
+            org.acronym.toLowerCase().contains(q) ||
+            org.departmentName.toLowerCase().contains(q);
+        if (!matchesSearch) return false;
+      }
+
+      final isEligible = org.isStudentEligible(studentDeptId, studentDeptName);
+
+      switch (_selectedFilter) {
+        case OrgFilter.allEligible:
+          return isEligible;
+        case OrgFilter.myDepartment:
+          return !org.isCrossDepartmental && isEligible;
+        case OrgFilter.crossDepartmental:
+          return org.isCrossDepartmental;
+        case OrgFilter.all:
+          return true;
+      }
     }).toList();
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.88,
       padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -168,10 +210,10 @@ class _JoinOrganizationSheetState
             ],
           ),
           const Text(
-            'Select an organization to request membership. Your request will be sent to the officers for approval.',
+            'Select an organization to request membership. Cross-departmental clubs are open to all students, while departmental clubs are exclusive to students of that department.',
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Search bar
           TextField(
@@ -189,7 +231,36 @@ class _JoinOrganizationSheetState
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip(
+                  label: 'All Eligible',
+                  filter: OrgFilter.allEligible,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'My Department',
+                  filter: OrgFilter.myDepartment,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'Cross-Departmental',
+                  filter: OrgFilter.crossDepartmental,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'All Organizations',
+                  filter: OrgFilter.all,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // Organizations list
           Expanded(
@@ -204,9 +275,13 @@ class _JoinOrganizationSheetState
                       )
                     : filteredOrgs.isEmpty
                         ? const Center(
-                            child: Text(
-                              'No organizations found.',
-                              style: TextStyle(color: Colors.grey),
+                            child: Padding(
+                              padding: EdgeInsets.all(24.0),
+                              child: Text(
+                                'No organizations found matching your criteria.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
                             ),
                           )
                         : ListView.separated(
@@ -224,22 +299,26 @@ class _JoinOrganizationSheetState
 
                               return InkWell(
                                 onTap: isEligible
-                                    ? () => setState(() => _selectedOrgId = id)
+                                    ? () {
+                                        setState(() {
+                                          _selectedOrgId = isSelected ? null : id;
+                                        });
+                                      }
                                     : null,
                                 borderRadius: BorderRadius.circular(12),
                                 child: Opacity(
-                                  opacity: isEligible ? 1.0 : 0.6,
+                                  opacity: isEligible ? 1.0 : 0.55,
                                   child: Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: isSelected
                                           ? AppColors.primary.withOpacity(0.08)
-                                          : Colors.white,
+                                          : (isEligible ? Colors.white : Colors.grey.shade50),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: isSelected
                                             ? AppColors.primary
-                                            : Colors.grey.shade200,
+                                            : (isEligible ? Colors.grey.shade200 : Colors.grey.shade300),
                                         width: isSelected ? 2 : 1,
                                       ),
                                     ),
@@ -250,62 +329,67 @@ class _JoinOrganizationSheetState
                                           children: [
                                             CircleAvatar(
                                               radius: 20,
-                                              backgroundColor: AppColors.primary,
+                                              backgroundColor: isEligible ? AppColors.primary : Colors.grey.shade400,
                                               child: Text(
                                                 acronym.isNotEmpty
                                                     ? (acronym.length > 2
                                                         ? acronym.substring(0, 2)
                                                         : acronym)
-                                                    : 'ORG',
+                                                    : 'OR',
                                                 style: const TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     name,
-                                                    style: AppTextStyles.bodyMedium
-                                                        .copyWith(
+                                                    style: AppTextStyles.bodyMedium.copyWith(
                                                       fontWeight: FontWeight.bold,
-                                                      color: AppColors.primaryDark,
+                                                      color: isEligible ? AppColors.primaryDark : Colors.grey.shade700,
                                                       fontSize: 14,
                                                     ),
                                                   ),
+                                                  const SizedBox(height: 3),
                                                   Row(
                                                     children: [
-                                                      if (acronym.isNotEmpty) ...[
-                                                        Text(
-                                                          acronym,
-                                                          style: const TextStyle(
-                                                            color: Colors.grey,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(width: 8),
-                                                      ],
-                                                      // Scope badge
                                                       Container(
                                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                         decoration: BoxDecoration(
-                                                          color: org.isDepartmental
-                                                              ? AppColors.primary.withOpacity(0.1)
-                                                              : AppColors.success.withOpacity(0.1),
+                                                          color: org.isCrossDepartmental
+                                                              ? AppColors.success.withOpacity(0.12)
+                                                              : (isEligible
+                                                                  ? AppColors.primary.withOpacity(0.12)
+                                                                  : Colors.red.shade50),
                                                           borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(
+                                                            color: org.isCrossDepartmental
+                                                                ? AppColors.success.withOpacity(0.3)
+                                                                : (isEligible
+                                                                    ? AppColors.primary.withOpacity(0.3)
+                                                                    : Colors.red.shade200),
+                                                            width: 0.8,
+                                                          ),
                                                         ),
                                                         child: Text(
-                                                          org.isDepartmental ? '🏢 Departmental' : '🌐 Open to All',
+                                                          org.isCrossDepartmental
+                                                              ? '🌐 Open to All Departments'
+                                                              : (isEligible
+                                                                  ? '🏛️ Your Department (${org.departmentName})'
+                                                                  : '🔒 Restricted Department'),
                                                           style: TextStyle(
-                                                            color: org.isDepartmental ? AppColors.primary : AppColors.success,
+                                                            color: org.isCrossDepartmental
+                                                                ? AppColors.success
+                                                                : (isEligible
+                                                                    ? AppColors.primary
+                                                                    : Colors.red.shade700),
                                                             fontSize: 10,
-                                                            fontWeight: FontWeight.bold,
+                                                            fontWeight: FontWeight.w600,
                                                           ),
                                                         ),
                                                       ),
@@ -325,14 +409,20 @@ class _JoinOrganizationSheetState
                                           ],
                                         ),
                                         if (!isEligible) ...[
-                                          const SizedBox(height: 6),
-                                          Padding(
-                                            padding: const EdgeInsets.only(left: 52.0),
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 52.0),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red.shade50,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
                                             child: Text(
-                                              'Departmental club reserved for matching department students.',
-                                              style: AppTextStyles.labelSmall.copyWith(
-                                                color: AppColors.error,
+                                              'Exclusive to ${org.departmentName.isNotEmpty ? org.departmentName : "matching department"} students. (Your department: ${studentDeptName ?? studentDeptId ?? "N/A"})',
+                                              style: TextStyle(
+                                                color: Colors.red.shade800,
                                                 fontSize: 11,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             ),
                                           ),
@@ -380,6 +470,37 @@ class _JoinOrganizationSheetState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required OrgFilter filter,
+  }) {
+    final isSelected = _selectedFilter == filter;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? Colors.white : AppColors.primaryDark,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedFilter = filter;
+          });
+        }
+      },
+      selectedColor: AppColors.primary,
+      backgroundColor: Colors.grey.shade100,
+      side: BorderSide(
+        color: isSelected ? AppColors.primary : Colors.grey.shade300,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
     );
   }
 }

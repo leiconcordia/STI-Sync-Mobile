@@ -7,7 +7,6 @@ import 'package:sti_sync/features/dashboard/widgets/scanner_assignment_banner.da
 import 'package:sti_sync/features/dashboard/widgets/upcoming_events_section.dart';
 import 'package:sti_sync/features/dashboard/widgets/announcements_section.dart';
 import 'package:sti_sync/features/dashboard/widgets/my_organizations_section.dart';
-import 'package:sti_sync/features/semester/widgets/re_enrollment_banner.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -24,9 +23,8 @@ class DashboardScreen extends ConsumerWidget {
             children: const [
               DashboardHeader(),
               SizedBox(height: 16),
-              ReEnrollmentBanner(),
               DigitalIdCard(),
-              SizedBox(height: 24),
+              SizedBox(height: 20),
               ScannerAssignmentBanner(),
               SizedBox(height: 32),
               UpcomingEventsSection(),

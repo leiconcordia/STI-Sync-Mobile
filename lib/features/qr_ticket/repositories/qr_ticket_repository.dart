@@ -18,6 +18,11 @@ class EventTicketConfig {
   final String? cancellationReason;
   final String? refundPolicy;
   final DateTime? cancelledAt;
+  final bool isCompleted;
+  final bool isArchived;
+  final bool isDeleted;
+  final bool attendanceLocked;
+  final bool certificatesEnabled;
 
   const EventTicketConfig({
     required this.title,
@@ -29,20 +34,30 @@ class EventTicketConfig {
     this.cancellationReason,
     this.refundPolicy,
     this.cancelledAt,
+    this.isCompleted = false,
+    this.isArchived = false,
+    this.isDeleted = false,
+    this.attendanceLocked = false,
+    this.certificatesEnabled = false,
   });
 
   bool get isTicketAvailable => enableQRTickets || attendanceEnabled || studentPayablesEnabled;
 
   factory EventTicketConfig.fromEvent(EventModel event) => EventTicketConfig(
         title: event.title,
-        enableQRTickets: event.enableQRTickets,
-        attendanceEnabled: event.attendanceEnabled,
+        enableQRTickets: event.requiresAttendance,
+        attendanceEnabled: event.requiresAttendance,
         studentPayablesEnabled: event.studentPayablesEnabled,
         eventFee: event.adminFeeOverride ?? 0,
         isCancelled: event.isEffectivelyCancelled,
         cancellationReason: event.cancellationReason,
         refundPolicy: event.refundPolicy,
         cancelledAt: event.cancelledAt,
+        isCompleted: event.isCompleted,
+        isArchived: event.isArchived,
+        isDeleted: event.isDeleted,
+        attendanceLocked: event.attendanceLocked,
+        certificatesEnabled: event.certificatesEnabled,
       );
 }
 
@@ -135,33 +150,54 @@ class QrTicketRepository {
     String? eventTitle,
     String? courseInfo,
     required EventTicketConfig config,
+    String? alternateStudentId,
   }) async {
-    final snap = await _firestore
+    var snap = await _firestore
         .collection(FirestorePaths.payables)
         .where('studentId', isEqualTo: studentId)
         .where('eventId', isEqualTo: eventId)
         .limit(1)
         .get();
 
+    if (snap.docs.isEmpty && alternateStudentId != null && alternateStudentId.isNotEmpty) {
+      snap = await _firestore
+          .collection(FirestorePaths.payables)
+          .where('studentId', isEqualTo: alternateStudentId)
+          .where('eventId', isEqualTo: eventId)
+          .limit(1)
+          .get();
+    }
+
     if (snap.docs.isEmpty) {
       final isFree = !config.studentPayablesEnabled;
+      final companion = CachedPayablesCompanion(
+        id: Value('${eventId}_$studentId'),
+        eventId: Value(eventId),
+        studentId: Value(studentId),
+        studentSchoolId: Value(studentIdNumber),
+        qrTicketUnlocked: Value(isFree ? 1 : 0),
+        amountDue: Value(isFree ? 0 : config.eventFee),
+        paymentStatus: Value(isFree ? 'free' : 'unpaid'),
+        cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        studentName: Value(studentName),
+        studentIdNumber: Value(studentIdNumber),
+        profilePhotoUrl: Value(profilePhotoUrl),
+        eventTitle: Value(eventTitle),
+        courseInfo: Value(courseInfo),
+      );
       await _payablesDao.replacePayable(
-          CachedPayablesCompanion(
-            id: Value('${eventId}_$studentId'),
-            eventId: Value(eventId),
-            studentId: Value(studentId),
-            qrTicketUnlocked: Value(isFree ? 1 : 0),
-            amountDue: Value(isFree ? 0 : config.eventFee),
-            paymentStatus: Value(isFree ? 'free' : 'unpaid'),
-            cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
-            studentName: Value(studentName),
-            studentIdNumber: Value(studentIdNumber),
-            profilePhotoUrl: Value(profilePhotoUrl),
-            eventTitle: Value(eventTitle),
-            courseInfo: Value(courseInfo),
-          ),
+          companion,
           studentId: studentId,
           eventId: eventId);
+      if (studentIdNumber != null && studentIdNumber.isNotEmpty && studentIdNumber != studentId) {
+        await _payablesDao.replacePayable(
+            companion.copyWith(
+              id: Value('${eventId}_$studentIdNumber'),
+              studentId: Value(studentIdNumber),
+            ),
+            studentId: studentIdNumber,
+            eventId: eventId);
+      }
       return;
     }
 
@@ -176,39 +212,54 @@ class QrTicketRepository {
     final isPaid = rawStatus == 'paid' || rawStatus == 'waived' || (assigned > 0 && paid >= assigned);
     final isUnlocked = explicitUnlocked || isPaid;
 
+    final companion = CachedPayablesCompanion(
+      id: Value(snap.docs.first.id),
+      eventId: Value(eventId),
+      studentId: Value(studentId),
+      studentSchoolId: Value(studentIdNumber),
+      type: Value(data['type'] as String? ?? 'event_fee'),
+      label: Value(data['label'] as String? ?? (data['title'] as String? ?? 'Event Fee')),
+      description: Value(data['description'] as String?),
+      organizationId: Value(data['organizationId'] as String?),
+      organizationName: Value(data['organizationName'] as String?),
+      semesterId: Value(data['semesterId'] as String? ?? ''),
+      assignedAmount: Value(assigned),
+      paidAmount: Value(paid),
+      status: Value(data['status'] as String? ?? 'pending'),
+      qrTicketUnlocked: Value(isUnlocked ? 1 : 0),
+      amountDue: Value(isPaid ? 0.0 : (rawDue > 0 ? rawDue : config.eventFee)),
+      paymentStatus: Value(rawStatus),
+      cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      studentName: Value(studentName),
+      studentIdNumber: Value(studentIdNumber),
+      profilePhotoUrl: Value(profilePhotoUrl),
+      eventTitle: Value(eventTitle),
+      courseInfo: Value(courseInfo),
+    );
+
     await _payablesDao.replacePayable(
-        CachedPayablesCompanion(
-          id: Value(snap.docs.first.id),
-          eventId: Value(eventId),
-          studentId: Value(studentId),
-          type: Value(data['type'] as String? ?? 'event_fee'),
-          label: Value(data['label'] as String? ?? (data['title'] as String? ?? 'Event Fee')),
-          description: Value(data['description'] as String?),
-          organizationId: Value(data['organizationId'] as String?),
-          organizationName: Value(data['organizationName'] as String?),
-          semesterId: Value(data['semesterId'] as String? ?? ''),
-          assignedAmount: Value(assigned),
-          paidAmount: Value(paid),
-          status: Value(data['status'] as String? ?? 'pending'),
-          qrTicketUnlocked: Value(isUnlocked ? 1 : 0),
-          amountDue: Value(isPaid ? 0.0 : (rawDue > 0 ? rawDue : config.eventFee)),
-          paymentStatus: Value(rawStatus),
-          cachedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          studentName: Value(studentName),
-          studentIdNumber: Value(studentIdNumber),
-          profilePhotoUrl: Value(profilePhotoUrl),
-          eventTitle: Value(eventTitle),
-          courseInfo: Value(courseInfo),
-        ),
+        companion,
         studentId: studentId,
         eventId: eventId);
+    if (studentIdNumber != null && studentIdNumber.isNotEmpty && studentIdNumber != studentId) {
+      await _payablesDao.replacePayable(
+          companion.copyWith(
+            id: Value('${eventId}_$studentIdNumber'),
+            studentId: Value(studentIdNumber),
+          ),
+          studentId: studentIdNumber,
+          eventId: eventId);
+    }
   }
 
 
-  Future<EventTicketConfig?> getEventTicketConfig(String eventId) async {
+  Future<EventTicketConfig?> getEventTicketConfig(String eventId, [String? studentId]) async {
     try {
-      final doc =
-          await _firestore.collection(FirestorePaths.events).doc(eventId).get();
+      var doc =
+          await _firestore.collection(FirestorePaths.activities).doc(eventId).get();
+      if (!doc.exists) {
+        doc = await _firestore.collection(FirestorePaths.events).doc(eventId).get();
+      }
       if (!doc.exists) return null;
       final event = EventModel.fromFirestore(doc);
       final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -217,19 +268,19 @@ class QrTicketRepository {
         CachedEventsCompanion.insert(
           id: eventId,
           title: event.title,
-          eventJson: jsonEncode(event.toMap()),
+          eventJson: event.toJson(),
           cachedAt: nowMs,
           expiresAt: expiresMs,
         ),
       );
       return EventTicketConfig.fromEvent(event);
     } catch (_) {
-      return getLocalEventTicketConfig(eventId);
+      return getLocalEventTicketConfig(eventId, studentId);
     }
   }
 
 
-  Future<EventTicketConfig?> getLocalEventTicketConfig(String eventId) async {
+  Future<EventTicketConfig?> getLocalEventTicketConfig(String eventId, [String? studentId, String? alternateStudentId]) async {
     final cached = await _eventsDao.getEvent(eventId);
     if (cached != null) {
       try {
@@ -239,7 +290,11 @@ class QrTicketRepository {
       } catch (_) {}
     }
 
-    final payable = await _payablesDao.getPayableByEvent(eventId);
+    var payable = await _payablesDao.getPayableByEvent(eventId, studentId);
+    if (payable == null && alternateStudentId != null && alternateStudentId.isNotEmpty) {
+      payable = await _payablesDao.getPayableByEvent(eventId, alternateStudentId);
+    }
+    payable ??= await _payablesDao.getPayableByEvent(eventId);
     if (payable != null) {
       return EventTicketConfig(
         title: payable.eventTitle ?? 'STI Event',
@@ -255,8 +310,16 @@ class QrTicketRepository {
 
   /// Reads the ticket status from the local Drift cache. Works offline.
   Future<QrTicketStatus?> getLocalTicketStatus(
-      String studentId, String eventId) async {
-    final cached = await _payablesDao.getPayable(studentId, eventId);
+      String studentId, String eventId, [String? alternateStudentId]) async {
+    var cached = await _payablesDao.getPayable(studentId, eventId);
+    if (cached == null && alternateStudentId != null && alternateStudentId.isNotEmpty) {
+      cached = await _payablesDao.getPayable(alternateStudentId, eventId);
+    }
+    cached ??= await _payablesDao.getPayableByEvent(eventId, studentId);
+    if (cached == null && alternateStudentId != null && alternateStudentId.isNotEmpty) {
+      cached = await _payablesDao.getPayableByEvent(eventId, alternateStudentId);
+    }
+    cached ??= await _payablesDao.getPayableByEvent(eventId);
     if (cached == null) return null;
     return QrTicketStatus(
       isUnlocked: cached.qrTicketUnlocked == 1,

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
-import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'tables/cached_events_table.dart';
 import 'tables/cached_participants_table.dart';
@@ -41,6 +40,7 @@ part 'app_database.g.dart';
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
+  AppDatabase.forTesting(super.e);
 
   @override
   int get schemaVersion => 9;
@@ -159,6 +159,32 @@ class AppDatabase extends _$AppDatabase {
   Future<void> clearAllData() async {
     await customStatement('PRAGMA foreign_keys = OFF');
     try {
+      try {
+        await delete(scannerAssignments).go();
+      } catch (e) {
+        debugPrint('⚠️ Warning: Failed to purge scannerAssignments: $e');
+      }
+      try {
+        await delete(cachedParticipants).go();
+      } catch (e) {
+        debugPrint('⚠️ Warning: Failed to purge cachedParticipants: $e');
+      }
+      try {
+        await delete(offlineAttendance).go();
+      } catch (e) {
+        debugPrint('⚠️ Warning: Failed to purge offlineAttendance: $e');
+      }
+      try {
+        await delete(cachedEvents).go();
+      } catch (e) {
+        debugPrint('⚠️ Warning: Failed to purge cachedEvents: $e');
+      }
+      try {
+        await delete(cachedPayables).go();
+      } catch (e) {
+        debugPrint('⚠️ Warning: Failed to purge cachedPayables: $e');
+      }
+
       for (final table in allTables) {
         int retries = 0;
         while (retries < 3) {
@@ -189,7 +215,20 @@ LazyDatabase _openConnection() {
     final cachebase = (await getTemporaryDirectory()).path;
     sqlite3.tempDirectory = cachebase;
 
-    return NativeDatabase.createInBackground(file);
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (rawDb) {
+        rawDb.execute('PRAGMA busy_timeout = 10000;');
+        try {
+          rawDb.execute('PRAGMA journal_mode = WAL;');
+        } catch (_) {
+          // Database may already be in WAL mode or held with a shared lock; safe to continue
+        }
+        try {
+          rawDb.execute('PRAGMA synchronous = NORMAL;');
+        } catch (_) {}
+      },
+    );
   });
 }
 

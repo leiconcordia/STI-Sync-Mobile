@@ -331,5 +331,37 @@ void main() {
       expect(student.revisionHistory[0]['reason'], 'Profile photo inaccurate');
       expect(student.revisionHistory[1]['reviewedBy'], 'ADVISER');
     });
+
+    test('Contact number validation enforces 10 digits starting with 9', () {
+      final invalidShort = RegistrationState(
+        lastName: 'Concordia',
+        firstName: 'Lei',
+        studentId: '02000123456',
+        dateOfBirth: DateTime(2005, 1, 1),
+        sex: 'Male',
+        contactNumber: '912345678', // 9 digits
+      );
+      expect(invalidShort.validateCurrentStep(), contains('Contact number must be 10 digits starting with 9'));
+
+      final invalidPrefix = RegistrationState(
+        lastName: 'Concordia',
+        firstName: 'Lei',
+        studentId: '02000123456',
+        dateOfBirth: DateTime(2005, 1, 1),
+        sex: 'Male',
+        contactNumber: '8123456789', // starts with 8
+      );
+      expect(invalidPrefix.validateCurrentStep(), contains('Contact number must be 10 digits starting with 9'));
+
+      final validState = RegistrationState(
+        lastName: 'Concordia',
+        firstName: 'Lei',
+        studentId: '02000123456',
+        dateOfBirth: DateTime(2005, 1, 1),
+        sex: 'Male',
+        contactNumber: '9123456789',
+      );
+      expect(validState.validateCurrentStep(), isNull);
+    });
   });
 }

@@ -50,6 +50,58 @@ class RegistrationRepository {
     return false;
   }
 
+  /// Checks if a student with the given contact number (mobile number) already exists in Firestore.
+  /// Handles normalized 10-digit formats ('9xxxxxxxxx'), '09xxxxxxxxx', and '+639xxxxxxxxx'.
+  Future<bool> isContactNumberTaken(String contactNumber, {String? excludeUid}) async {
+    final cleanDigits = contactNumber.replaceAll(RegExp(r'\D'), '');
+    if (cleanDigits.isEmpty) return false;
+
+    // Normalize to standard 10-digit format starting with 9 (e.g. 9171234567)
+    final tenDigits = cleanDigits.length == 10
+        ? cleanDigits
+        : (cleanDigits.length == 11 && cleanDigits.startsWith('0'))
+            ? cleanDigits.substring(1)
+            : (cleanDigits.length == 12 && cleanDigits.startsWith('63'))
+                ? cleanDigits.substring(2)
+                : cleanDigits;
+
+    final candidateVariants = <String>{
+      tenDigits,
+      '0$tenDigits',
+      '+63$tenDigits',
+      '63$tenDigits',
+      cleanDigits,
+    }.toList();
+
+    // 1. Query contactNumber field
+    try {
+      final snap = await _firestore
+          .collection(FirestorePaths.students)
+          .where('contactNumber', whereIn: candidateVariants)
+          .get();
+
+      for (final doc in snap.docs) {
+        if (excludeUid != null && doc.id == excludeUid) continue;
+        return true;
+      }
+    } catch (_) {}
+
+    // 2. Query phone field (for alternate schemas)
+    try {
+      final snapPhone = await _firestore
+          .collection(FirestorePaths.students)
+          .where('phone', whereIn: candidateVariants)
+          .get();
+
+      for (final doc in snapPhone.docs) {
+        if (excludeUid != null && doc.id == excludeUid) continue;
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
   /// Checks if a student with the same First Name, Last Name, and Date of Birth already exists in Firestore.
   Future<bool> isNameAndDobTaken({
     required String firstName,
@@ -287,6 +339,14 @@ class RegistrationRepository {
       );
     }
 
+    onProgress?.call(0.12, 'Checking contact number…');
+    if (await isContactNumberTaken(data.contactNumber)) {
+      throw const AppException(
+        code: 'contactNumber-taken',
+        message: 'This mobile number is already registered to another student.',
+      );
+    }
+
     onProgress?.call(0.15, 'Checking student identity…');
     if (await isNameAndDobTaken(
       firstName: data.firstName,
@@ -436,6 +496,12 @@ class RegistrationRepository {
       throw const AppException(
         code: 'email-taken',
         message: 'This email address is already registered to another account.',
+      );
+    }
+    if (await isContactNumberTaken(data.contactNumber, excludeUid: uid)) {
+      throw const AppException(
+        code: 'contactNumber-taken',
+        message: 'This mobile number is already registered to another student.',
       );
     }
     if (await isNameAndDobTaken(

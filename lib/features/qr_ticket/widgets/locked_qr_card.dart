@@ -4,8 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/core/utils/currency_formatter.dart';
-import 'package:sti_sync/shared/providers/providers.dart';
-import 'package:sti_sync/features/semester/widgets/re_enrollment_bottom_sheet.dart';
 
 class LockedQrCard extends ConsumerWidget {
   final double amountDue;
@@ -151,7 +149,7 @@ class LockedQrCard extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'Re-enrollment Required',
+            'Re-enrollment Pending',
             style: AppTextStyles.h2.copyWith(
               color: AppColors.primaryDark,
               fontWeight: FontWeight.bold,
@@ -161,43 +159,13 @@ class LockedQrCard extends ConsumerWidget {
           const SizedBox(height: 8),
           Text(
             lockReason ??
-                'Please complete your semester re-enrollment confirmation to unlock your event QR tickets.',
+                'Please visit the STI SAS Office to complete your official semester re-enrollment.',
             style: AppTextStyles.labelSmall.copyWith(
               color: Colors.grey.shade800,
               fontSize: 12,
               height: 1.4,
             ),
             textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                final student = ref.read(authViewModelProvider).student;
-                final activeSemester = ref.read(activeSemesterModelProvider).valueOrNull;
-                if (student != null && activeSemester != null) {
-                  ReEnrollmentBottomSheet.show(
-                    context,
-                    student: student,
-                    activeSemester: activeSemester,
-                  );
-                }
-              },
-              icon: const Icon(Icons.edit_note_rounded, size: 18),
-              label: const Text(
-                'Complete Re-enrollment',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryDark,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
           ),
         ],
       ),

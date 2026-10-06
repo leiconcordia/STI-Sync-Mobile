@@ -362,33 +362,55 @@ _firestore
 
 ---
 
-### 2.6 `issued_certificates/{certificateId}`
+### 2.6 `certificates_issued/{certificateId}`
 
 ```dart
-/// A certificate issued to a student post-event.
+/// A certificate issued to a student post-event from the web portal.
 class IssuedCertificateModel {
   final String id;
-  final String certificateNumber;       // e.g. "CERT-2026-0001"
-  final String templateId;              // FK → /certificate_templates
   final String eventId;                 // FK → /events
-  final String eventName;               // Denormalized
-  final String studentId;               // FK → /students
-  final String studentName;             // Denormalized
-  final DateTime issueDate;
-  final String? pdfUrl;                 // Exported PDF document URL
-  final String? qrCodeUrl;              // Verification QR code URL
-  final String organizationId;          // FK → /organizations
+  final String eventTitle;              // Denormalized event title
+  final String templateId;              // FK → /certificates or /certificate_templates
+  final String templateName;            // Denormalized template name
+  final String recipientName;           // Recipient full student name
+  final String studentId;               // STI Student Number (e.g. "02000213456") or Auth UID
+  final String course;                  // Student Course / Section (e.g. "BSIT-3A")
+  final DateTime issuedAt;              // Firestore Timestamp
+  final String issuedBy;                // Auth UID of issuing officer or admin
 }
 ```
 
-**Firestore path:** `/issued_certificates/{certificateId}`  
+**Firestore path:** `/certificates_issued/{certificateId}`  
 **Mobile query:**
 ```dart
 _firestore
-  .collection(FirestorePaths.issuedCertificates)
-  .where('studentId', isEqualTo: currentStudentId)
-  .orderBy('issueDate', descending: true)
+  .collection(FirestorePaths.certificatesIssued)
+  .where('studentId', isEqualTo: currentStudent.studentId)
+  .orderBy('issuedAt', descending: true)
   .snapshots()
+```
+
+### 2.6.1 `certificates/{certificateId}` and `certificate_templates/{templateId}`
+
+```dart
+/// Certificate visual layout template with paper size, orientation, and placement tokens.
+class CertificateTemplateModel {
+  final String id;
+  final String title;                   // e.g. "Certificate of Participation"
+  final String category;                // "Participation" | "Recognition" | etc.
+  final String status;                  // "Published" | "Approved"
+  final String organizationId;          // "admin" or orgId
+  final String organizationName;        // e.g. "SAO Admin"
+  final String imageUrl;                // Background template image URL
+  final String paperSize;               // "a4" | "letter" | "short" | "long"
+  final String orientation;             // "landscape" | "portrait"
+  final Map<String, dynamic> namePosition; // xPercent, yPercent, fontSizePt, textColor, etc.
+  final List<Map<String, dynamic>> elements;
+  final String? signatoryName;
+  final String? signatoryTitle;
+  final String? secondarySignatoryName;
+  final String? secondarySignatoryTitle;
+}
 ```
 
 ---
@@ -484,7 +506,9 @@ class FirestorePaths {
   static const String attendance         = 'attendance';
   static const String payables           = 'payables';
   static const String announcements      = 'announcements';
-  static const String issuedCertificates = 'issued_certificates';
+  static const String certificatesIssued = 'certificates_issued';
+  static const String certificates       = 'certificates';
+  static const String certificateTemplates = 'certificate_templates';
   static const String organizations      = 'organizations';
   static const String organizationOfficers = 'organization_officers';
   static const String organizationMembers = 'organization_members';
@@ -505,7 +529,8 @@ class FirestorePaths {
 | `attendance` | Own records (`studentId == auth.uid`) | Only when `qrTicketUnlocked == true` |
 | `payables` | Own records (`studentId == auth.uid`) | None — admin/officer updates status |
 | `announcements` | Targeted at `'campus-wide'`, `'all-organizations'`, or student org/dept | None |
-| `issued_certificates` | Own records (`studentId == auth.uid`) | None |
+| `certificates_issued` | Own records (`studentId == auth.uid` or `student.studentId`) | None (Web Admin/Officer writes) |
+| `certificates` | Published/Approved templates | None |
 | `organizations` | Active orgs | None |
 | `organization_members` | Own membership docs (`studentAuthUid == auth.uid`) | Join requests (`status == 'pending'`) |
 

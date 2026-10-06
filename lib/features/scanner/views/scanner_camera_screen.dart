@@ -6,10 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:drift/drift.dart' as drift;
-import 'package:intl/intl.dart';
 import '../../../shared/providers/providers.dart';
 import '../../../core/local/app_database.dart';
 import '../models/scanner_assignment_model.dart';
+import '../utils/session_timing_evaluator.dart';
 import '../widgets/scan_result_overlay.dart';
 
 class ScannerCameraScreen extends ConsumerStatefulWidget {
@@ -103,88 +103,104 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         return;
       }
 
-      // VALIDATION 3: Attendance Window & Timing Validation
+      if (assignment.isCompleted || assignment.attendanceLocked || assignment.isArchived || assignment.isDeleted) {
+        await _showOverlay(
+          ScanResultType.windowClosed,
+          null,
+          extraMessage: 'Scanner Locked: This event has been marked as Completed. Scans are no longer accepted.',
+        );
+        return;
+      }
+
+      // VALIDATION 3: Gate Permission Check
+      if (widget.gateType == 'Time-In' && !assignment.canCheckIn) {
+        await _showOverlay(
+          ScanResultType.invalidFormat,
+          null,
+          extraMessage: 'Permission Denied: You do not have permission to scan Time-In.',
+        );
+        return;
+      }
+      if (widget.gateType == 'Time-Out' && !assignment.canCheckOut) {
+        await _showOverlay(
+          ScanResultType.invalidFormat,
+          null,
+          extraMessage: 'Permission Denied: You do not have permission to scan Time-Out.',
+        );
+        return;
+      }
+
+      // VALIDATION 4: Attendance Window & Timing Validation
       final session = assignment.sessions.firstWhere(
         (s) => s['id'] == widget.sessionId,
         orElse: () => <String, dynamic>{},
       );
 
-      final dateStr = session['date'] as String?;
-      final startTimeStr = (session['startTime'] as String?) ?? (session['timeInOpen'] as String?);
-      final timeInOpenStr = (session['timeInOpen'] as String?) ?? (session['startTime'] as String?);
-      final timeInCloseStr = session['timeInClose'] as String?;
-      final timeOutOpenStr = session['timeOutOpen'] as String?;
-      final timeOutCloseStr = session['timeOutClose'] as String?;
-
-      final gracePeriod = (session['gracePeriodMinutes'] as num?)?.toInt() ?? assignment.gracePeriodMinutes ?? 15;
-      final lateThreshold = (session['lateThresholdMinutes'] as num?)?.toInt() ?? assignment.lateThresholdMinutes ?? 60;
-
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final scanTime = DateTime.fromMillisecondsSinceEpoch(now);
-
-      final sessionStart = _parseSessionStart(dateStr, startTimeStr);
-      final timeInOpen = _parseSessionStart(dateStr, timeInOpenStr);
-      final timeInClose = _parseSessionStart(dateStr, timeInCloseStr);
-      final timeOutOpen = _parseSessionStart(dateStr, timeOutOpenStr);
-      final timeOutClose = _parseSessionStart(dateStr, timeOutCloseStr);
-
+      final now = DateTime.now();
       String scanStatus = 'Present';
 
       if (widget.gateType == 'Time-In') {
-        // Window check: Before Time-In Opens
-        if (timeInOpen != null && scanTime.isBefore(timeInOpen)) {
+        final timing = SessionTimingEvaluator.evaluateTimeIn(
+          session,
+          checkTime: now,
+          fallbackGrace: assignment.gracePeriodMinutes,
+          fallbackLateThreshold: assignment.lateThresholdMinutes,
+        );
+
+        if (timing.isNotStarted) {
           await _showOverlay(
             ScanResultType.windowNotOpen,
             null,
-            extraMessage: 'Time-In is not open yet.\nOpens at: $timeInOpenStr',
+            extraMessage: 'Time-In is not open yet.\n${timing.message}',
           );
           return;
         }
 
-        // Window check: After Time-In Closes / Late Threshold Ends
-        final lateThresholdEnd = timeInClose ?? sessionStart?.add(Duration(minutes: lateThreshold));
-        if (lateThresholdEnd != null && scanTime.isAfter(lateThresholdEnd)) {
-          final closeTimeDisplay = timeInCloseStr ?? DateFormat('h:mm a').format(lateThresholdEnd);
+        if (timing.isClosed) {
           await _showOverlay(
             ScanResultType.windowClosed,
             null,
-            extraMessage: 'Time-In window has closed.\nClosed at: $closeTimeDisplay',
+            extraMessage: 'Time-In window has closed.\n${timing.message}',
           );
           return;
         }
 
-        // Grace Period Evaluation:
-        // Grace period threshold = sessionStart + gracePeriod (e.g. 7:30 AM + 15m = 7:45 AM)
-        final graceThreshold = sessionStart?.add(Duration(minutes: gracePeriod)) ??
-            timeInOpen?.add(Duration(minutes: gracePeriod));
-
-        if (graceThreshold != null && scanTime.isAfter(graceThreshold)) {
-          scanStatus = 'Late';
-        } else {
-          scanStatus = 'Present';
-        }
+        scanStatus = timing.attendanceStatus ?? 'Present';
       } else if (widget.gateType == 'Time-Out') {
-        // Window check: Before Time-Out Opens
-        if (timeOutOpen != null && scanTime.isBefore(timeOutOpen)) {
-          await _showOverlay(
-            ScanResultType.windowNotOpen,
-            null,
-            extraMessage: 'Time-Out is not open yet.\nOpens at: $timeOutOpenStr',
-          );
-          return;
-        }
+        final timing = SessionTimingEvaluator.evaluateTimeOut(
+          session,
+          checkTime: now,
+          fallbackLateThreshold: assignment.lateThresholdMinutes,
+        );
 
-        // Window check: After Time-Out Closes
-        if (timeOutClose != null && scanTime.isAfter(timeOutClose)) {
+        if (timing.isDisabled) {
           await _showOverlay(
             ScanResultType.windowClosed,
             null,
-            extraMessage: 'Time-Out window has closed.\nClosed at: $timeOutCloseStr',
+            extraMessage: 'Time-Out is not configured for this session.',
           );
           return;
         }
 
-        scanStatus = 'Present';
+        if (timing.isNotStarted) {
+          await _showOverlay(
+            ScanResultType.windowNotOpen,
+            null,
+            extraMessage: 'Time-Out is not open yet.\n${timing.message}',
+          );
+          return;
+        }
+
+        if (timing.isClosed) {
+          await _showOverlay(
+            ScanResultType.windowClosed,
+            null,
+            extraMessage: 'Time-Out window has closed.\n${timing.message}',
+          );
+          return;
+        }
+
+        scanStatus = timing.attendanceStatus ?? 'Present';
       }
 
       final db = ref.read(appDatabaseProvider);
@@ -229,7 +245,8 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
 
       // SUCCESS: Write to local database
       final currentUserId = ref.read(authViewModelProvider).student?.id ?? 'Unknown';
-      final localId = '${studentAuthUid}_${widget.sessionId}_${widget.gateType}_$now';
+      final scanTimestamp = now.millisecondsSinceEpoch;
+      final localId = '${studentAuthUid}_${widget.sessionId}_${widget.gateType}_$scanTimestamp';
 
       final record = OfflineAttendanceCompanion(
         localId: drift.Value(localId),
@@ -240,7 +257,7 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         gateType: drift.Value(widget.gateType),
         scanMethod: const drift.Value('QR'),
         scannedBy: drift.Value(currentUserId),
-        scannedAt: drift.Value(now),
+        scannedAt: drift.Value(scanTimestamp),
         synced: const drift.Value(0),
         conflictResolved: const drift.Value(0),
         status: drift.Value(scanStatus),
@@ -414,6 +431,43 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
                         ),
                       ],
                     ),
+                  )
+                else if (assignment.isCompleted || assignment.attendanceLocked || assignment.isArchived || assignment.isDeleted)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B).withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF64748B)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.lock, color: Colors.white, size: 22),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'SCANNER LOCKED — EVENT CONCLUDED',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'This event has been marked as Completed. Scans are no longer accepted.',
+                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 
                 const Spacer(),
@@ -464,29 +518,5 @@ class _ScannerCameraScreenState extends ConsumerState<ScannerCameraScreen> {
         ],
       ),
     );
-  }
-
-  DateTime? _parseSessionStart(String? dateStr, String? timeStr) {
-    if (dateStr == null || timeStr == null || timeStr.trim().isEmpty) return null;
-    try {
-      final cleanTime = timeStr.trim();
-      final cleanDate = dateStr.trim();
-      if (cleanTime.toUpperCase().contains('AM') || cleanTime.toUpperCase().contains('PM')) {
-        final format = DateFormat('yyyy-MM-dd h:mm a');
-        return format.parse('$cleanDate $cleanTime', true).toLocal();
-      } else {
-        final parts = cleanTime.split(':');
-        final hour = int.parse(parts[0]);
-        final minute = int.parse(parts[1]);
-        final dateParts = cleanDate.split('-');
-        final year = int.parse(dateParts[0]);
-        final month = int.parse(dateParts[1]);
-        final day = int.parse(dateParts[2]);
-        return DateTime(year, month, day, hour, minute);
-      }
-    } catch (e) {
-      debugPrint('Error parsing session date/time ($dateStr $timeStr): $e');
-      return null;
-    }
   }
 }

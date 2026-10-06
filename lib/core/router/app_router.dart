@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/features/auth/views/login_screen.dart';
-import 'package:sti_sync/features/auth/views/pending_status_screen.dart';
-import 'package:sti_sync/features/auth/views/registration/registration_flow_screen.dart';
+import 'package:sti_sync/features/auth/views/reenrollment_expired_screen.dart';
+import 'package:sti_sync/features/auth/views/profile_completion/profile_completion_flow_screen.dart';
 import 'package:sti_sync/features/auth/views/splash_screen.dart';
 import 'package:sti_sync/features/auth/views/welcome_screen.dart';
 import 'package:sti_sync/features/dashboard/views/main_shell_screen.dart';
@@ -19,6 +19,10 @@ import 'package:sti_sync/features/scanner/views/scanner_logs_screen.dart';
 import 'package:sti_sync/features/scanner/views/sync_conflicts_screen.dart';
 import 'package:sti_sync/features/payables/views/payables_screen.dart';
 import 'package:sti_sync/features/profile/views/profile_screen.dart';
+import 'package:sti_sync/features/certificates/views/certificates_screen.dart';
+import 'package:sti_sync/features/certificates/views/certificate_detail_screen.dart';
+import 'package:sti_sync/features/certificates/models/issued_certificate_model.dart';
+import 'package:sti_sync/features/profile/views/student_attendance_history_screen.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:sti_sync/features/sync/models/sync_status_model.dart';
 
@@ -45,36 +49,34 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authViewModelProvider);
       final isAuth = authState.isAuthenticated;
-      final currentStudent = authState.pendingStudent ?? authState.student;
-      final statusUpper = currentStudent?.status.trim().toUpperCase() ?? '';
-      final isPending = authState.pendingStudent != null ||
-          (currentStudent != null &&
-              (statusUpper == 'PENDING' || statusUpper == 'RETURNED'));
+      final currentStudent = authState.student;
+
+      final isProfileIncomplete = currentStudent != null &&
+          (!currentStudent.isProfileComplete || currentStudent.requiresPasswordChange);
 
       // Paths that don't require authentication
       final isAuthPath = state.matchedLocation == '/login' ||
-                         state.matchedLocation == '/register' ||
                          state.matchedLocation == '/welcome';
       
       // If at splash screen:
       if (state.matchedLocation == '/') {
         if (isAuth) {
-          return isPending ? '/pending-status' : '/dashboard';
+          return isProfileIncomplete ? '/complete-profile' : '/dashboard';
         }
         return null;
       }
 
       if (isAuth) {
-        if (isPending) {
-           if (state.matchedLocation != '/pending-status' && state.matchedLocation != '/register') {
-              // Allow them to go to register if they hit "Register Again"
-              return '/pending-status';
-           }
-        } else {
-           // Fully authenticated, ACTIVE student
-           if (isAuthPath || state.matchedLocation == '/pending-status') {
-             return '/dashboard';
-           }
+        if (isProfileIncomplete) {
+          if (state.matchedLocation != '/complete-profile') {
+            return '/complete-profile';
+          }
+          return null;
+        }
+
+        // Fully authenticated, ACTIVE student with complete profile
+        if (isAuthPath || state.matchedLocation == '/complete-profile') {
+          return '/dashboard';
         }
       } else {
         // If not authenticated and not on an auth path, go to welcome
@@ -102,14 +104,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        name: 'register',
-        path: '/register',
-        builder: (context, state) => const RegistrationFlowScreen(),
+        name: 'completeProfile',
+        path: '/complete-profile',
+        builder: (context, state) => const ProfileCompletionFlowScreen(),
       ),
       GoRoute(
-        name: 'pendingStatus',
-        path: '/pending-status',
-        builder: (context, state) => const PendingStatusScreen(),
+        name: 'reenrollmentExpired',
+        path: '/reenrollment-expired',
+        builder: (context, state) => const ReEnrollmentExpiredScreen(),
       ),
       GoRoute(
         name: 'eventDetail',
@@ -124,6 +126,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => QrTicketScreen(
           eventId: state.pathParameters['eventId']!,
         ),
+      ),
+      GoRoute(
+        name: 'certificates',
+        path: '/certificates',
+        builder: (context, state) => const CertificatesScreen(),
+      ),
+      GoRoute(
+        name: 'certificateDetail',
+        path: '/certificates/:certificateId',
+        builder: (context, state) => CertificateDetailScreen(
+          certificateId: state.pathParameters['certificateId']!,
+          certificate: state.extra as IssuedCertificateModel?,
+        ),
+      ),
+      GoRoute(
+        name: 'attendanceHistory',
+        path: '/attendance-history',
+        builder: (context, state) => const StudentAttendanceHistoryScreen(),
       ),
 
       GoRoute(

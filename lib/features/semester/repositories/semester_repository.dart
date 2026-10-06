@@ -8,44 +8,83 @@ class SemesterRepository {
   SemesterRepository(this._firestore);
 
   /// Streams the currently active academic semester from Firestore.
-  Stream<SemesterModel?> watchActiveSemester() {
+  /// If [isShs] is provided, prioritizes the active academic period dedicated to that cohort
+  /// (Trimester for SHS, Semester for College).
+  Stream<SemesterModel?> watchActiveSemester({bool? isShs}) {
     return _firestore
         .collection(FirestorePaths.semesters)
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
 
-      final activeDocs = snap.docs.where((doc) {
+      final activeList = <SemesterModel>[];
+      for (final doc in snap.docs) {
         final data = doc.data();
+        if (data['archived'] == true) continue;
         final status = (data['status'] as String?)?.toUpperCase() ?? '';
-        final isActive = data['isActive'] == true || data['isCurrent'] == true || data['is_active'] == true;
-        return status == 'ACTIVE' || isActive;
-      }).toList();
-
-      if (activeDocs.isNotEmpty) {
-        return SemesterModel.fromFirestore(activeDocs.first);
+        final isActive = data['isActive'] == true ||
+            data['isCurrent'] == true ||
+            data['is_active'] == true;
+        if (status == 'ACTIVE' || isActive) {
+          activeList.add(SemesterModel.fromFirestore(doc));
+        }
       }
 
-      // Fallback to first document if available
-      return SemesterModel.fromFirestore(snap.docs.first);
+      if (activeList.isNotEmpty) {
+        if (isShs != null) {
+          final matched = activeList.where((s) => isShs ? s.isShs : s.isCollege).toList();
+          if (matched.isNotEmpty) return matched.first;
+          return activeList.first.forCohort(isShs: isShs);
+        }
+        return activeList.first;
+      }
+
+      // Fallback to first non-archived document if available
+      final nonArchived = snap.docs.where((d) => d.data()['archived'] != true).toList();
+      if (nonArchived.isNotEmpty) {
+        final fallback = SemesterModel.fromFirestore(nonArchived.first);
+        return isShs != null ? fallback.forCohort(isShs: isShs) : fallback;
+      }
+      final fallbackFirst = SemesterModel.fromFirestore(snap.docs.first);
+      return isShs != null ? fallbackFirst.forCohort(isShs: isShs) : fallbackFirst;
     }).handleError((_) => null);
   }
 
-  /// Fetches the currently active semester once.
-  Future<SemesterModel?> getActiveSemester() async {
+  /// Fetches the currently active semester once for a specific academic level.
+  Future<SemesterModel?> getActiveSemester({bool? isShs}) async {
     try {
       final snap = await _firestore.collection(FirestorePaths.semesters).get();
       if (snap.docs.isEmpty) return null;
 
+      final activeList = <SemesterModel>[];
       for (var doc in snap.docs) {
         final data = doc.data();
+        if (data['archived'] == true) continue;
         final status = (data['status'] as String?)?.toUpperCase() ?? '';
-        final isActive = data['isActive'] == true || data['isCurrent'] == true || data['is_active'] == true;
+        final isActive = data['isActive'] == true ||
+            data['isCurrent'] == true ||
+            data['is_active'] == true;
         if (status == 'ACTIVE' || isActive) {
-          return SemesterModel.fromFirestore(doc);
+          activeList.add(SemesterModel.fromFirestore(doc));
         }
       }
-      return SemesterModel.fromFirestore(snap.docs.first);
+
+      if (activeList.isNotEmpty) {
+        if (isShs != null) {
+          final matched = activeList.where((s) => isShs ? s.isShs : s.isCollege).toList();
+          if (matched.isNotEmpty) return matched.first;
+          return activeList.first.forCohort(isShs: isShs);
+        }
+        return activeList.first;
+      }
+
+      final nonArchived = snap.docs.where((d) => d.data()['archived'] != true).toList();
+      if (nonArchived.isNotEmpty) {
+        final fallback = SemesterModel.fromFirestore(nonArchived.first);
+        return isShs != null ? fallback.forCohort(isShs: isShs) : fallback;
+      }
+      final fallbackFirst = SemesterModel.fromFirestore(snap.docs.first);
+      return isShs != null ? fallbackFirst.forCohort(isShs: isShs) : fallbackFirst;
     } catch (_) {
       return null;
     }

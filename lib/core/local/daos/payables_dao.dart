@@ -42,28 +42,39 @@ class PayablesDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<bool> isUnlocked(String studentId, String eventId) async {
-    final p = await (select(cachedPayables)
+    final list = await (select(cachedPayables)
           ..where(
-              (t) => t.studentId.equals(studentId) & t.eventId.equals(eventId)))
-        .getSingleOrNull();
-    if (p == null) return false;
-    return p.qrTicketUnlocked == 1;
+              (t) => t.studentId.equals(studentId) & t.eventId.equals(eventId))
+          ..limit(1))
+        .get();
+    if (list.isEmpty) return false;
+    return list.first.qrTicketUnlocked == 1;
   }
 
   Future<CachedPayable?> getPayable(String studentId, String eventId) async {
-    return (select(cachedPayables)
+    final list = await (select(cachedPayables)
           ..where(
-              (t) => t.studentId.equals(studentId) & t.eventId.equals(eventId)))
-        .getSingleOrNull();
+              (t) => t.studentId.equals(studentId) & t.eventId.equals(eventId))
+          ..limit(1))
+        .get();
+    return list.firstOrNull;
   }
 
   Future<List<CachedPayable>> getPayablesForStudent(String studentId) {
     return (select(cachedPayables)..where((t) => t.studentId.equals(studentId))).get();
   }
 
-  Future<CachedPayable?> getPayableByEvent(String eventId) async {
-    return (select(cachedPayables)..where((t) => t.eventId.equals(eventId)))
-        .getSingleOrNull();
+  Future<CachedPayable?> getPayableByEvent(String eventId, [String? studentId]) async {
+    final query = select(cachedPayables)
+      ..where((t) {
+        if (studentId != null && studentId.isNotEmpty) {
+          return t.eventId.equals(eventId) & t.studentId.equals(studentId);
+        }
+        return t.eventId.equals(eventId);
+      })
+      ..limit(1);
+    final list = await query.get();
+    return list.firstOrNull;
   }
 
   Future<void> purgeEventPayables(String eventId) {

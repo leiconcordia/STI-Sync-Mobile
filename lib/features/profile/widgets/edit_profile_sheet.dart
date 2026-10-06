@@ -444,7 +444,7 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
-                          'To request official updates to your student name, program, or section, please visit the School Registrar or SAO office.',
+                          'To request official updates to your student name, program, or section, please visit the School SAS Office',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: Colors.grey.shade600,
                             fontStyle: FontStyle.italic,

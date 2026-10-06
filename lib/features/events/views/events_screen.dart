@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/features/events/models/event_model.dart';
 import 'package:sti_sync/features/events/widgets/event_search_bar.dart';
 import 'package:sti_sync/features/events/widgets/event_filter_chips.dart';
 import 'package:sti_sync/features/events/widgets/featured_event_card.dart';
@@ -11,15 +12,59 @@ import 'package:sti_sync/shared/providers/providers.dart';
 class EventsScreen extends ConsumerWidget {
   const EventsScreen({super.key});
 
+  /// Finds the event likely to happen:
+  /// 1. An event that is currently ongoing.
+  /// 2. If none ongoing, the upcoming event starting closest to the current time.
+  EventModel? _getFeaturedEvent(List<EventModel> events) {
+    final candidates = events.where((e) {
+      if (e.isArchived || e.isDeleted || e.isCompleted || e.isEffectivelyCancelled) {
+        return false;
+      }
+      return e.isUpcomingOrOngoing();
+    }).toList();
+
+    if (candidates.isEmpty) return null;
+
+    // 1. Ongoing event is happening right now
+    final ongoing = candidates
+        .where((e) => e.mobileStatus == MobileEventDisplayStatus.ongoing)
+        .toList();
+    if (ongoing.isNotEmpty) {
+      ongoing.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+      return ongoing.first;
+    }
+
+    // 2. Upcoming event starting closest to now (likely to happen soonest)
+    final now = DateTime.now();
+    final upcoming =
+        candidates.where((e) => !e.startDateTime.isBefore(now)).toList();
+    if (upcoming.isNotEmpty) {
+      upcoming.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+      return upcoming.first;
+    }
+
+    // 3. Fallback to candidate with earliest start date
+    candidates.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return candidates.first;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            await ref.read(connectivityServiceProvider).checkConnectivity();
+            ref.invalidate(eventsStreamProvider);
+            ref.invalidate(myOrganizationsProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -57,6 +102,11 @@ class EventsScreen extends ConsumerWidget {
                       final myOrgIds = myOrgs.map((o) => o.organizationId).toSet();
 
                       final filteredEvents = allEvents.where((e) {
+                        // Exclude archived and deleted events from discovery feed
+                        if (e.isArchived || e.isDeleted) {
+                          return false;
+                        }
+
                         // 1. Search Query Filter
                         if (searchQuery.isNotEmpty) {
                           final matchesTitle = e.title.toLowerCase().contains(searchQuery);
@@ -70,21 +120,26 @@ class EventsScreen extends ConsumerWidget {
                         // 2. Category / Scope Filter
                         switch (filter) {
                           case EventFilterCategory.all:
-                            return e.isUpcomingOrOngoing();
+                            return e.isUpcomingOrOngoing() && !e.isCompleted;
                           case EventFilterCategory.schoolSao:
-                            return e.isCampusWide && e.isUpcomingOrOngoing();
+                            return e.isCampusWide && e.isUpcomingOrOngoing() && !e.isCompleted;
                           case EventFilterCategory.myOrgs:
-                            return e.isOrgEvent && myOrgIds.contains(e.hostingOrgId) && e.isUpcomingOrOngoing();
+                            return e.isOrgEvent && myOrgIds.contains(e.hostingOrgId) && e.isUpcomingOrOngoing() && !e.isCompleted;
                           case EventFilterCategory.completed:
-                            return e.isPast();
+                            return e.isCompleted || e.isPast();
                         }
                       }).toList();
 
-                      // 3. Sorting
+                      // 3. Sorting: "latest created event should be in top"
                       if (filter == EventFilterCategory.completed) {
-                        filteredEvents.sort((a, b) => b.startDateTime.compareTo(a.startDateTime));
+                        filteredEvents.sort((a, b) {
+                          final aTime = a.completedAt ?? a.startDateTime;
+                          final bTime = b.completedAt ?? b.startDateTime;
+                          return bTime.compareTo(aTime);
+                        });
                       } else {
-                        filteredEvents.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+                        // The latest created event is on top
+                        filteredEvents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
                       }
 
                       if (filteredEvents.isEmpty) {
@@ -156,10 +211,10 @@ class EventsScreen extends ConsumerWidget {
                       }
 
                       final isDefaultAllView = searchQuery.isEmpty && filter == EventFilterCategory.all;
-                      final featuredEvent = (isDefaultAllView && filteredEvents.isNotEmpty) ? filteredEvents.first : null;
-                      final listEvents = (isDefaultAllView && filteredEvents.isNotEmpty)
-                          ? filteredEvents.skip(1).toList()
-                          : filteredEvents;
+                      // Featured event is the event likely to happen (ongoing or starting soonest)
+                      final featuredEvent = isDefaultAllView ? _getFeaturedEvent(allEvents) : null;
+                      // Duplicate: featured event remains in listEvents as well
+                      final listEvents = filteredEvents;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +260,8 @@ class EventsScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 

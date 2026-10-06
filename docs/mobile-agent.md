@@ -40,6 +40,7 @@ Parse the prompt and extract:
 | Student QR Ticket & Lock State | `docs/features/qr-ticket-system.md` |
 | Events, Eligibility, Session Schedule | `docs/features/events-eligibility-system.md` |
 | Payables, Financial Gate Control | `docs/features/payables-system.md` |
+| Certificates & Credentials | `docs/features/certificates-system.md` |
 | **New Feature Domain** | **Create `docs/features/<feature-name>.md` first & register here** |
 | New screen or navigation change | `mobile-agent.md` Section 4 (routes) |
 | New entity or schema change | Update `mobile-database-schema.md` first |
@@ -270,6 +271,7 @@ All routes are defined in `lib/core/router/app_router.dart`.
 | `announcements` | `/announcements` | `AnnouncementsScreen` |
 | `announcementDetail` | `/announcements/:announcementId` | `AnnouncementDetailScreen` |
 | `certificates` | `/certificates` | `CertificatesScreen` |
+| `certificateDetail` | `/certificates/:certificateId` | `CertificateDetailScreen` |
 | `profile` | `/profile` | `ProfileScreen` |
 
 When adding a new route: update this table AND `app_router.dart`.

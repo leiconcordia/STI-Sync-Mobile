@@ -21,15 +21,19 @@ class ScannerAssignmentBanner extends ConsumerWidget {
         final latest = assignments.first;
         final String eventTitle = latest.eventTitle.isNotEmpty ? latest.eventTitle : 'Assigned Event';
         final venueNameAsync = ref.watch(venueNameProvider(latest.venueId));
-        final String venue = (latest.customVenueName != null && latest.customVenueName!.isNotEmpty)
-            ? latest.customVenueName!
-            : (venueNameAsync.valueOrNull != null && venueNameAsync.valueOrNull != 'Campus Venue' && venueNameAsync.valueOrNull != 'TBA'
-                ? venueNameAsync.valueOrNull!
+        final customVenue = latest.customVenueName;
+        final resolvedVenue = venueNameAsync.valueOrNull;
+        final String venue = (customVenue != null && customVenue.isNotEmpty)
+            ? customVenue
+            : (resolvedVenue != null && resolvedVenue != 'Campus Venue' && resolvedVenue != 'TBA'
+                ? resolvedVenue
                 : (latest.venue.isNotEmpty && latest.venue != 'STI Campus' && latest.venue != 'Campus Venue'
                     ? latest.venue
-                    : (venueNameAsync.valueOrNull ?? 'Campus Venue')));
+                    : (resolvedVenue ?? 'Campus Venue')));
         final String formattedDate = latest.formattedStartDate;
         final int sessionCount = latest.sessions.length;
+
+        final bool needsUpload = latest.requiresAttendanceUploadNotice;
 
         return Material(
           color: Colors.transparent,
@@ -40,22 +44,30 @@ class ScannerAssignmentBanner extends ConsumerWidget {
             borderRadius: BorderRadius.circular(20),
             child: Container(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    AppColors.primaryDark,
-                    Color(0xFF0F2C59),
-                  ],
+                gradient: LinearGradient(
+                  colors: needsUpload
+                      ? const [
+                          Color(0xFF2C1810),
+                          Color(0xFF451A03),
+                        ]
+                      : const [
+                          AppColors.primaryDark,
+                          Color(0xFF0F2C59),
+                        ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: AppColors.secondary.withValues(alpha: 0.4),
+                  color: needsUpload
+                      ? Colors.amber.shade400
+                      : AppColors.secondary.withValues(alpha: 0.4),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryDark.withValues(alpha: 0.3),
+                    color: (needsUpload ? Colors.amber.shade900 : AppColors.primaryDark)
+                        .withValues(alpha: 0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -63,16 +75,16 @@ class ScannerAssignmentBanner extends ConsumerWidget {
               ),
               child: Stack(
                 children: [
-                  // Gold accent side strip
+                  // Gold or Amber accent side strip
                   Positioned(
                     top: 0,
                     bottom: 0,
                     left: 0,
                     width: 5,
                     child: Container(
-                      decoration: const BoxDecoration(
-                        color: AppColors.secondary,
-                        borderRadius: BorderRadius.only(
+                      decoration: BoxDecoration(
+                        color: needsUpload ? Colors.amber.shade400 : AppColors.secondary,
+                        borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(20),
                           bottomLeft: Radius.circular(20),
                         ),
@@ -89,16 +101,20 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppColors.secondary.withValues(alpha: 0.15),
+                            color: (needsUpload ? Colors.amber : AppColors.secondary)
+                                .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.secondary.withValues(alpha: 0.5),
+                              color: (needsUpload ? Colors.amber : AppColors.secondary)
+                                  .withValues(alpha: 0.5),
                               width: 1,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.qr_code_scanner_rounded,
-                            color: AppColors.secondary,
+                          child: Icon(
+                            needsUpload
+                                ? Icons.cloud_upload_rounded
+                                : Icons.qr_code_scanner_rounded,
+                            color: needsUpload ? Colors.amber.shade300 : AppColors.secondary,
                             size: 22,
                           ),
                         ),
@@ -112,9 +128,11 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                               Row(
                                 children: [
                                   Text(
-                                    'SCANNER DUTY',
+                                    needsUpload ? 'UPLOAD REQUIRED' : 'SCANNER DUTY',
                                     style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.secondary,
+                                      color: needsUpload
+                                          ? Colors.amber.shade300
+                                          : AppColors.secondary,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
                                       fontSize: 10,
@@ -124,11 +142,11 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: AppColors.success,
+                                      color: needsUpload ? Colors.amber.shade700 : AppColors.success,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      'LIVE',
+                                      needsUpload ? 'CONCLUDED' : 'LIVE',
                                       style: AppTextStyles.labelSmall.copyWith(
                                         color: Colors.white,
                                         fontSize: 9,
@@ -140,18 +158,22 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                eventTitle,
+                                needsUpload
+                                    ? 'Upload your attendance: Event has been concluded'
+                                    : eventTitle,
                                 style: AppTextStyles.bodyLarge.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 15,
+                                  fontSize: needsUpload ? 13 : 15,
                                 ),
-                                maxLines: 1,
+                                maxLines: needsUpload ? 2 : 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '$formattedDate • $venue • $sessionCount Session(s)',
+                                needsUpload
+                                    ? '$eventTitle • ${latest.pendingSyncCount} offline scan(s) pending'
+                                    : '$formattedDate • $venue • $sessionCount Session(s)',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
@@ -167,12 +189,14 @@ class ScannerAssignmentBanner extends ConsumerWidget {
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: const BoxDecoration(
-                            color: AppColors.secondary,
+                          decoration: BoxDecoration(
+                            color: needsUpload ? Colors.amber.shade400 : AppColors.secondary,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.arrow_forward_rounded,
+                          child: Icon(
+                            needsUpload
+                                ? Icons.cloud_upload_rounded
+                                : Icons.arrow_forward_rounded,
                             color: AppColors.primaryDark,
                             size: 16,
                           ),

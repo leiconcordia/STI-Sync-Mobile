@@ -16,7 +16,7 @@ class StiSyncApp extends ConsumerWidget {
 
     ref.listen<AsyncValue<bool>>(connectivityStatusProvider, (previous, next) {
       if (previous != null && next.hasValue && previous.value != next.value) {
-        final isOnline = next.value!;
+        final isOnline = next.value ?? false;
         
         final contextForSize = scaffoldMessengerKey.currentContext;
         final screenHeight = contextForSize != null ? MediaQuery.of(contextForSize).size.height : 800.0;

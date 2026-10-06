@@ -84,6 +84,13 @@ class PayableModel {
   final String? paymentReference;         // Transaction ID or receipt number
   final List<dynamic>? transactions;      // Embedded payment transactions
 
+  // ─── Lifecycle & Event Snapshot Metadata ───
+  final bool isArchived;
+  final bool isDeleted;
+  final String? eventTitle;
+  final String? schoolYear;
+  final String? semester;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -120,6 +127,11 @@ class PayableModel {
     this.paymentMethod,
     this.paymentReference,
     this.transactions,
+    this.isArchived = false,
+    this.isDeleted = false,
+    this.eventTitle,
+    this.schoolYear,
+    this.semester,
     this.createdAt,
     this.updatedAt,
   });
@@ -236,6 +248,11 @@ class PayableModel {
       paymentMethod: data['paymentMethod'] as String?,
       paymentReference: data['paymentReference'] as String?,
       transactions: data['transactions'] as List<dynamic>?,
+      isArchived: data['isArchived'] == true,
+      isDeleted: data['isDeleted'] == true,
+      eventTitle: (data['eventTitle'] ?? data['eventName'] ?? data['title']) as String?,
+      schoolYear: (data['schoolYear'] ?? data['academicYear']) as String?,
+      semester: data['semester'] as String?,
       createdAt: parseDate(data['createdAt']),
       updatedAt: parseDate(data['updatedAt']),
     );
@@ -279,6 +296,11 @@ class PayableModel {
       'paymentMethod': paymentMethod,
       'paymentReference': paymentReference,
       'transactions': transactions,
+      'isArchived': isArchived,
+      'isDeleted': isDeleted,
+      'eventTitle': eventTitle,
+      'schoolYear': schoolYear,
+      'semester': semester,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };

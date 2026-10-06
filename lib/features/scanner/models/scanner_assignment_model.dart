@@ -70,6 +70,12 @@ class ScannerAssignmentModel {
   /// Late threshold in minutes after start time before time-in closes
   final int? lateThresholdMinutes;
 
+  final bool isArchived;
+  final bool isDeleted;
+  final bool attendanceLocked;
+  final DateTime? completedAt;
+  final int pendingSyncCount;
+
   /// Original Firestore snapshot — available when built from Firestore,
   /// null when restored from local Drift cache.
   final DocumentSnapshot? eventSnapshot;
@@ -92,6 +98,11 @@ class ScannerAssignmentModel {
     this.cancellationReason,
     this.gracePeriodMinutes,
     this.lateThresholdMinutes,
+    this.isArchived = false,
+    this.isDeleted = false,
+    this.attendanceLocked = false,
+    this.completedAt,
+    this.pendingSyncCount = 0,
     this.dataDownloaded = false,
     this.downloadedAt,
     this.eventSnapshot,
@@ -115,6 +126,11 @@ class ScannerAssignmentModel {
     String? cancellationReason,
     int? gracePeriodMinutes,
     int? lateThresholdMinutes,
+    bool? isArchived,
+    bool? isDeleted,
+    bool? attendanceLocked,
+    DateTime? completedAt,
+    int? pendingSyncCount,
     bool? dataDownloaded,
     DateTime? downloadedAt,
     DocumentSnapshot? eventSnapshot,
@@ -137,6 +153,11 @@ class ScannerAssignmentModel {
       cancellationReason: cancellationReason ?? this.cancellationReason,
       gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
       lateThresholdMinutes: lateThresholdMinutes ?? this.lateThresholdMinutes,
+      isArchived: isArchived ?? this.isArchived,
+      isDeleted: isDeleted ?? this.isDeleted,
+      attendanceLocked: attendanceLocked ?? this.attendanceLocked,
+      completedAt: completedAt ?? this.completedAt,
+      pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
       dataDownloaded: dataDownloaded ?? this.dataDownloaded,
       downloadedAt: downloadedAt ?? this.downloadedAt,
       eventSnapshot: eventSnapshot ?? this.eventSnapshot,
@@ -162,6 +183,22 @@ class ScannerAssignmentModel {
   /// True when the event's last session has not yet ended (plus a 12-hour grace period).
   bool get isActive => DateTime.now().isBefore(eventEndTime.add(const Duration(hours: 12)));
 
+  /// True if the event has concluded / completed by Admin
+  bool get isCompleted =>
+      status.toLowerCase() == 'completed' ||
+      proposalStatus.toLowerCase() == 'completed' ||
+      completedAt != null;
+
+  /// True if the event has been officially concluded or attendance locked by Admin
+  bool get isConcluded => isCompleted || attendanceLocked;
+
+  /// True if this assignment has pending offline attendance records waiting to sync
+  bool get hasUnsyncedAttendance => pendingSyncCount > 0;
+
+  /// True when the event has concluded by Admin but unsynced offline records remain.
+  /// Triggers prompt: "Upload your attendance: Event has been concluded"
+  bool get requiresAttendanceUploadNotice => isConcluded && hasUnsyncedAttendance;
+
   /// True when this event has been cancelled
   bool get isEffectivelyCancelled =>
       isCancelled ||
@@ -174,16 +211,54 @@ class ScannerAssignmentModel {
       (cancellationReason != null && cancellationReason!.trim().isNotEmpty);
 
   /// True when this assignment is valid for scanning:
-  /// event is still active AND in an approved state AND not cancelled.
-  bool get canScan => isActive && !isEffectivelyCancelled && proposalStatus.toLowerCase() == 'approved';
+  /// Must NOT be concluded by Admin, not cancelled, not archived/deleted, and approved.
+  bool get canScan =>
+      !isEffectivelyCancelled &&
+      !isConcluded &&
+      !isArchived &&
+      !isDeleted &&
+      proposalStatus.toLowerCase() == 'approved';
+
+  /// True if the assignment MUST remain visible to the officer:
+  /// Either active for scanning, cancelled, OR has unsynced attendance waiting for upload.
+  bool get shouldDisplay =>
+      canScan ||
+      isEffectivelyCancelled ||
+      hasUnsyncedAttendance;
+
+  // ─── Permission Getters ───────────────────────────────────────────────────
+
+  /// Legacy indicator if the officer document had fullAccess marked
+  bool get hasFullAccess => permissions['fullAccess'] == true;
+
+  /// Whether this scanner is allowed to perform Time-In check-ins
+  bool get canCheckIn => permissions['canCheckIn'] == true;
+
+  /// Whether this scanner is allowed to perform Time-Out check-outs
+  bool get canCheckOut => permissions['canCheckOut'] == true;
+
+  /// Whether this scanner is permitted to log manual / flagged attendance entries
+  bool get allowManualAttendance =>
+      permissions['allowManualAttendance'] == true ||
+      permissions['allowFlagged'] == true ||
+      permissions['allowFlaggedAttendance'] == true;
+
+  /// Alias for allowManualAttendance
+  bool get allowFlagged => allowManualAttendance;
+
+  /// Whether this scanner can view the attendee roster / list
+  bool get canViewList => permissions['canViewList'] == true;
+
+  /// Whether this scanner can edit or delete attendance records
+  bool get canEditRecords => permissions['canEditRecords'] == true;
 
   // ─── Factories ───────────────────────────────────────────────────────────
 
   /// Build from a live Firestore EventDocument snapshot.
   ///
   /// Finds the matching officer entry in `scanners[]` array.
-  /// Throws if the officer is not found in the scanners list.
-  factory ScannerAssignmentModel.fromEventDoc(
+  /// Returns `null` if the officer is not found in the scanners list.
+  static ScannerAssignmentModel? fromEventDoc(
     DocumentSnapshot doc,
     String officerUserId,
   ) =>
@@ -191,30 +266,96 @@ class ScannerAssignmentModel {
 
   /// Build from a live Firestore EventDocument snapshot matching any of [targetOfficerIds]
   /// (e.g. organization_officer document IDs or student auth UID).
-  factory ScannerAssignmentModel.fromEventDocForIds(
+  ///
+  /// Returns `null` if the officer is not explicitly listed in the event's `scanners[]` array
+  /// or if their scanner status is revoked/inactive/removed.
+  static ScannerAssignmentModel? fromEventDocForIds(
     DocumentSnapshot doc,
     List<String> targetOfficerIds,
   ) {
-    final data = doc.data() as Map<String, dynamic>;
+    final rawData = doc.data();
+    if (rawData == null || rawData is! Map) return null;
+    final data = Map<String, dynamic>.from(rawData);
+
+    // In Firestore, each event document has a scannerUserIds array containing the authorized scanner IDs.
+    // Do NOT add this event to the user's assignments if their ID is not listed in scannerUserIds!
+    final List<dynamic> rawScannerUserIds = data['scannerUserIds'] as List<dynamic>? ?? [];
+    final scannerUserIds = rawScannerUserIds
+        .map((e) => e?.toString().trim() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toSet();
+
+    final isUserListedInScannerUserIds = targetOfficerIds.any((id) => scannerUserIds.contains(id.trim()));
+    if (!isUserListedInScannerUserIds) {
+      debugPrint(
+        'ScannerAssignmentModel: User IDs $targetOfficerIds NOT listed in event scannerUserIds: $scannerUserIds for event ${doc.id}. Assignment not added.',
+      );
+      return null;
+    }
 
     // Locate this officer's entry in the nested scanners array.
     // Checks against any of the target officer IDs (organization_officers doc IDs or student auth UID).
     final List<dynamic> scanners = data['scanners'] as List<dynamic>? ?? [];
-    final scannerData = scanners.firstWhere(
-      (s) {
-        final sOfficerId =
-            (s as Map<String, dynamic>)['officerUserId'] as String?;
-        return targetOfficerIds.contains(sOfficerId);
-      },
-      orElse: () => null,
-    ) as Map<String, dynamic>? ?? {};
 
-    final matchedOfficerId = (scannerData['officerUserId'] as String?) ??
-        (targetOfficerIds.isNotEmpty ? targetOfficerIds.first : '');
+    Map<String, dynamic>? scannerData;
+    String matchedOfficerId = '';
 
-    if (scannerData.isEmpty) {
+    for (final s in scanners) {
+      if (s is! Map) continue;
+      final map = Map<String, dynamic>.from(s);
+      final candidateIds = [
+        map['officerUserId'],
+        map['officerId'],
+        map['officer_id'],
+        map['userId'],
+        map['user_id'],
+        map['studentId'],
+        map['student_id'],
+        map['studentAuthUid'],
+        map['id'],
+      ].whereType<String>().where((id) => id.isNotEmpty).toList();
+
+      for (final cid in candidateIds) {
+        if (targetOfficerIds.contains(cid)) {
+          scannerData = map;
+          matchedOfficerId = cid;
+          break;
+        }
+      }
+      if (scannerData != null) break;
+    }
+
+    // If the officer is not found in the nested scanners array, they are NOT an assigned scanner.
+    if (scannerData == null || scannerData.isEmpty) {
       debugPrint(
-          'ScannerAssignmentModel: Warning: Officer IDs $targetOfficerIds found in scannerUserIds but not in scanners[] array for event ${doc.id}. Defaulting to basic access.');
+        'ScannerAssignmentModel: Officer IDs $targetOfficerIds not found in scanners[] array for event ${doc.id}. Non-assigned user ignored.',
+      );
+      return null;
+    }
+
+    // Check if scanner assignment has been revoked or removed
+    final scannerStatus = (scannerData['status'] as String?)?.toLowerCase().trim() ?? '';
+    final isScannerRevoked = scannerData['isCancelled'] == true ||
+        scannerData['is_cancelled'] == true ||
+        scannerData['cancelled'] == true ||
+        scannerData['revoked'] == true ||
+        scannerData['isAssigned'] == false ||
+        scannerData['is_assigned'] == false ||
+        scannerStatus == 'removed' ||
+        scannerStatus == 'inactive' ||
+        scannerStatus == 'unassigned' ||
+        scannerStatus == 'revoked';
+
+    if (isScannerRevoked) {
+      debugPrint(
+        'ScannerAssignmentModel: Scanner status for officer $matchedOfficerId is inactive/revoked ($scannerStatus) for event ${doc.id}.',
+      );
+      return null;
+    }
+
+    if (matchedOfficerId.isEmpty) {
+      matchedOfficerId = (scannerData['officerUserId'] as String?) ??
+          (targetOfficerIds.isNotEmpty ? targetOfficerIds.first : '');
     }
 
     final gracePeriod = (data['gracePeriodMinutes'] as num?)?.toInt();
@@ -242,7 +383,7 @@ class ScannerAssignmentModel {
         })
         .toList();
 
-    final eventEndTime = _computeLastEndTime(rawSessions);
+    final eventEndTime = _computeLastEndTime(rawSessions, data);
 
     final startDate = (data['startDate'] as String?)?.trim() ??
         (sessions.isNotEmpty ? (sessions.first['date'] as String?)?.trim() : null);
@@ -294,6 +435,16 @@ class ScannerAssignmentModel {
         hasCancellationReason ||
         scannerIsCancelled;
 
+    final isArchived = data['isArchived'] == true;
+    final isDeleted = data['isDeleted'] == true;
+    final attendanceLocked = data['attendanceLocked'] == true || rawStatus == 'completed';
+    DateTime? completedAt;
+    if (data['completedAt'] != null) {
+      try {
+        completedAt = (data['completedAt'] as dynamic).toDate();
+      } catch (_) {}
+    }
+
     final status = isCancelled ? 'cancelled' : ((data['status'] as String?) ?? 'approved');
     final proposalStatus = isCancelled ? 'cancelled' : ((data['proposalStatus'] ?? data['proposal_status']) as String? ?? 'approved');
 
@@ -308,13 +459,26 @@ class ScannerAssignmentModel {
       sessions: sessions,
       officerUserId: matchedOfficerId,
       permissions: {
-        'fullAccess': scannerData['fullAccess'] as bool? ?? false,
-        'canCheckIn': scannerData['canCheckIn'] as bool? ?? false,
-        'canCheckOut': scannerData['canCheckOut'] as bool? ?? false,
-        'canViewList': scannerData['canViewList'] as bool? ?? false,
-        'canEditRecords': scannerData['canEditRecords'] as bool? ?? false,
+        'fullAccess': scannerData['fullAccess'] == true ||
+            scannerData['isLead'] == true ||
+            scannerData['leadScanner'] == true,
+        'canCheckIn': scannerData['canCheckIn'] == true ||
+            scannerData['checkIn'] == true,
+        'canCheckOut': scannerData['canCheckOut'] == true ||
+            scannerData['checkOut'] == true,
+        'canViewList': scannerData['canViewList'] == true ||
+            scannerData['viewList'] == true,
+        'canEditRecords': scannerData['canEditRecords'] == true ||
+            scannerData['editRecords'] == true,
         'allowManualAttendance':
-            scannerData['allowManualAttendance'] as bool? ?? false,
+            scannerData['allowManualAttendance'] == true ||
+            scannerData['allowManual'] == true ||
+            scannerData['allowFlagged'] == true ||
+            scannerData['allowFlaggedAttendance'] == true,
+        'allowFlagged': scannerData['allowFlagged'] == true ||
+            scannerData['allowFlaggedAttendance'] == true ||
+            scannerData['allowManualAttendance'] == true ||
+            scannerData['allowManual'] == true,
       },
       eventEndTime: eventEndTime,
       proposalStatus: proposalStatus,
@@ -323,6 +487,10 @@ class ScannerAssignmentModel {
       cancellationReason: cancellationReason,
       gracePeriodMinutes: gracePeriod,
       lateThresholdMinutes: lateThreshold,
+      isArchived: isArchived,
+      isDeleted: isDeleted,
+      attendanceLocked: attendanceLocked,
+      completedAt: completedAt,
       dataDownloaded: false,
       downloadedAt: null,
       eventSnapshot: doc,
@@ -345,6 +513,7 @@ class ScannerAssignmentModel {
     final venueStr = entity.eventFormat.isNotEmpty ? entity.eventFormat : 'Campus Venue';
     final parsedStartDate = parsedSessions.isNotEmpty ? parsedSessions.first['date'] as String? : null;
     final isCancelled = entity.proposalStatus.toLowerCase() == 'cancelled';
+    final isCompleted = entity.proposalStatus.toLowerCase() == 'completed';
 
     return ScannerAssignmentModel(
       eventId: entity.eventId,
@@ -361,7 +530,8 @@ class ScannerAssignmentModel {
       eventEndTime: DateTime.fromMillisecondsSinceEpoch(entity.eventEndTime),
       proposalStatus: entity.proposalStatus,
       isCancelled: isCancelled,
-      status: isCancelled ? 'cancelled' : 'approved',
+      status: isCancelled ? 'cancelled' : (isCompleted ? 'completed' : 'approved'),
+      attendanceLocked: isCompleted,
       gracePeriodMinutes: entity.gracePeriodMinutes,
       lateThresholdMinutes: lateThresh,
       dataDownloaded: entity.dataDownloaded == 1,
@@ -381,7 +551,7 @@ class ScannerAssignmentModel {
       officerUserId: drift.Value(officerUserId),
       permissions: drift.Value(json.encode(permissions)),
       eventEndTime: drift.Value(eventEndTime.millisecondsSinceEpoch),
-      proposalStatus: drift.Value(isEffectivelyCancelled ? 'cancelled' : proposalStatus),
+      proposalStatus: drift.Value(isEffectivelyCancelled ? 'cancelled' : (isCompleted ? 'completed' : proposalStatus)),
       gracePeriodMinutes: drift.Value(gracePeriodMinutes),
       dataDownloaded: drift.Value(dataDownloaded ? 1 : 0),
       downloadedAt: drift.Value(downloadedAt?.millisecondsSinceEpoch ?? 0),
@@ -391,14 +561,25 @@ class ScannerAssignmentModel {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   /// Computes the end DateTime of the last session in the list.
-  static DateTime computeLastEndTime(List<dynamic> sessions) => _computeLastEndTime(sessions);
+  static DateTime computeLastEndTime(List<dynamic> sessions, [Map<String, dynamic>? data]) =>
+      _computeLastEndTime(sessions, data);
 
   /// Computes the end DateTime of the last session in the list.
   /// Supports both 24-hour ('17:00') and 12-hour AM/PM ('5:00 PM') formats.
-  static DateTime _computeLastEndTime(List<dynamic> sessions) {
+  static DateTime _computeLastEndTime(List<dynamic> sessions, [Map<String, dynamic>? data]) {
     if (sessions.isEmpty) {
-      // No sessions → fallback to past date so empty events don't stay active forever
-      return DateTime.now().subtract(const Duration(days: 1));
+      if (data != null) {
+        final dateStr = (data['date'] as String?)?.trim() ??
+            (data['startDate'] as String?)?.trim();
+        final endTimeStr = (data['endTime'] as String?)?.trim();
+        if (dateStr != null && dateStr.isNotEmpty) {
+          final dt = endTimeStr != null && endTimeStr.isNotEmpty
+              ? _parseDateTime(dateStr, endTimeStr)
+              : _parseDateTime(dateStr, '23:59');
+          if (dt != null) return dt;
+        }
+      }
+      return DateTime.now().add(const Duration(days: 7));
     }
 
     DateTime? latest;
@@ -432,7 +613,7 @@ class ScannerAssignmentModel {
       final cleanDate = dateStr.trim();
       if (cleanTime.toUpperCase().contains('AM') || cleanTime.toUpperCase().contains('PM')) {
         final format = DateFormat('yyyy-MM-dd h:mm a');
-        return format.parse('$cleanDate $cleanTime', true).toLocal();
+        return format.parse('$cleanDate $cleanTime');
       } else {
         final parts = cleanTime.split(':');
         final hour = int.parse(parts[0]);

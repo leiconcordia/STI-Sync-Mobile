@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
+import 'package:sti_sync/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:sti_sync/shared/providers/providers.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +11,7 @@ import '../viewmodels/qr_ticket_viewmodel.dart';
 import '../widgets/qr_code_display.dart';
 import '../widgets/locked_qr_card.dart';
 import '../widgets/cancelled_qr_card.dart';
+import '../widgets/concluded_qr_card.dart';
 
 class QrTicketScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -39,6 +41,16 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthState>(authViewModelProvider, (previous, next) {
+      final student = next.student;
+      if (student != null && (previous?.student == null || previous?.student?.id != student.id)) {
+        final activeSemester = ref.read(activeSemesterModelProvider).valueOrNull;
+        ref
+            .read(qrTicketViewModelProvider(widget.eventId).notifier)
+            .loadTicket(student, widget.eventId, activeSemester: activeSemester);
+      }
+    });
+
     final ticketState = ref.watch(qrTicketViewModelProvider(widget.eventId));
 
     return Scaffold(
@@ -115,6 +127,19 @@ class _QrTicketScreenState extends ConsumerState<QrTicketScreen> {
         cancellationReason: state.cancellationReason,
         refundPolicy: state.refundPolicy,
         cancelledAt: state.cancelledAt,
+      );
+    }
+
+    if (state is QrTicketConcluded) {
+      return ConcludedQrCard(
+        eventTitle: state.eventTitle,
+        studentName: state.studentName,
+        studentId: state.studentId,
+        profilePhotoUrl: state.profilePhotoUrl,
+        courseInfo: state.courseInfo,
+        isArchived: state.isArchived,
+        certificatesEnabled: state.certificatesEnabled,
+        eventId: widget.eventId,
       );
     }
 

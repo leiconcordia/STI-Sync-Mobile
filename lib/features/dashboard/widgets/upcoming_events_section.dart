@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
 import 'package:sti_sync/core/utils/date_formatter.dart';
@@ -42,7 +41,9 @@ class UpcomingEventsSection extends ConsumerWidget {
         const SizedBox(height: 16),
         eventsAsync.when(
           data: (events) {
-            final upcomingEvents = events.where((e) => e.isUpcomingOrOngoing()).toList()
+            final upcomingEvents = events
+                .where((e) => e.isUpcomingOrOngoing() && !e.isArchived && !e.isDeleted && !e.isCompleted)
+                .toList()
               ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
 
             if (upcomingEvents.isEmpty) {

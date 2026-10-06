@@ -19,6 +19,7 @@ class EventDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsyncValue = ref.watch(eventDetailProvider(eventId));
     final payablesAsync = ref.watch(payablesStreamProvider);
+    final myCertificatesAsync = ref.watch(myCertificatesStreamProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -83,6 +84,9 @@ class EventDetailScreen extends ConsumerWidget {
                     if (event.isEffectivelyCancelled) ...[
                       _buildCancelledAlertBanner(event),
                       const SizedBox(height: 16),
+                    ] else if (event.isArchived) ...[
+                      _buildArchivedAlertBanner(event),
+                      const SizedBox(height: 16),
                     ],
                     _buildBannerImage(event),
                     const SizedBox(height: 16),
@@ -95,6 +99,58 @@ class EventDetailScreen extends ConsumerWidget {
                       runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
+                        if (event.isArchived)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.archive_outlined,
+                                    size: 13, color: Color(0xFF475569)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Archived',
+                                  style: TextStyle(
+                                    color: Color(0xFF475569),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (event.isCompleted)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_outline,
+                                    size: 13, color: Color(0xFF047857)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Concluded',
+                                  style: TextStyle(
+                                    color: Color(0xFF047857),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (event.eventCategoryId.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -206,7 +262,17 @@ class EventDetailScreen extends ConsumerWidget {
                       style: AppTextStyles.h1
                           .copyWith(color: AppColors.primaryDark, fontSize: 26),
                     ),
-                    const SizedBox(height: 24),
+                    if (event.tagline != null && event.tagline!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        event.tagline!.trim(),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -220,6 +286,9 @@ class EventDetailScreen extends ConsumerWidget {
                           _buildInfoRow(Icons.location_on_outlined, 'Venue',
                               event.customVenueName ?? venueName.valueOrNull ?? (event.venueId.isNotEmpty ? event.venueId : 'Campus Venue')),
                           Divider(color: Colors.grey.shade200, height: 1),
+                          _buildInfoRow(Icons.devices_other_outlined, 'Format',
+                              event.eventFormat.isNotEmpty ? event.eventFormat : 'On-Campus'),
+                          Divider(color: Colors.grey.shade200, height: 1),
                           _buildInfoRow(Icons.people_outline, 'Attendees',
                               event.expectedParticipantCount > 0
                                   ? '${event.expectedParticipantCount} expected'
@@ -227,10 +296,41 @@ class EventDetailScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
+
+                    // Admission & Event Fee (Total Budget is strictly hidden from students)
+                    _buildAdmissionAndFeeSection(event),
+                    const SizedBox(height: 20),
+
+                    // Target Audience & Eligibility
+                    _buildTargetAudienceSection(event),
+                    const SizedBox(height: 20),
+
+                    // Activity Objectives
+                    if (event.objectives.isNotEmpty) ...[
+                      _buildObjectivesSection(event),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // Mechanics & Guidelines
+                    if (event.mechanics.isNotEmpty) ...[
+                      _buildMechanicsSection(event),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // Co-Organizers / Proponents
+                    if (event.organizers.isNotEmpty) ...[
+                      _buildOrganizersSection(event),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // Attendance & Certification Requirements
+                    _buildAttendanceAndCertificateSection(event),
+                    const SizedBox(height: 20),
+
                     if (event.sessions.isNotEmpty) ...[
                       Text(
-                        'Sessions',
+                        'Sessions Schedule',
                         style: AppTextStyles.bodyLarge.copyWith(
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
@@ -277,54 +377,7 @@ class EventDetailScreen extends ConsumerWidget {
                           )),
                       const SizedBox(height: 12),
                     ],
-                    if (event.totalApprovedBudget > 0 ||
-                        (event.adminFeeOverride ?? 0) > 0) ...[
-                      Text(
-                        'Budget & Event Fee',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.primaryDark,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Column(
-                          children: [
-                            if (event.totalApprovedBudget > 0)
-                              _buildInfoRow(
-                                Icons.account_balance_wallet_outlined,
-                                'Total Budget',
-                                _formatCurrency(event.totalApprovedBudget),
-                              ),
-                            if ((event.adminFeeOverride ?? 0) > 0) ...[
-                              if (event.totalApprovedBudget > 0)
-                                Divider(color: Colors.grey.shade200, height: 1),
-                              _buildInfoRow(
-                                Icons.confirmation_number_outlined,
-                                'Event Fee',
-                                _formatCurrency(event.adminFeeOverride!),
-                              ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                child: Text(
-                                  'Payment of the event fee is required to unlock your QR ticket.',
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
+
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
@@ -376,48 +429,244 @@ class EventDetailScreen extends ConsumerWidget {
                     ],
                   ),
                   child: SafeArea(
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          context.pushNamed(
-                            'qrTicket',
-                            pathParameters: {'eventId': eventId},
+                    child: Builder(
+                      builder: (context) {
+                        final myCertificates = myCertificatesAsync.valueOrNull ?? [];
+                        final matchingCert = myCertificates.where((c) => c.eventId == event.id).firstOrNull;
+
+                        if (event.isEffectivelyCancelled) {
+                          return SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                context.pushNamed(
+                                  'qrTicket',
+                                  pathParameters: {'eventId': eventId},
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey.shade800,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.block_rounded,
+                                size: 20,
+                                color: Colors.redAccent,
+                              ),
+                              label: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Ticket Revoked (Event Cancelled)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
                           );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: event.isEffectivelyCancelled
-                              ? Colors.grey.shade800
-                              : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        icon: Icon(
-                          event.isEffectivelyCancelled
-                              ? Icons.block_rounded
-                              : Icons.qr_code_rounded,
-                          size: 20,
-                          color: event.isEffectivelyCancelled
-                              ? Colors.redAccent
-                              : Colors.white,
-                        ),
-                        label: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            event.isEffectivelyCancelled
-                                ? 'Ticket Revoked (Event Cancelled)'
-                                : 'View Digital QR Ticket',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                        }
+
+                        // Concluded or Archived Event
+                        if (event.isCompleted || event.isArchived) {
+                          if (matchingCert != null) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      context.pushNamed(
+                                        'certificateDetail',
+                                        pathParameters: {'certificateId': matchingCert.id},
+                                        extra: matchingCert,
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE5A100),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.workspace_premium_rounded, size: 20),
+                                    label: const Text(
+                                      'Claim / Download Certificate',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      context.pushNamed(
+                                        'qrTicket',
+                                        pathParameters: {'eventId': eventId},
+                                      );
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.grey.shade300),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.lock_clock_outlined,
+                                        size: 16, color: Color(0xFF64748B)),
+                                    label: const Text(
+                                      'Gate Check-in Closed (View Pass)',
+                                      style: TextStyle(
+                                        color: Color(0xFF64748B),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (event.certificatesEnabled) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFCD34D)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.workspace_premium_outlined, size: 16, color: Color(0xFFB45309)),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Certificates are enabled for this event. Your certificate will be claimable once issued.',
+                                          style: TextStyle(
+                                            color: Color(0xFF92400E),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    context.pushNamed(
+                                      'qrTicket',
+                                      pathParameters: {'eventId': eventId},
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF64748B),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.lock_clock_rounded, size: 20),
+                                  label: const FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      'Event Concluded — Gate Check-in Closed',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        // Normal Upcoming or Ongoing Event
+                        if (!event.requiresAttendance) {
+                          return Container(
+                            width: double.infinity,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline_rounded, size: 20, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text(
+                                  'View Details Only — No Attendance Required',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              context.pushNamed(
+                                'qrTicket',
+                                pathParameters: {'eventId': eventId},
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.qr_code_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'View Digital QR Ticket',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -431,6 +680,378 @@ class EventDetailScreen extends ConsumerWidget {
             child:
                 Text('Error: $err', style: const TextStyle(color: Colors.red))),
       ),
+    );
+  }
+
+  Widget _buildAdmissionAndFeeSection(EventModel event) {
+    final fee = event.adminFeeOverride ?? 0.0;
+    final isFree = fee <= 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Admission & Event Fee',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            children: [
+              if (!isFree) ...[
+                _buildInfoRow(
+                  Icons.confirmation_number_outlined,
+                  'Event Fee',
+                  _formatCurrency(fee),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Payment of the event fee is required to unlock your QR ticket.',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                _buildInfoRow(
+                  Icons.verified_outlined,
+                  'Admission',
+                  'Free Admission',
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF047857)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'No payment required. Eligible students can access their digital QR pass for entry.',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: const Color(0xFF047857),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetAudienceSection(EventModel event) {
+    String levelText = 'All Academic Levels';
+    if (event.targetAcademicLevel != null && event.targetAcademicLevel!.isNotEmpty) {
+      final lvl = event.targetAcademicLevel!.toUpperCase();
+      if (lvl == 'BOTH' || (lvl.contains('SHS') && lvl.contains('COLLEGE'))) {
+        levelText = 'Senior High School & College';
+      } else if (lvl == 'SHS') {
+        levelText = 'Senior High School (SHS) Only';
+      } else if (lvl == 'COLLEGE') {
+        levelText = 'College Division Only';
+      } else {
+        levelText = event.targetAcademicLevel!;
+      }
+    }
+
+    final coursesText = event.targetCourses.isNotEmpty
+        ? event.targetCourses.join(', ')
+        : 'All Programs & Strands';
+
+    final yearsText = event.targetYearLevels.isNotEmpty
+        ? event.targetYearLevels.join(', ')
+        : 'All Year Levels';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Target Audience & Eligibility',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            children: [
+              _buildInfoRow(Icons.school_outlined, 'Academic Division', levelText),
+              Divider(color: Colors.grey.shade200, height: 1),
+              _buildInfoRow(Icons.book_outlined, 'Target Programs', coursesText),
+              Divider(color: Colors.grey.shade200, height: 1),
+              _buildInfoRow(Icons.calendar_view_week_outlined, 'Year Levels', yearsText),
+              if (event.targetSections.isNotEmpty) ...[
+                Divider(color: Colors.grey.shade200, height: 1),
+                _buildInfoRow(Icons.group_outlined, 'Sections', event.targetSections.join(', ')),
+              ],
+              Divider(color: Colors.grey.shade200, height: 1),
+              _buildInfoRow(
+                Icons.people_outline,
+                'Scope',
+                event.targetAudienceScope == 'members'
+                    ? 'Club / Org Members Only'
+                    : 'Open to All Enrolled Students',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildObjectivesSection(EventModel event) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Activity Objectives',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: event.objectives.map((obj) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        obj,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMechanicsSection(EventModel event) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mechanics & Activity Guidelines',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < event.mechanics.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${i + 1}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          event.mechanics[i],
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrganizersSection(EventModel event) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Activity Organizers',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: event.organizers.map((org) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.groups_rounded, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        org,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceAndCertificateSection(EventModel event) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Attendance & Certification',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: AppColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            children: [
+              _buildInfoRow(
+                Icons.how_to_reg_outlined,
+                'Attendance Status',
+                event.mandatoryAttendance
+                    ? 'Mandatory Attendance'
+                    : (event.attendanceEnabled
+                        ? 'Required'
+                        : 'Optional'),
+              ),
+              Divider(color: Colors.grey.shade200, height: 1),
+              _buildInfoRow(
+                Icons.workspace_premium_outlined,
+                'Certificate',
+                event.certificatesEnabled
+                    ? (event.autoIssueCertificates
+                        ? 'Auto-issued upon attendance'
+                        : 'Issued upon evaluation/completion')
+                    : 'No certificate issued',
+              ),
+              if (event.certificateSignatory != null &&
+                  event.certificateSignatory!.trim().isNotEmpty) ...[
+                Divider(color: Colors.grey.shade200, height: 1),
+                _buildInfoRow(
+                  Icons.edit_note_rounded,
+                  'Signatory',
+                  event.certificateSignatory!,
+                ),
+              ],
+              Divider(color: Colors.grey.shade200, height: 1),
+              _buildInfoRow(
+                Icons.devices_other_outlined,
+                'Format',
+                event.eventFormat.isNotEmpty ? event.eventFormat : 'On-Campus Activity',
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -520,6 +1141,32 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildAttendanceGuide(EventModel event, EventSessionModel session) {
+    if (!event.requiresAttendance) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Information Only • No gate check-in or QR scanning required for this session.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF475569),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final start = _parseSessionDateTime(session, session.startTime);
     final opens = _parseSessionDateTime(session, session.timeInOpen) ?? start;
     final graceMinutes =
@@ -780,6 +1427,69 @@ class EventDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArchivedAlertBanner(EventModel event) {
+    final dateStr = event.archivedAt != null
+        ? formatAppDateTime(event.archivedAt)
+        : (event.completedAt != null ? formatAppDateTime(event.completedAt) : 'Archived');
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF94A3B8), width: 1.2),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE2E8F0),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.archive_rounded, color: Color(0xFF334155), size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SEALED & ARCHIVED EVENT',
+                      style: TextStyle(
+                        color: Color(0xFF1E293B),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    Text(
+                      'This event is sealed and archived for historical audit.',
+                      style: TextStyle(color: Color(0xFF475569), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Archived Record: $dateStr',
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

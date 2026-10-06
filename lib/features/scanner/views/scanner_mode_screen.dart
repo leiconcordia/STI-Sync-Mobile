@@ -75,22 +75,23 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
   bool get _hasManualPermission {
     final assignment = _assignment;
     if (assignment == null) return false;
-    return assignment.permissions['fullAccess'] == true ||
-        assignment.permissions['allowManualAttendance'] == true;
+    return assignment.allowManualAttendance;
   }
 
   Future<void> _refreshData() async {
     // Check if online before allowing refresh
-    final isOnline = ref.read(connectivityStatusProvider).valueOrNull ?? false;
+    final isOnline = await ref.read(connectivityServiceProvider).checkConnectivity();
     if (!isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Cannot refresh. No internet connection.'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Cannot refresh. No internet connection.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
       return;
     }
 
@@ -137,6 +138,15 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
     final liveEvent = eventId != null ? ref.watch(eventDetailProvider(eventId)).valueOrNull : null;
     final assignment = _assignment;
     final isCancelled = (assignment?.isEffectivelyCancelled == true) || (liveEvent?.isEffectivelyCancelled == true);
+    final isCompletedOrLocked = (assignment?.isCompleted == true) ||
+        (assignment?.attendanceLocked == true) ||
+        (assignment?.isArchived == true) ||
+        (assignment?.isDeleted == true) ||
+        (liveEvent?.isCompleted == true) ||
+        (liveEvent?.attendanceLocked == true) ||
+        (liveEvent?.isArchived == true) ||
+        (liveEvent?.isDeleted == true);
+    final isScanDisabled = isCancelled || isCompletedOrLocked;
 
     final activeSessionId = _selectedSessionId ??
         (assignment?.sessions.isNotEmpty == true
@@ -207,6 +217,86 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                     ),
                   ],
                 ),
+              )
+            else if (assignment?.requiresAttendanceUploadNotice == true)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade900.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Upload your attendance: Event has been concluded',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${assignment!.pendingSyncCount} attendance log(s) recorded offline. Scanning is closed. Upload your records now to finalize and clean up scanner duty.',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (isCompletedOrLocked)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF64748B)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SCANNER LOCKED — EVENT CONCLUDED',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'This event has been marked as Completed. Scans are no longer accepted.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             const SizedBox(height: 12),
             _buildSessionSelector(),
@@ -259,7 +349,7 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                                     color: AppColors.primary, size: 22),
                               ),
                             ),
-                          if (eventId != null && _hasManualPermission && !isCancelled)
+                          if (eventId != null && _hasManualPermission && !isScanDisabled)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: FloatingActionButton.small(
@@ -291,16 +381,18 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
                                       ),
                                     );
                                   }
-                                : _openScannerConfig,
-                            backgroundColor: isCancelled
+                                : isCompletedOrLocked
+                                    ? () => _showScannerLockedDialog()
+                                    : _openScannerConfig,
+                            backgroundColor: isScanDisabled
                                 ? Colors.grey.shade400
                                 : AppColors.secondary,
-                            elevation: isCancelled ? 2 : 4,
+                            elevation: isScanDisabled ? 2 : 4,
                             child: Icon(
-                              isCancelled
+                              isScanDisabled
                                   ? Icons.block
                                   : Icons.qr_code_scanner,
-                              color: isCancelled
+                              color: isScanDisabled
                                   ? Colors.white
                                   : AppColors.primaryDark,
                               size: 28,
@@ -315,6 +407,24 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showScannerLockedDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Scanner Locked'),
+        content: const Text(
+          'This event has been marked as Completed. Scans are no longer accepted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
@@ -338,6 +448,18 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+      return;
+    }
+
+    if (assignment.isCompleted ||
+        assignment.attendanceLocked ||
+        assignment.isArchived ||
+        assignment.isDeleted ||
+        (liveEvent?.isCompleted == true) ||
+        (liveEvent?.attendanceLocked == true) ||
+        (liveEvent?.isArchived == true) ||
+        (liveEvent?.isDeleted == true)) {
+      _showScannerLockedDialog();
       return;
     }
 
@@ -409,12 +531,27 @@ class _ScannerModeScreenState extends ConsumerState<ScannerModeScreen> {
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
-        children: assignment.sessions.map((s) {
+        children: assignment.sessions.asMap().entries.map((entry) {
+          final index = entry.key;
+          final s = entry.value;
           final id = s['id'] as String? ?? '';
-          final name = s['title'] as String? ?? 'Unnamed Session';
+          final rawTitle = (s['title'] ??
+                  s['sessionTitle'] ??
+                  s['name'] ??
+                  s['sessionName'] ??
+                  s['label']) as String?;
+          final name = (rawTitle != null && rawTitle.trim().isNotEmpty)
+              ? rawTitle.trim()
+              : 'Session ${index + 1}';
           final startTime = s['startTime'] as String? ?? '';
           final endTime = s['endTime'] as String? ?? '';
-          final time = '$startTime - $endTime';
+          final formattedStart = formatAppTime(startTime);
+          final formattedEnd = formatAppTime(endTime);
+          final time = (formattedStart.isNotEmpty && formattedEnd.isNotEmpty)
+              ? '$formattedStart - $formattedEnd'
+              : (startTime.isNotEmpty && endTime.isNotEmpty)
+                  ? '$startTime - $endTime'
+                  : '';
           final isSelected = id == activeSessionId;
 
           return Padding(

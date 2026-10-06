@@ -66,6 +66,26 @@ class QrTicketCancelled extends QrTicketState {
   });
 }
 
+class QrTicketConcluded extends QrTicketState {
+  final String eventTitle;
+  final String studentName;
+  final String studentId;
+  final String profilePhotoUrl;
+  final String courseInfo;
+  final bool isArchived;
+  final bool certificatesEnabled;
+
+  const QrTicketConcluded({
+    required this.eventTitle,
+    required this.studentName,
+    required this.studentId,
+    required this.profilePhotoUrl,
+    required this.courseInfo,
+    this.isArchived = false,
+    this.certificatesEnabled = false,
+  });
+}
+
 class QrTicketNoTicket extends QrTicketState {
   final QrTicketModel ticket;
   const QrTicketNoTicket(this.ticket);
@@ -98,28 +118,13 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
         .where((value) => value.isNotEmpty)
         .join(' - ');
 
-    // Gate Lock Rule: Semester Rollover / Pending Re-enrollment
-    if (activeSemester != null && student.isPendingReEnrollment(activeSemester)) {
-      state = QrTicketLocked(
-        amountDue: 0.0,
-        paymentStatus: 'RE_ENROLLMENT_REQUIRED',
-        eventTitle: 'Re-enrollment Required',
-        studentName: studentName,
-        studentId: studentIdNumber,
-        profilePhotoUrl: profilePhotoUrl,
-        courseInfo: courseInfo,
-        lockReason:
-            'Please complete your semester re-enrollment confirmation to unlock your event QR tickets.',
-      );
-      return;
-    }
 
 
     try {
       final isOnline = await _repository.checkOnline();
       final config = isOnline
-          ? await _repository.getEventTicketConfig(eventId)
-          : await _repository.getLocalEventTicketConfig(eventId);
+          ? await _repository.getEventTicketConfig(eventId, studentAuthUid)
+          : await _repository.getLocalEventTicketConfig(eventId, studentAuthUid);
 
       if (config == null) {
         state = const QrTicketError(
@@ -143,6 +148,20 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
         return;
       }
 
+      // Concluded / Archived Gate Check
+      if (config.isCompleted || config.isArchived || config.isDeleted) {
+        state = QrTicketConcluded(
+          eventTitle: config.title,
+          studentName: studentName,
+          studentId: studentIdNumber,
+          profilePhotoUrl: profilePhotoUrl,
+          courseInfo: courseInfo,
+          isArchived: config.isArchived,
+          certificatesEnabled: config.certificatesEnabled,
+        );
+        return;
+      }
+
       if (!config.isTicketAvailable) {
         state = const QrTicketError(
           'QR tickets are not enabled for this event.',
@@ -152,24 +171,42 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
 
       if (!isOnline) {
         final cached =
-            await _repository.getLocalTicketStatus(studentAuthUid, eventId);
-        if (cached == null) {
-          state = const QrTicketError(
-            'Connect once to prepare this event ticket for offline use.',
+            await _repository.getLocalTicketStatus(studentAuthUid, eventId, studentIdNumber);
+        if (cached != null) {
+          _setStateFromStatus(
+            isUnlocked: cached.isUnlocked,
+            amountDue: cached.amountDue,
+            paymentStatus: cached.paymentStatus,
+            eventId: eventId,
+            eventTitle: cached.eventTitle ?? config.title,
+            student: student,
+            studentName: (cached.studentName != null && cached.studentName!.isNotEmpty) ? cached.studentName! : studentName,
+            studentIdNumber: (cached.studentIdNumber != null && cached.studentIdNumber!.isNotEmpty) ? cached.studentIdNumber! : studentIdNumber,
+            profilePhotoUrl: cached.profilePhotoUrl ?? profilePhotoUrl,
+            courseInfo: (cached.courseInfo != null && cached.courseInfo!.isNotEmpty) ? cached.courseInfo! : courseInfo,
           );
           return;
         }
-        _setStateFromStatus(
-          isUnlocked: cached.isUnlocked,
-          amountDue: cached.amountDue,
-          paymentStatus: cached.paymentStatus,
-          eventId: eventId,
-          eventTitle: cached.eventTitle ?? config.title,
-          student: student,
-          studentName: studentName,
-          studentIdNumber: studentIdNumber,
-          profilePhotoUrl: profilePhotoUrl,
-          courseInfo: courseInfo,
+
+        // Fallback for free events cached locally
+        if (!config.studentPayablesEnabled || config.eventFee == 0) {
+          _setStateFromStatus(
+            isUnlocked: true,
+            amountDue: 0.0,
+            paymentStatus: 'free',
+            eventId: eventId,
+            eventTitle: config.title,
+            student: student,
+            studentName: studentName,
+            studentIdNumber: studentIdNumber,
+            profilePhotoUrl: profilePhotoUrl,
+            courseInfo: courseInfo,
+          );
+          return;
+        }
+
+        state = const QrTicketError(
+          'Connect once to prepare this event ticket for offline use.',
         );
         return;
       }
@@ -183,6 +220,7 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
         eventTitle: config.title,
         courseInfo: courseInfo,
         config: config,
+        alternateStudentId: studentIdNumber,
       );
 
       _subscription?.cancel();
@@ -198,6 +236,7 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
           eventTitle: config.title,
           courseInfo: courseInfo,
           config: config,
+          alternateStudentId: studentIdNumber,
         );
         _setStateFromStatus(
           isUnlocked: status.isUnlocked,
@@ -211,10 +250,63 @@ class QrTicketViewModel extends StateNotifier<QrTicketState> {
           profilePhotoUrl: profilePhotoUrl,
           courseInfo: courseInfo,
         );
-      }, onError: (Object error) {
-        state = QrTicketError('Failed to load ticket: $error');
+      }, onError: (Object error) async {
+        // Fall back to local cached status if stream fails
+        final cached = await _repository.getLocalTicketStatus(studentAuthUid, eventId, studentIdNumber);
+        if (cached != null) {
+          _setStateFromStatus(
+            isUnlocked: cached.isUnlocked,
+            amountDue: cached.amountDue,
+            paymentStatus: cached.paymentStatus,
+            eventId: eventId,
+            eventTitle: cached.eventTitle ?? config.title,
+            student: student,
+            studentName: studentName,
+            studentIdNumber: studentIdNumber,
+            profilePhotoUrl: profilePhotoUrl,
+            courseInfo: courseInfo,
+          );
+        } else {
+          state = QrTicketError('Failed to load ticket: $error');
+        }
       });
     } catch (error) {
+      // If an error occurred online, attempt offline fallback before showing error
+      try {
+        final localConfig = await _repository.getLocalEventTicketConfig(eventId, studentAuthUid, studentIdNumber);
+        if (localConfig != null) {
+          final cached = await _repository.getLocalTicketStatus(studentAuthUid, eventId, studentIdNumber);
+          if (cached != null) {
+            _setStateFromStatus(
+              isUnlocked: cached.isUnlocked,
+              amountDue: cached.amountDue,
+              paymentStatus: cached.paymentStatus,
+              eventId: eventId,
+              eventTitle: cached.eventTitle ?? localConfig.title,
+              student: student,
+              studentName: studentName,
+              studentIdNumber: studentIdNumber,
+              profilePhotoUrl: profilePhotoUrl,
+              courseInfo: courseInfo,
+            );
+            return;
+          } else if (!localConfig.studentPayablesEnabled || localConfig.eventFee == 0) {
+            _setStateFromStatus(
+              isUnlocked: true,
+              amountDue: 0.0,
+              paymentStatus: 'free',
+              eventId: eventId,
+              eventTitle: localConfig.title,
+              student: student,
+              studentName: studentName,
+              studentIdNumber: studentIdNumber,
+              profilePhotoUrl: profilePhotoUrl,
+              courseInfo: courseInfo,
+            );
+            return;
+          }
+        }
+      } catch (_) {}
       state = QrTicketError('Error loading ticket: $error');
     }
   }

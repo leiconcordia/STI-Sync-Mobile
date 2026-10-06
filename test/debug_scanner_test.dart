@@ -38,11 +38,15 @@ void main() {
       print('EVENT ${doc.id}:');
       try {
         final model = ScannerAssignmentModel.fromEventDocForIds(doc, targetIds);
-        print(' - Title: ${model.eventTitle}');
-        print(' - isActive: ${model.isActive}');
-        print(' - canScan: ${model.canScan}');
-        print(' - sessions count: ${model.sessions.length}');
-        print(' - proposalStatus: ${model.proposalStatus}');
+        if (model != null) {
+          print(' - Title: ${model.eventTitle}');
+          print(' - isActive: ${model.isActive}');
+          print(' - canScan: ${model.canScan}');
+          print(' - sessions count: ${model.sessions.length}');
+          print(' - proposalStatus: ${model.proposalStatus}');
+        } else {
+          print(' - NOT AN ASSIGNED SCANNER (ignored)');
+        }
       } catch (e, st) {
         print(' - ERROR PARSING: $e\n$st');
       }

@@ -14,10 +14,12 @@ class ParticipantsDao extends DatabaseAccessor<AppDatabase> with _$ParticipantsD
     });
   }
 
-  Future<CachedParticipant?> getParticipantByStudentId(String studentId, String eventId) {
-    return (select(cachedParticipants)
-          ..where((t) => t.id.equals(studentId) & t.eventId.equals(eventId)))
-        .getSingleOrNull();
+  Future<CachedParticipant?> getParticipantByStudentId(String studentId, String eventId) async {
+    final list = await (select(cachedParticipants)
+          ..where((t) => t.id.equals(studentId) & t.eventId.equals(eventId))
+          ..limit(1))
+        .get();
+    return list.firstOrNull;
   }
 
   Future<List<CachedParticipant>> getAllForEvent(String eventId) {

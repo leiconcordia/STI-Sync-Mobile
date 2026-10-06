@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sti_sync/core/theme/app_colors.dart';
 import 'package:sti_sync/core/theme/app_text_styles.dart';
@@ -18,6 +19,8 @@ class FeaturedEventCard extends ConsumerWidget {
     final venueName = ref.watch(venueNameProvider(event.venueId));
     final orgName = ref.watch(orgNameProvider(event.hostingOrgId));
 
+    final hasBanner = event.bannerImageUrl != null && event.bannerImageUrl!.trim().isNotEmpty;
+
     return GestureDetector(
       onTap: () {
         context.pushNamed('eventDetail', pathParameters: {'eventId': event.id});
@@ -26,28 +29,61 @@ class FeaturedEventCard extends ConsumerWidget {
         decoration: BoxDecoration(
           color: AppColors.primary,
           borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        padding: const EdgeInsets.all(20),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.secondary),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    'FEATURED EVENT',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.secondary,
-                      fontWeight: FontWeight.bold,
+            if (hasBanner)
+              CachedNetworkImage(
+                imageUrl: event.bannerImageUrl!.trim(),
+                width: double.infinity,
+                height: 150,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  height: 150,
+                  color: AppColors.primaryDark,
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white70,
                     ),
                   ),
                 ),
+                errorWidget: (context, url, error) => const SizedBox.shrink(),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.secondary),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          'FEATURED EVENT',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.secondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                 if (event.isEffectivelyCancelled)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -57,6 +93,40 @@ class FeaturedEventCard extends ConsumerWidget {
                     ),
                     child: const Text(
                       'CANCELLED',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  )
+                else if (event.isArchived)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF64748B),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'ARCHIVED',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  )
+                else if (event.isCompleted)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'COMPLETED',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -107,7 +177,7 @@ class FeaturedEventCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -136,8 +206,8 @@ class FeaturedEventCard extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: event.isCampusWide
-                        ? AppColors.secondary.withOpacity(0.25)
-                        : Colors.white.withOpacity(0.12),
+                        ? AppColors.secondary.withValues(alpha: 0.25)
+                        : Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -152,53 +222,97 @@ class FeaturedEventCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 18),
-            Divider(color: Colors.white.withOpacity(0.2), height: 1),
+            Divider(color: Colors.white.withValues(alpha: 0.2), height: 1),
             const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: () {
-                    context.pushNamed('eventDetail', pathParameters: {'eventId': event.id});
-                  },
-                  child: Row(
-                    children: [
-                      Text(
-                        'View Details',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: Colors.white,
+                if (event.requiresAttendance) ...[
+                  GestureDetector(
+                    onTap: () {
+                      context.pushNamed('eventDetail', pathParameters: {'eventId': event.id});
+                    },
+                    child: Row(
+                      children: [
+                        Text(
+                          'View Details',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      context.pushNamed('qrTicket', pathParameters: {'eventId': event.id});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'View Ticket',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 14, color: Colors.white70),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                      Text(
+                        'No Attendance Required',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    context.pushNamed('qrTicket', pathParameters: {'eventId': event.id});
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      'View Ticket',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryDark,
-                        fontWeight: FontWeight.bold,
+                  GestureDetector(
+                    onTap: () {
+                      context.pushNamed('eventDetail', pathParameters: {'eventId': event.id});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'View Details',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                        ],
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
-          ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
   }
 }
